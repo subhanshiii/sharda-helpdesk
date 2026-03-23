@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getInitials, getRoleColor } from '../utils/helpers';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
-  FiLogOut, FiMenu, FiX, FiBell, FiChevronRight,
+  FiLogOut, FiMenu, FiX, FiBell, FiChevronRight, FiSpeaker,
 } from 'react-icons/fi';
 
 const ShardaLogo = ({ size = 32 }) => (
@@ -77,13 +77,9 @@ export default function Layout() {
       {/* Logo */}
       <div className="relative px-5 pt-6 pb-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 shadow-lg flex-shrink-0">
-  <img 
-    src="/sharda-logo.png" 
-    alt="Sharda University" 
-    className="w-full h-full object-contain"
-  />
-</div>
+          <div className="flex-shrink-0 drop-shadow-lg">
+            <ShardaLogo size={40} />
+          </div>
           <div>
             <p className="font-display font-bold text-white text-base leading-none">Sharda</p>
             <p className="font-display font-bold text-white text-base leading-none">University</p>
@@ -103,6 +99,7 @@ export default function Layout() {
         <NavItem to="/dashboard" icon={FiHome}      label="Dashboard"  end onClick={closeSidebar} />
         <NavItem to="/tickets"   icon={FiList}       label="Tickets"        onClick={closeSidebar} />
         <NavItem to="/tickets/new" icon={FiPlusCircle} label="New Ticket"   onClick={closeSidebar} />
+        <NavItem to="/announcements" icon={FiSpeaker}    label="Announcements"     onClick={closeSidebar} />
         {user?.role === 'admin' && (
           <>
             <div className="pt-3 pb-1">

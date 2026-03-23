@@ -164,7 +164,10 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-gray-500 mt-5">
             Don't have an account?{' '}
-            <Link to="/register" className="text-blue-600 font-semibold hover:underline">Register here</Link>
+        
+            <Link to="/register" className="text-blue-600 font-semibold hover:underline">Register here</Link> 
+            <p>
+            <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Forgot password?</Link></p>
           </p>
 
           {/* Demo accounts */}
