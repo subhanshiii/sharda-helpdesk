@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getInitials, getRoleColor } from '../utils/helpers';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
-  FiLogOut, FiMenu, FiX, FiBell, FiChevronRight, FiSpeaker,
+  FiLogOut, FiMenu, FiX, FiBell, FiChevronRight, FiSpeaker, FiBriefcase, FiCalendar,
 } from 'react-icons/fi';
 
 const ShardaLogo = ({ size = 32 }) => (
@@ -61,11 +61,14 @@ export default function Layout() {
   const closeSidebar = () => setSidebarOpen(false);
 
   const pageTitle = {
-    '/dashboard':   'Dashboard',
-    '/tickets':     'Support Tickets',
-    '/tickets/new': 'New Ticket',
-    '/users':       'User Management',
-    '/profile':     'My Profile',
+    '/dashboard':      'Dashboard',
+    '/tickets':        'Support Tickets',
+    '/tickets/new':    'New Ticket',
+    '/users':          'User Management',
+    '/profile':        'My Profile',
+    '/announcements':  'Announcements',
+    '/opportunities':  'Opportunities',
+    '/events':         'Events',
   }[location.pathname] || 'Helpdesk';
 
   const SidebarContent = () => (
@@ -99,7 +102,9 @@ export default function Layout() {
         <NavItem to="/dashboard" icon={FiHome}      label="Dashboard"  end onClick={closeSidebar} />
         <NavItem to="/tickets"   icon={FiList}       label="Tickets"        onClick={closeSidebar} />
         <NavItem to="/tickets/new" icon={FiPlusCircle} label="New Ticket"   onClick={closeSidebar} />
-        <NavItem to="/announcements" icon={FiSpeaker}    label="Announcements"     onClick={closeSidebar} />
+        <NavItem to="/announcements" icon={FiSpeaker}    label="Announcements"  onClick={closeSidebar} />
+        <NavItem to="/opportunities" icon={FiBriefcase}  label="Opportunities"  onClick={closeSidebar} />
+        <NavItem to="/events"        icon={FiCalendar}   label="Events"         onClick={closeSidebar} />
         {user?.role === 'admin' && (
           <>
             <div className="pt-3 pb-1">

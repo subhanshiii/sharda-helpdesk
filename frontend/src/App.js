@@ -13,9 +13,11 @@ import CreateTicket      from './pages/CreateTicket';
 import TicketDetail      from './pages/TicketDetail';
 import UsersPage         from './pages/UsersPage';
 import ProfilePage       from './pages/ProfilePage';
-import AnnouncementsPage from './pages/AnnouncementsPage';
-import NotFound          from './pages/NotFound';
-import Layout            from './components/Layout';
+import AnnouncementsPage  from './pages/AnnouncementsPage';
+import OpportunitiesPage  from './pages/OpportunitiesPage';
+import EventsPage         from './pages/EventsPage';
+import NotFound           from './pages/NotFound';
+import Layout             from './components/Layout';
 
 const ProtectedRoute = ({ children, roles }) => {
   const { user, token } = useAuth();
@@ -46,6 +48,8 @@ function AppRoutes() {
         <Route path="/tickets/:id"      element={<TicketDetail />} />
         <Route path="/profile"          element={<ProfilePage />} />
         <Route path="/announcements"    element={<AnnouncementsPage />} />
+        <Route path="/opportunities"    element={<OpportunitiesPage />} />
+        <Route path="/events"           element={<EventsPage />} />
         <Route path="/users" element={
           <ProtectedRoute roles={['admin']}><UsersPage /></ProtectedRoute>
         } />
