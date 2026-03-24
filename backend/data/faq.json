@@ -1,0 +1,50 @@
+[
+  {
+    "question": "How do I reset my university portal password?",
+    "answer": "Go to the student portal login page and click 'Forgot Password'. Enter your university email and follow the instructions sent to your inbox. If you still face issues, raise an IT Support ticket."
+  },
+  {
+    "question": "How do I connect to university WiFi?",
+    "answer": "Use your university enrollment ID as username and your portal password. Connect to the 'Sharda-Student' network. If it still doesn't work, raise an IT Support ticket with your device details."
+  },
+  {
+    "question": "How do I pay my semester fee online?",
+    "answer": "Login to the student portal, go to Finance > Fee Payment. You can pay via net banking, UPI, or credit/debit card. For issues, raise a Finance ticket."
+  },
+  {
+    "question": "How do I get a bonafide certificate?",
+    "answer": "Submit a request through the Administration section of the helpdesk. It typically takes 2-3 working days. You can collect it from the admin block."
+  },
+  {
+    "question": "How do I renew library books?",
+    "answer": "Login to the library portal with your enrollment ID. Go to My Books > Renew. Books can be renewed up to 2 times. For issues, raise a Library ticket."
+  },
+  {
+    "question": "What is the hostel complaint process?",
+    "answer": "Raise a Hostel category ticket with your room number, block, and issue description. Maintenance issues are typically resolved within 24-48 hours."
+  },
+  {
+    "question": "How do I check my exam schedule?",
+    "answer": "Login to the student portal and go to Academics > Exam Schedule. If it's not visible, raise an Academic ticket and mention your semester and branch."
+  },
+  {
+    "question": "How do I apply for a scholarship?",
+    "answer": "Go to the Finance section of the student portal. Scholarship applications are open at the start of each semester. For issues with the form, raise a Finance ticket."
+  },
+  {
+    "question": "How long does it take to resolve a ticket?",
+    "answer": "IT tickets: 24-48 hours. Administrative: 2-3 days. Hostel maintenance: 24 hours. Finance: 3-5 days. Critical issues are prioritized."
+  },
+  {
+    "question": "How do I change my registered mobile number?",
+    "answer": "Visit the Administration office with your ID card, or raise an Administration ticket with proof of your new number."
+  },
+  {
+    "question": "How do I get my marksheet or transcript?",
+    "answer": "Apply through the student portal under Academics > Documents. Processing takes 5-7 working days. Urgent requests can be raised as a ticket."
+  },
+  {
+    "question": "What are the library timings?",
+    "answer": "The main library is open Monday to Saturday, 8 AM to 9 PM. Digital library access is available 24/7 through the student portal."
+  }
+]

@@ -1,0 +1,428 @@
+# 📘 Project Design & Architecture (PDA)
+## Sharda University Student Platform — Helpdesk & Beyond
+
+---
+
+## 1. PROJECT OVERVIEW
+
+**Project Name:** Sharda University Student Platform  
+**Type:** Full-Stack Web Application  
+**Stack:** MERN (MongoDB, Express.js, React.js, Node.js)  
+**Purpose:** A centralized student support and engagement platform for Sharda University that combines a helpdesk ticketing system with events, opportunities, announcements, and AI-powered assistance.
+
+---
+
+## 2. OBJECTIVES
+
+- Provide students with a single platform for all university support needs
+- Streamline ticket-based support with role-based access
+- Keep students informed through announcements and events
+- Expose students to internships, hackathons, and opportunities
+- Reduce repetitive queries using an AI/FAQ chatbot
+- Enable password recovery and email notifications via Resend
+
+---
+
+## 3. TECH STACK
+
+| Layer       | Technology              | Purpose                        |
+|-------------|-------------------------|--------------------------------|
+| Frontend    | React.js 18             | UI components and routing      |
+| Styling     | Tailwind CSS            | Utility-first CSS framework    |
+| State Mgmt  | Context API + useReducer| Global auth state              |
+| HTTP Client | Axios                   | API calls with interceptors    |
+| Charts      | Recharts                | Dashboard visualizations       |
+| Icons       | React Icons (Feather)   | UI icon set                    |
+| Fonts       | Outfit + Plus Jakarta Sans | Premium typography           |
+| Backend     | Node.js + Express.js    | REST API server                |
+| Database    | MongoDB + Mongoose      | NoSQL data storage             |
+| Auth        | JWT (jsonwebtoken)      | Stateless authentication       |
+| Passwords   | bcryptjs                | Password hashing               |
+| File Upload | Multer                  | Image and document uploads     |
+| Email       | Resend                  | Transactional emails           |
+| Validation  | express-validator       | Input validation middleware    |
+
+---
+
+## 4. SYSTEM ARCHITECTURE
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    CLIENT (Browser)                      │
+│  React App (Port 3000)                                   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │Dashboard │ │ Tickets  │ │  Events  │ │   AI     │  │
+│  │ Page     │ │  Pages   │ │   Page   │ │Assistant │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│           │           │           │           │          │
+│           └───────────┴───────────┴───────────┘          │
+│                         Axios HTTP                        │
+└──────────────────────────┬──────────────────────────────┘
+                           │ REST API calls
+┌──────────────────────────▼──────────────────────────────┐
+│                 SERVER (Node + Express)                   │
+│  Port 8080                                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │  Auth    │ │ Tickets  │ │  Events  │ │  Chat    │  │
+│  │ Routes   │ │  Routes  │ │  Routes  │ │  Routes  │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│           Middleware: JWT Auth, Error Handler, Multer     │
+└──────────────────────────┬──────────────────────────────┘
+                           │ Mongoose ODM
+┌──────────────────────────▼──────────────────────────────┐
+│              DATABASE (MongoDB)                           │
+│  Collections: users, tickets, events, opportunities,     │
+│               announcements, passwordresets              │
+└─────────────────────────────────────────────────────────┘
+                           │
+              ┌────────────▼────────────┐
+              │  External Services       │
+              │  Resend (Email API)      │
+              └─────────────────────────┘
+```
+
+---
+
+## 5. FOLDER STRUCTURE
+
+```
+sharda-helpdesk/
+│
+├── backend/                          # Node.js + Express API
+│   ├── config/
+│   │   └── db.js                     # MongoDB connection
+│   │
+│   ├── controllers/                  # Business logic
+│   │   ├── authController.js         # Register, login, profile
+│   │   ├── ticketController.js       # Ticket CRUD + replies
+│   │   ├── userController.js         # Admin user management
+│   │   ├── statsController.js        # Dashboard statistics
+│   │   ├── announcementController.js # Announcements CRUD
+│   │   ├── opportunityController.js  # Opportunities + bookmarks
+│   │   ├── eventController.js        # Events + interest toggle
+│   │   ├── chatController.js         # AI/FAQ chatbot logic
+│   │   └── passwordResetController.js# Forgot/reset password
+│   │
+│   ├── middleware/
+│   │   ├── auth.js                   # JWT protect + authorize
+│   │   ├── errorHandler.js           # Global error handler
+│   │   └── upload.js                 # Multer file upload
+│   │
+│   ├── models/                       # Mongoose schemas
+│   │   ├── User.js                   # User (name,email,role,password)
+│   │   ├── Ticket.js                 # Ticket + Reply sub-schema
+│   │   ├── Announcement.js           # Announcement model
+│   │   ├── Opportunity.js            # Opportunity + bookmarks
+│   │   ├── Event.js                  # Event + interested users
+│   │   └── PasswordReset.js          # Reset token (TTL indexed)
+│   │
+│   ├── routes/                       # Express route definitions
+│   │   ├── authRoutes.js
+│   │   ├── ticketRoutes.js
+│   │   ├── userRoutes.js
+│   │   ├── statsRoutes.js
+│   │   ├── announcementRoutes.js
+│   │   ├── opportunityRoutes.js
+│   │   ├── eventRoutes.js
+│   │   └── chatRoutes.js
+│   │
+│   ├── data/
+│   │   └── faq.json                  # FAQ dataset (12 Q&As)
+│   │
+│   ├── utils/
+│   │   ├── seed.js                   # Database seeder
+│   │   └── emailService.js           # Resend email templates
+│   │
+│   ├── uploads/                      # Uploaded files (auto-created)
+│   ├── .env                          # Environment variables
+│   ├── .env.example                  # Environment template
+│   ├── package.json
+│   └── server.js                     # Express entry point
+│
+└── frontend/                         # React application
+    ├── public/
+    │   ├── index.html                # HTML template
+    │   └── sharda-logo.png           # University logo
+    │
+    └── src/
+        ├── components/
+        │   ├── Layout.js             # Sidebar + topbar shell
+        │   ├── TicketCard.js         # Ticket list card component
+        │   └── ui.js                 # Reusable UI primitives
+        │
+        ├── context/
+        │   └── AuthContext.js        # Auth state (useReducer)
+        │
+        ├── pages/
+        │   ├── LoginPage.js          # Split-panel login
+        │   ├── RegisterPage.js       # Student registration
+        │   ├── ForgotPassword.js     # Forgot password flow
+        │   ├── ResetPassword.js      # Reset password (token)
+        │   ├── Dashboard.js          # Central dashboard
+        │   ├── TicketList.js         # Filterable ticket list
+        │   ├── CreateTicket.js       # New ticket form + AI hint
+        │   ├── TicketDetail.js       # Chat-style ticket thread
+        │   ├── AnnouncementsPage.js  # Announcements board
+        │   ├── OpportunitiesPage.js  # Opportunities + bookmarks
+        │   ├── EventsPage.js         # Events + interest
+        │   ├── AIAssistant.js        # Chat-based AI assistant
+        │   ├── FAQPage.js            # Accordion FAQ page
+        │   ├── UsersPage.js          # Admin user management
+        │   ├── ProfilePage.js        # Edit profile + password
+        │   └── NotFound.js           # 404 page
+        │
+        ├── utils/
+        │   ├── api.js                # Axios instance + interceptors
+        │   └── helpers.js            # Formatters, color maps
+        │
+        ├── App.js                    # Router + route guards
+        ├── index.js                  # React entry point
+        └── index.css                 # Global styles + Tailwind
+```
+
+---
+
+## 6. DATABASE MODELS
+
+### User
+```
+name, email, password (hashed), role (student/agent/admin/clubhead),
+department, enrollmentId, avatar, isActive, lastLogin
+```
+
+### Ticket
+```
+ticketId (auto: SU-2024-0001), title, description, category, priority,
+status, user (ref), assignedTo (ref), replies (sub-doc array),
+attachments, tags, aiSuggestedPriority, resolvedAt, closedAt
+```
+
+### Reply (embedded in Ticket)
+```
+message, author (ref), authorRole, attachments, isInternal, createdAt
+```
+
+### Announcement
+```
+title, message, type (info/warning/urgent/success),
+postedBy (ref), isActive, expiresAt
+```
+
+### Opportunity
+```
+title, description, type (Internship/Hackathon/Competition/Workshop/Job/Scholarship),
+company, location, externalLink, deadline, stipend, eligibility,
+tags, postedBy (ref), bookmarks (user refs array), isActive
+```
+
+### Event
+```
+title, description, category, date, endDate, venue, poster,
+videoLink, registrationLink, organizer, maxParticipants,
+tags, postedBy (ref), interestedUsers (user refs array), isActive
+```
+
+### PasswordReset
+```
+user (ref), token, expiresAt (TTL: 15min), used
+```
+
+---
+
+## 7. API ENDPOINTS
+
+### Auth
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | /api/auth/register | Public | Student registration |
+| POST | /api/auth/login | Public | Login + JWT |
+| GET | /api/auth/me | Private | Current user |
+| PUT | /api/auth/updateprofile | Private | Update profile |
+| PUT | /api/auth/changepassword | Private | Change password |
+| POST | /api/auth/forgot-password | Public | Send reset email |
+| POST | /api/auth/reset-password | Public | Reset with token |
+| GET | /api/auth/verify-reset-token/:token | Public | Validate token |
+
+### Tickets
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | /api/tickets | Private | List (role-filtered) |
+| POST | /api/tickets | Private | Create ticket |
+| GET | /api/tickets/:id | Private | Get ticket |
+| PUT | /api/tickets/:id | Private | Update ticket |
+| DELETE | /api/tickets/:id | Admin | Delete ticket |
+| POST | /api/tickets/:id/replies | Private | Add reply |
+
+### Opportunities
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | /api/opportunities | Private | List all |
+| POST | /api/opportunities | Admin/ClubHead | Create |
+| GET | /api/opportunities/bookmarked | Private | My bookmarks |
+| PUT | /api/opportunities/:id/bookmark | Private | Toggle bookmark |
+| DELETE | /api/opportunities/:id | Admin/ClubHead | Delete |
+
+### Events
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | /api/events | Private | List all |
+| POST | /api/events | Admin/ClubHead | Create (with poster) |
+| PUT | /api/events/:id/interest | Private | Toggle interest |
+| DELETE | /api/events/:id | Admin/ClubHead | Delete |
+
+### Chat / AI
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | /api/chat | Private | Send message |
+| GET | /api/chat/faqs | Private | Get all FAQs |
+| GET | /api/chat/suggestions | Private | Get suggestions |
+
+### Stats
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| GET | /api/stats | Private | Dashboard stats |
+
+---
+
+## 8. ROLE PERMISSIONS
+
+| Feature | Student | Agent | Admin | ClubHead |
+|---------|:-------:|:-----:|:-----:|:--------:|
+| Create ticket | ✅ | ✅ | ✅ | ✅ |
+| View own tickets | ✅ | — | ✅ | ✅ |
+| View all tickets | ❌ | ✅ | ✅ | ❌ |
+| Reply to ticket | ✅ | ✅ | ✅ | ✅ |
+| Internal notes | ❌ | ✅ | ✅ | ❌ |
+| Assign tickets | ❌ | ❌ | ✅ | ❌ |
+| Delete tickets | ❌ | ❌ | ✅ | ❌ |
+| Post announcements | ❌ | ✅ | ✅ | ❌ |
+| Post opportunities | ❌ | ❌ | ✅ | ✅ |
+| Post events | ❌ | ❌ | ✅ | ✅ |
+| Bookmark opportunities | ✅ | ✅ | ✅ | ✅ |
+| Mark event interest | ✅ | ✅ | ✅ | ✅ |
+| Manage users | ❌ | ❌ | ✅ | ❌ |
+| View dashboard stats | Own | Assigned | All | Own |
+
+---
+
+## 9. KEY FEATURES
+
+### 🎫 Helpdesk Ticketing
+- Auto-generated ticket IDs (SU-2024-0001)
+- 8 categories: IT Support, Administration, Hostel, Library, Finance, Academic, Infrastructure, Other
+- 4 priorities: Low, Medium, High, Critical
+- 4 statuses: Open → In Progress → Resolved → Closed
+- Chat-style threaded replies
+- Internal notes (staff only)
+- File attachments (up to 5MB)
+- AI-suggested priority based on keywords
+
+### 📢 Announcements
+- Types: Info, Warning, Urgent, Success
+- Color-coded banners on dashboard
+- Admin/Agent can post and delete
+
+### 💼 Opportunities
+- 6 types: Internship, Hackathon, Competition, Workshop, Job, Scholarship
+- Deadline countdown badges (🔥 urgent, ⚡ soon)
+- Bookmark/save for later
+- Search and filter by type
+
+### 🎉 Events
+- 7 categories with emoji icons
+- Poster image upload
+- Interest toggle with count
+- Live status: Today!, Tomorrow, In Nd, Ongoing, Completed
+- Registration and video links
+- Upcoming/Past/All filter tabs
+
+### 🤖 AI Assistant
+- Chat-based interface
+- FAQ keyword matching
+- Suggested questions
+- Auto-detects ticket creation intent
+- Graceful fallback with ticket CTA
+
+### 🔐 Auth & Security
+- JWT authentication (7-day expiry)
+- bcrypt password hashing (10 salt rounds)
+- Role-based route protection
+- Forgot password via Resend email
+- Reset token auto-expires in 15 minutes
+
+---
+
+## 10. ENVIRONMENT VARIABLES
+
+```env
+# Backend (.env)
+PORT=8080
+MONGO_URI=mongodb://localhost:27017/sharda_helpdesk
+JWT_SECRET=your_secret_key_here
+JWT_EXPIRE=7d
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+RESEND_API_KEY=re_xxxxxxxxxxxx
+FROM_EMAIL=onboarding@resend.dev
+
+# Frontend (.env)
+REACT_APP_API_URL=http://localhost:8080/api
+```
+
+---
+
+## 11. SETUP INSTRUCTIONS
+
+### Prerequisites
+- Node.js v18+
+- MongoDB (local or Atlas)
+- npm v9+
+
+### Backend Setup
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Edit .env with your values
+node utils/seed.js        # Seed demo data
+npm run dev               # Start server
+```
+
+### Frontend Setup
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# Set REACT_APP_API_URL=http://localhost:8080/api
+npm start
+```
+
+### Demo Credentials
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@sharda.ac.in | admin123 |
+| Agent | it.support@sharda.ac.in | agent123 |
+| Student | student@sharda.ac.in | student123 |
+
+---
+
+## 12. FUTURE ENHANCEMENTS
+
+| Feature | Priority | Effort |
+|---------|----------|--------|
+| Real-time notifications (Socket.io) | High | Medium |
+| OpenAI-powered chatbot | High | Low |
+| Email notifications on ticket update | Medium | Low |
+| Ticket export to PDF | Medium | Medium |
+| Dark mode | Low | Medium |
+| Mobile app (React Native) | Low | High |
+| Two-factor authentication | Medium | Medium |
+| Analytics & reporting | Medium | High |
+| Club Head role & club management | Medium | Medium |
+| Academic calendar integration | Low | High |
+
+---
+
+*Documentation Version: 2.0*  
+*Last Updated: 2024*  
+*Project: Sharda University Student Platform*
