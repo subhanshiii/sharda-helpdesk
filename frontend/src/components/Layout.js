@@ -5,7 +5,7 @@ import { getInitials, getRoleColor } from '../utils/helpers';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiBell, FiChevronRight,
-  FiSpeaker, FiBriefcase, FiCalendar, FiMessageSquare, FiHelpCircle,
+  FiSpeaker, FiBriefcase, FiCalendar, FiMessageSquare, FiHelpCircle, FiClock,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -50,6 +50,7 @@ export default function Layout() {
     '/announcements': 'Announcements',
     '/opportunities': 'Opportunities',
     '/events':        'Events',
+    '/academic-calendar': 'Academic Calendar',
     '/ai-assistant':  'AI Assistant',
     '/faq':           'FAQ',
   };
@@ -85,7 +86,8 @@ export default function Layout() {
         <SectionLabel label="Main" />
         <NavItem to="/dashboard"     icon={FiHome}         label="Dashboard"     end onClick={closeSidebar} />
         <NavItem to="/announcements" icon={FiSpeaker}      label="Announcements"     onClick={closeSidebar} />
-        <NavItem to="/events"        icon={FiCalendar}     label="Events"            onClick={closeSidebar} />
+        <NavItem to="/events"              icon={FiCalendar}      label="Events"            onClick={closeSidebar} />
+        <NavItem to="/academic-calendar"   icon={FiClock}         label="Academic Calendar" onClick={closeSidebar} />
         <NavItem to="/opportunities" icon={FiBriefcase}    label="Opportunities"     onClick={closeSidebar} />
 
         <SectionLabel label="Helpdesk" />

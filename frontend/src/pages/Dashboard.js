@@ -3,301 +3,375 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import { FullPageSpinner, StatusBadge, PriorityBadge } from '../components/ui';
-import { formatRelative, getCategoryIcon } from '../utils/helpers';
+import { formatRelative } from '../utils/helpers';
 import {
-  FiPlusCircle, FiArrowRight, FiTrendingUp,
-  FiCalendar, FiBriefcase, FiMessageSquare, FiSpeaker,
+  FiPlusCircle, FiArrowRight, FiCalendar, FiBriefcase,
+  FiMessageSquare, FiHelpCircle, FiBookmark, FiSpeaker,
+  FiAlertTriangle, FiInfo, FiCheckCircle, FiZap, FiList,
+  FiExternalLink, FiMapPin, FiClock,
 } from 'react-icons/fi';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const StatCard = ({ label, value, icon, from, to, trend, link }) => (
-  <Link to={link || '#'} className="card p-5 overflow-hidden relative group hover:-translate-y-1 transition-all duration-200 block animate-fade-in-up">
-    <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-5 -translate-y-10 translate-x-10"
-      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{label}</p>
-        <p className="font-display text-4xl font-black mt-1 text-gray-900">{value ?? 0}</p>
-        {trend && <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1"><FiTrendingUp size={11} />{trend}</p>}
+// ── Greeting ──────────────────────────────────────────
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return { text: 'Good morning', emoji: '☀️' };
+  if (h < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+  return { text: 'Good evening', emoji: '🌙' };
+};
+
+// ── Widget wrapper ────────────────────────────────────
+const Widget = ({ title, icon: Icon, iconColor, action, children, className = '' }) => (
+  <div className={`card flex flex-col overflow-hidden ${className}`}>
+    <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
+      <div className="flex items-center gap-2">
+        <Icon size={15} className={iconColor || 'text-blue-500'} />
+        <h3 className="font-display font-bold text-gray-900 text-sm">{title}</h3>
       </div>
-      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
-        style={{ background: `linear-gradient(135deg, ${from}18, ${to}18)` }}>
-        {icon}
+      {action && (
+        <Link to={action.link} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium">
+          {action.label} <FiArrowRight size={11} />
+        </Link>
+      )}
+    </div>
+    <div className="flex-1">{children}</div>
+  </div>
+);
+
+const Empty = ({ icon, text }) => (
+  <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+    <div className="text-3xl mb-2">{icon}</div>
+    <p className="text-xs text-gray-400">{text}</p>
+  </div>
+);
+
+// ── Quick links ───────────────────────────────────────
+const QUICK_LINKS = [
+  { label: 'New Ticket',    icon: '🎫', link: '/tickets/new',   bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-100'   },
+  { label: 'AI Assistant',  icon: '🤖', link: '/ai-assistant',  bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-100'   },
+  { label: 'FAQ',           icon: '❓', link: '/faq',           bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
+  { label: 'Announcements', icon: '📢', link: '/announcements', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100'  },
+  { label: 'Events',        icon: '🎉', link: '/events',        bg: 'bg-pink-50',   text: 'text-pink-700',   border: 'border-pink-100'   },
+  { label: 'Opportunities', icon: '💼', link: '/opportunities', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-100'  },
+];
+
+// ── Announcement item ─────────────────────────────────
+const ANN_CONFIG = {
+  urgent:  { icon: FiZap,           color: 'text-red-500',    bg: 'bg-red-50'    },
+  warning: { icon: FiAlertTriangle, color: 'text-amber-500',  bg: 'bg-amber-50'  },
+  info:    { icon: FiInfo,          color: 'text-blue-500',   bg: 'bg-blue-50'   },
+  success: { icon: FiCheckCircle,   color: 'text-green-500',  bg: 'bg-green-50'  },
+};
+
+const AnnouncementItem = ({ a }) => {
+  const cfg = ANN_CONFIG[a.type] || ANN_CONFIG.info;
+  const Icon = cfg.icon;
+  return (
+    <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${cfg.bg}`}>
+        <Icon size={13} className={cfg.color} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
+        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{a.message}</p>
+        <p className="text-xs text-gray-400 mt-1">{formatRelative(a.createdAt)}</p>
       </div>
     </div>
-    <div className="mt-4 h-1 rounded-full overflow-hidden bg-gray-100">
-      <div className="h-full rounded-full transition-all duration-1000"
-        style={{ width: `${Math.min(((value || 0) / 20) * 100, 100)}%`, background: `linear-gradient(90deg, ${from}, ${to})` }} />
+  );
+};
+
+// ── Event item ────────────────────────────────────────
+const CAT_EMOJI = { Technical:'💻', Cultural:'🎭', Sports:'⚽', Academic:'🎓', Workshop:'🔧', Seminar:'🎤', Other:'📌' };
+
+const EventItem = ({ event }) => {
+  const days  = Math.ceil((new Date(event.date) - new Date()) / (1000*60*60*24));
+  const badge = days === 0 ? { label:'Today!', cls:'bg-red-100 text-red-700' }
+              : days === 1 ? { label:'Tomorrow', cls:'bg-orange-100 text-orange-700' }
+              : days <= 7  ? { label:`${days}d`, cls:'bg-blue-100 text-blue-700' }
+              : { label: new Date(event.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}), cls:'bg-gray-100 text-gray-600' };
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+      <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">
+        {CAT_EMOJI[event.category] || '📌'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          {event.venue && <span className="text-xs text-gray-400 flex items-center gap-1"><FiMapPin size={9}/>{event.venue}</span>}
+        </div>
+      </div>
+      <span className={`badge text-xs flex-shrink-0 ${badge.cls}`}>{badge.label}</span>
+    </div>
+  );
+};
+
+// ── Opportunity item ──────────────────────────────────
+const OPP_EMOJI  = { Internship:'💼', Hackathon:'💻', Competition:'🏆', Workshop:'🔧', Job:'👔', Scholarship:'🎓' };
+const OPP_COLORS = {
+  Internship:'bg-blue-50 text-blue-700', Hackathon:'bg-violet-50 text-violet-700',
+  Competition:'bg-orange-50 text-orange-700', Workshop:'bg-teal-50 text-teal-700',
+  Job:'bg-pink-50 text-pink-700', Scholarship:'bg-yellow-50 text-yellow-700',
+};
+
+const OpportunityItem = ({ opp }) => (
+  <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-xl flex-shrink-0">
+      {OPP_EMOJI[opp.type] || '💼'}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-semibold text-gray-800 truncate">{opp.title}</p>
+      <p className="text-xs text-gray-400">{opp.company || opp.type}</p>
+    </div>
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <span className={`badge text-xs ${OPP_COLORS[opp.type] || 'bg-gray-100 text-gray-600'}`}>{opp.type}</span>
+      {opp.externalLink && (
+        <a href={opp.externalLink} target="_blank" rel="noreferrer"
+          className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
+          <FiExternalLink size={13}/>
+        </a>
+      )}
+    </div>
+  </div>
+);
+
+// ── Ticket item ───────────────────────────────────────
+const TicketItem = ({ ticket }) => (
+  <Link to={`/tickets/${ticket._id}`}
+    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2 mb-0.5">
+        <span className="text-xs font-mono text-gray-400">{ticket.ticketId}</span>
+      </div>
+      <p className="text-sm font-semibold text-gray-800 truncate">{ticket.title}</p>
+      <p className="text-xs text-gray-400">{formatRelative(ticket.createdAt)}</p>
+    </div>
+    <div className="flex flex-col items-end gap-1">
+      <StatusBadge status={ticket.status} />
+      <PriorityBadge priority={ticket.priority} />
     </div>
   </Link>
 );
 
-const AnnouncementBanner = ({ a }) => {
-  const colors = {
-    urgent:  'from-red-500 to-rose-600',
-    warning: 'from-amber-500 to-orange-500',
-    info:    'from-blue-500 to-cyan-500',
-    success: 'from-green-500 to-emerald-500',
-  };
-  const icons = { urgent: '🚨', warning: '⚠️', info: 'ℹ️', success: '✅' };
+// ── Academic Calendar item ────────────────────────────
+const CAL_CONFIG = {
+  Exam:         { emoji:'📝', bg:'bg-red-50',    text:'text-red-700'    },
+  Holiday:      { emoji:'🏖️', bg:'bg-green-50',  text:'text-green-700'  },
+  Deadline:     { emoji:'⏰', bg:'bg-orange-50', text:'text-orange-700' },
+  Result:       { emoji:'📊', bg:'bg-blue-50',   text:'text-blue-700'   },
+  Registration: { emoji:'📋', bg:'bg-violet-50', text:'text-violet-700' },
+  Event:        { emoji:'🎯', bg:'bg-pink-50',   text:'text-pink-700'   },
+  Other:        { emoji:'📌', bg:'bg-gray-50',   text:'text-gray-700'   },
+};
+
+const CalendarItem = ({ item }) => {
+  const cfg  = CAL_CONFIG[item.type] || CAL_CONFIG.Other;
+  const date = new Date(item.date);
+  const days = Math.ceil((date - new Date()) / (1000*60*60*24));
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-xl text-white bg-gradient-to-r ${colors[a.type] || colors.info}`}>
-      <span className="text-lg flex-shrink-0">{icons[a.type] || 'ℹ️'}</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm">{a.title}</p>
-        <p className="text-xs text-white/80 mt-0.5 line-clamp-1">{a.message}</p>
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+      <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${cfg.bg}`}>
+        <span className="text-base leading-none">{cfg.emoji}</span>
+        <span className={`text-xs font-bold leading-none mt-0.5 ${cfg.text}`}>
+          {date.toLocaleDateString('en-IN',{day:'numeric',month:'short'}).split(' ')[0]}
+        </span>
       </div>
-      <span className="text-xs text-white/70 flex-shrink-0">{formatRelative(a.createdAt)}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">{item.title}</p>
+        <p className="text-xs text-gray-400">
+          {date.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
+        </p>
+      </div>
+      <span className={`badge text-xs flex-shrink-0 ${
+        days <= 3 ? 'bg-red-100 text-red-700' :
+        days <= 7 ? 'bg-orange-100 text-orange-700' :
+        `${cfg.bg} ${cfg.text}`
+      }`}>
+        {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`}
+      </span>
     </div>
   );
 };
 
-const EventMini = ({ event }) => {
-  const catEmoji = { Technical:'💻', Cultural:'🎭', Sports:'⚽', Academic:'🎓', Workshop:'🔧', Seminar:'🎤', Other:'📌' };
-  const days = Math.ceil((new Date(event.date) - new Date()) / (1000*60*60*24));
-  return (
-    <Link to="/events" className="flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 transition-colors">
-      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">
-        {catEmoji[event.category] || '📌'}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
-        <p className="text-xs text-gray-400">{event.venue || 'Sharda University'}</p>
-      </div>
-      <span className={`badge text-xs flex-shrink-0 ${days <= 1 ? 'bg-red-100 text-red-700' : days <= 7 ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-        {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days}d`}
-      </span>
-    </Link>
-  );
-};
-
-const OpportunityMini = ({ opp }) => {
-  const icons = { Internship:'💼', Hackathon:'💻', Competition:'🏆', Workshop:'🔧', Job:'👔', Scholarship:'🎓' };
-  return (
-    <Link to="/opportunities" className="flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 transition-colors">
-      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-xl flex-shrink-0">
-        {icons[opp.type] || '💼'}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{opp.title}</p>
-        <p className="text-xs text-gray-400">{opp.company || opp.type}</p>
-      </div>
-      {opp.deadline && (
-        <span className="badge bg-gray-100 text-gray-500 text-xs flex-shrink-0">
-          {new Date(opp.deadline).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}
-        </span>
-      )}
-    </Link>
-  );
-};
-
+// ── Main Dashboard ────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats,         setStats]         = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
-  const [events,        setEvents]        = useState([]);
-  const [opportunities, setOpportunities] = useState([]);
-  const [loading,       setLoading]       = useState(true);
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { text: greetText, emoji: greetEmoji } = getGreeting();
 
   useEffect(() => {
     Promise.all([
       API.get('/stats'),
       API.get('/announcements'),
-      API.get('/events?filter=upcoming&limit=4'),
-      API.get('/opportunities?limit=4'),
-    ]).then(([statsRes, annRes, evRes, oppRes]) => {
-      setStats(statsRes.data.data);
-      setAnnouncements(annRes.data.data?.slice(0, 3) || []);
-      setEvents(evRes.data.data || []);
-      setOpportunities(oppRes.data.data || []);
+      API.get('/events?filter=upcoming&limit=5'),
+      API.get('/opportunities?limit=5'),
+      API.get('/opportunities/bookmarked'),
+      API.get('/academic-calendar'),
+    ]).then(([stats, ann, events, opps, bookmarked, calendar]) => {
+      setData({
+        stats:       stats.data.data,
+        announcements: ann.data.data?.slice(0,5) || [],
+        events:      events.data.data || [],
+        opportunities: opps.data.data || [],
+        bookmarked:  bookmarked.data.data || [],
+        calendar:    calendar.data.data || [],
+      });
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <FullPageSpinner />;
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const BAR_COLORS = ['#1e40af','#7c3aed','#0891b2','#059669','#d97706','#dc2626','#2563eb','#db2777'];
-  const categoryData = (stats?.categoryStats || []).map(c => ({ name: c._id, count: c.count }));
+  const myTickets = data?.stats?.recentTickets || [];
 
   return (
     <div className="space-y-5">
-      {/* Welcome banner */}
-      <div className="rounded-2xl p-6 text-white relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0c1654 0%, #1e3a8a 50%, #1e40af 100%)' }}>
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-32 translate-x-32" />
-        <div className="absolute bottom-0 left-1/2 w-48 h-48 rounded-full bg-white/5 translate-y-24" />
+
+      {/* ── Welcome header ── */}
+      <div className="rounded-2xl p-5 relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg,#0c1654 0%,#1e3a8a 50%,#1e40af 100%)' }}>
+        <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-24 translate-x-24" />
+        <div className="absolute bottom-0 right-1/4 w-32 h-32 rounded-full bg-white/5 translate-y-16" />
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-blue-300 text-sm font-medium">{greeting} 👋</p>
+            <p className="text-blue-300 text-sm font-medium">{greetText} {greetEmoji}</p>
             <h1 className="font-display text-2xl font-black text-white mt-0.5">{user?.name}</h1>
-            <p className="text-blue-200/70 text-sm mt-1">
-              {new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Link to="/tickets/new" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-blue-900 hover:-translate-y-0.5 transition-all shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #fcd34d, #f97316)' }}>
-              <FiPlusCircle size={15} /> New Ticket
-            </Link>
-            <Link to="/ai-assistant" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-white border border-white/20 hover:bg-white/10 transition-all">
-              <FiMessageSquare size={15} /> Ask AI
-            </Link>
-          </div>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg,#f59e0b,#ec4899,#06b6d4,#10b981,#f97316)' }} />
-      </div>
-
-      {/* Announcements */}
-      {announcements.length > 0 && (
-        <div className="space-y-2">
-          {announcements.map(a => <AnnouncementBanner key={a._id} a={a} />)}
-          <Link to="/announcements" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-            View all announcements <FiArrowRight size={11} />
-          </Link>
-        </div>
-      )}
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-        <StatCard label="Total Tickets"  value={stats?.totalTickets}      icon="🎫" from="#1e40af" to="#2563eb" link="/tickets" />
-        <StatCard label="Open"           value={stats?.openTickets}       icon="🔵" from="#0891b2" to="#06b6d4" trend="Needs attention" link="/tickets?status=Open" />
-        <StatCard label="In Progress"    value={stats?.inProgressTickets} icon="⚡" from="#d97706" to="#f59e0b" link="/tickets?status=In Progress" />
-        <StatCard label="Resolved"       value={stats?.resolvedTickets}   icon="✅" from="#059669" to="#10b981" trend="Great work!" link="/tickets?status=Resolved" />
-      </div>
-
-      {/* Main grid */}
-      <div className="grid lg:grid-cols-3 gap-5">
-
-        {/* Left col: chart + recent tickets */}
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Category chart */}
-          {categoryData.length > 0 && (
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display font-bold text-gray-900">Tickets by Category</h2>
-                <Link to="/tickets" className="text-xs text-blue-600 hover:underline flex items-center gap-1">View all <FiArrowRight size={11} /></Link>
-              </div>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={categoryData} margin={{ top:0, right:0, left:-20, bottom:0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize:10, fill:'#94a3b8' }} interval={0} angle={-20} textAnchor="end" height={45} />
-                  <YAxis tick={{ fontSize:11, fill:'#94a3b8' }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ fontSize:12, borderRadius:12, border:'1px solid #e2e8f0' }} formatter={v => [v,'Tickets']} />
-                  <Bar dataKey="count" radius={[6,6,0,0]}>
-                    {categoryData.map((_,i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Recent tickets */}
-          {stats?.recentTickets?.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-                <h2 className="font-display font-bold text-gray-900">Recent Tickets</h2>
-                <Link to="/tickets" className="text-xs text-blue-600 hover:underline flex items-center gap-1">View all <FiArrowRight size={11} /></Link>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {stats.recentTickets.map(t => (
-                  <Link key={t._id} to={`/tickets/${t._id}`}
-                    className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-blue-50/50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-mono text-gray-400">{t.ticketId}</span>
-                        <span className="text-xs text-gray-400">{getCategoryIcon(t.category)}</span>
-                      </div>
-                      <p className="text-sm font-semibold text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-400">{t.user?.name} · {formatRelative(t.createdAt)}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <StatusBadge status={t.status} />
-                      <PriorityBadge priority={t.priority} />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Admin stats */}
-          {['admin','agent'].includes(user?.role) && (
-            <div className="grid grid-cols-2 gap-4 stagger">
-              <StatCard label="Students"     value={stats?.totalUsers}  icon="🎓" from="#7c3aed" to="#8b5cf6" link="/users" />
-              <StatCard label="Support Staff" value={stats?.totalAgents} icon="👨‍💼" from="#db2777" to="#ec4899" link="/users" />
-            </div>
-          )}
-        </div>
-
-        {/* Right col: events + opportunities */}
-        <div className="space-y-5">
-
-          {/* Upcoming events */}
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
-              <h2 className="font-display font-bold text-gray-900 flex items-center gap-2">
-                <FiCalendar size={15} className="text-blue-500" /> Upcoming Events
-              </h2>
-              <Link to="/events" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                All <FiArrowRight size={11} />
-              </Link>
-            </div>
-            {events.length > 0 ? (
-              <div className="p-2 divide-y divide-gray-50">
-                {events.slice(0,4).map(e => <EventMini key={e._id} event={e} />)}
-              </div>
-            ) : (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">
-                <FiCalendar size={24} className="mx-auto mb-2 opacity-30" />
-                No upcoming events
-              </div>
-            )}
-          </div>
-
-          {/* Latest opportunities */}
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
-              <h2 className="font-display font-bold text-gray-900 flex items-center gap-2">
-                <FiBriefcase size={15} className="text-indigo-500" /> Opportunities
-              </h2>
-              <Link to="/opportunities" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                All <FiArrowRight size={11} />
-              </Link>
-            </div>
-            {opportunities.length > 0 ? (
-              <div className="p-2 divide-y divide-gray-50">
-                {opportunities.slice(0,4).map(o => <OpportunityMini key={o._id} opp={o} />)}
-              </div>
-            ) : (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">
-                <FiBriefcase size={24} className="mx-auto mb-2 opacity-30" />
-                No opportunities yet
-              </div>
-            )}
-          </div>
-
-          {/* Quick links */}
-          <div className="card p-4">
-            <h2 className="font-display font-bold text-gray-900 mb-3">Quick Actions</h2>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               {[
-                { label:'New Ticket',    icon:'🎫', link:'/tickets/new',    color:'bg-blue-50 text-blue-700'   },
-                { label:'Ask AI',        icon:'🤖', link:'/ai-assistant',   color:'bg-cyan-50 text-cyan-700'   },
-                { label:'FAQ',           icon:'❓', link:'/faq',            color:'bg-violet-50 text-violet-700'},
-                { label:'Announcements', icon:'📢', link:'/announcements',  color:'bg-amber-50 text-amber-700' },
-              ].map(item => (
-                <Link key={item.label} to={item.link}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl text-center hover:-translate-y-0.5 transition-all ${item.color}`}>
-                  <span className="text-xl">{item.icon}</span>
-                  <span className="text-xs font-semibold">{item.label}</span>
-                </Link>
+                { label: `${data?.stats?.openTickets || 0} Open Tickets`,    color: 'bg-blue-500/20 text-blue-200'  },
+                { label: `${data?.events?.length || 0} Upcoming Events`,     color: 'bg-pink-500/20 text-pink-200'  },
+                { label: `${data?.bookmarked?.length || 0} Saved Opps`,      color: 'bg-green-500/20 text-green-200'},
+              ].map(b => (
+                <span key={b.label} className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${b.color}`}>{b.label}</span>
               ))}
             </div>
           </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <Link to="/tickets/new"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-blue-900 hover:-translate-y-0.5 transition-all shadow-lg"
+              style={{ background:'linear-gradient(135deg,#fcd34d,#f97316)' }}>
+              <FiPlusCircle size={15}/> New Ticket
+            </Link>
+            <Link to="/ai-assistant"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-white border border-white/20 hover:bg-white/10 transition-all">
+              🤖 Ask AI
+            </Link>
+          </div>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-1"
+          style={{ background:'linear-gradient(90deg,#f59e0b,#ec4899,#06b6d4,#10b981)' }} />
+      </div>
+
+      {/* ── Quick links ── */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        {QUICK_LINKS.map(ql => (
+          <Link key={ql.label} to={ql.link}
+            className={`card flex flex-col items-center gap-2 p-3.5 text-center hover:-translate-y-1 hover:shadow-card-hover transition-all duration-200 border ${ql.border}`}>
+            <span className="text-2xl">{ql.icon}</span>
+            <span className={`text-xs font-bold ${ql.text}`}>{ql.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* ── Main widget grid ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
+        {/* Announcements */}
+        <Widget title="Latest Announcements" icon={FiSpeaker} iconColor="text-amber-500"
+          action={{ label:'View all', link:'/announcements' }}>
+          {data?.announcements?.length > 0
+            ? data.announcements.map(a => <AnnouncementItem key={a._id} a={a} />)
+            : <Empty icon="📢" text="No announcements yet" />
+          }
+        </Widget>
+
+        {/* Upcoming events */}
+        <Widget title="Upcoming Events" icon={FiCalendar} iconColor="text-pink-500"
+          action={{ label:'View all', link:'/events' }}>
+          {data?.events?.length > 0
+            ? data.events.map(e => <EventItem key={e._id} event={e} />)
+            : <Empty icon="🎉" text="No upcoming events" />
+          }
+        </Widget>
+
+        {/* Academic calendar */}
+        <Widget title="Academic Calendar" icon={FiClock} iconColor="text-red-500"
+          action={{ label:'View all', link:'/academic-calendar' }}>
+          {data?.calendar?.length > 0
+            ? data.calendar.slice(0,5).map(c => <CalendarItem key={c._id} item={c} />)
+            : (
+              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                <div className="text-3xl mb-2">📅</div>
+                <p className="text-xs text-gray-400 mb-3">No upcoming dates</p>
+                {user?.role === 'admin' && (
+                  <Link to="/academic-calendar" className="text-xs text-blue-600 hover:underline">+ Add dates</Link>
+                )}
+              </div>
+            )
+          }
+        </Widget>
+
+        {/* My tickets */}
+        <Widget title="My Active Tickets" icon={FiList} iconColor="text-blue-500"
+          action={{ label:'View all', link:'/tickets' }}>
+          {myTickets.length > 0
+            ? myTickets.slice(0,4).map(t => <TicketItem key={t._id} ticket={t} />)
+            : (
+              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                <div className="text-3xl mb-2">🎫</div>
+                <p className="text-xs text-gray-400 mb-3">No tickets yet</p>
+                <Link to="/tickets/new" className="btn-primary text-xs py-1.5 px-3">
+                  <FiPlusCircle size={12}/> Raise Ticket
+                </Link>
+              </div>
+            )
+          }
+        </Widget>
+
+        {/* New opportunities */}
+        <Widget title="Latest Opportunities" icon={FiBriefcase} iconColor="text-indigo-500"
+          action={{ label:'View all', link:'/opportunities' }}>
+          {data?.opportunities?.length > 0
+            ? data.opportunities.map(o => <OpportunityItem key={o._id} opp={o} />)
+            : <Empty icon="💼" text="No opportunities yet" />
+          }
+        </Widget>
+
+        {/* Bookmarked opportunities */}
+        <Widget title="My Saved Opportunities" icon={FiBookmark} iconColor="text-yellow-500"
+          action={{ label:'View saved', link:'/opportunities' }}>
+          {data?.bookmarked?.length > 0
+            ? data.bookmarked.slice(0,5).map(o => <OpportunityItem key={o._id} opp={o} />)
+            : (
+              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                <div className="text-3xl mb-2">🔖</div>
+                <p className="text-xs text-gray-400 mb-3">No saved opportunities</p>
+                <Link to="/opportunities" className="text-xs text-blue-600 hover:underline">Browse opportunities →</Link>
+              </div>
+            )
+          }
+        </Widget>
+
+      </div>
+
+      {/* ── Help banner ── */}
+      <div className="card p-5 flex flex-col sm:flex-row items-center justify-between gap-4"
+        style={{ background:'linear-gradient(135deg,#f0f9ff,#fdf4ff)' }}>
+        <div className="flex items-center gap-3">
+          <div className="text-3xl">🤖</div>
+          <div>
+            <p className="font-display font-bold text-gray-900">Need help? Ask the AI Assistant</p>
+            <p className="text-sm text-gray-500 mt-0.5">Get instant answers to common questions or raise a support ticket</p>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <Link to="/ai-assistant" className="btn-primary text-sm">
+            <FiMessageSquare size={14}/> Ask AI
+          </Link>
+          <Link to="/faq" className="btn-secondary text-sm">
+            <FiHelpCircle size={14}/> Browse FAQ
+          </Link>
         </div>
       </div>
+
     </div>
   );
 }
