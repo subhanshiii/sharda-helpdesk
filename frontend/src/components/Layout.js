@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import NotificationBell from "./NotificationBell";
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getInitials, getRoleColor } from '../utils/helpers';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
-  FiLogOut, FiMenu, FiX, FiBell, FiChevronRight,
+  FiLogOut, FiMenu, FiX, FiChevronRight,
   FiSpeaker, FiBriefcase, FiCalendar, FiMessageSquare, FiHelpCircle, FiClock,
 } from 'react-icons/fi';
 
@@ -159,10 +160,7 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="relative p-2.5 text-gray-400 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors">
-              <FiBell size={19} />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-yellow-400 border-2 border-white" />
-            </button>
+            <NotificationBell />
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-xs font-bold text-white cursor-pointer shadow-md">
               {getInitials(user?.name)}
             </div>

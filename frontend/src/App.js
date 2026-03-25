@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 import LoginPage             from './pages/LoginPage';
 import RegisterPage          from './pages/RegisterPage';
@@ -45,18 +46,18 @@ function AppRoutes() {
       <Route path="/reset-password"  element={<ResetPassword />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/dashboard"          element={<Dashboard />} />
-        <Route path="/tickets"            element={<TicketList />} />
-        <Route path="/tickets/new"        element={<CreateTicket />} />
-        <Route path="/tickets/:id"        element={<TicketDetail />} />
-        <Route path="/profile"            element={<ProfilePage />} />
-        <Route path="/announcements"      element={<AnnouncementsPage />} />
-        <Route path="/opportunities"      element={<OpportunitiesPage />} />
-        <Route path="/events"             element={<EventsPage />} />
-        <Route path="/ai-assistant"       element={<AIAssistant />} />
-        <Route path="/faq"                element={<FAQPage />} />
-        <Route path="/academic-calendar"  element={<AcademicCalendarPage />} />
-        <Route path="/users"              element={<ProtectedRoute roles={['admin']}><UsersPage /></ProtectedRoute>} />
+        <Route path="/dashboard"         element={<Dashboard />} />
+        <Route path="/tickets"           element={<TicketList />} />
+        <Route path="/tickets/new"       element={<CreateTicket />} />
+        <Route path="/tickets/:id"       element={<TicketDetail />} />
+        <Route path="/profile"           element={<ProfilePage />} />
+        <Route path="/announcements"     element={<AnnouncementsPage />} />
+        <Route path="/opportunities"     element={<OpportunitiesPage />} />
+        <Route path="/events"            element={<EventsPage />} />
+        <Route path="/ai-assistant"      element={<AIAssistant />} />
+        <Route path="/faq"               element={<FAQPage />} />
+        <Route path="/academic-calendar" element={<AcademicCalendarPage />} />
+        <Route path="/users"             element={<ProtectedRoute roles={['admin']}><UsersPage /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<NotFound />} />
@@ -67,13 +68,16 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Toaster position="top-right" toastOptions={{
-          duration: 3500,
-          style: { fontSize:'14px', fontFamily:'Plus Jakarta Sans, sans-serif', borderRadius:'12px' }
-        }} />
-        <AppRoutes />
-      </Router>
+      {/* NotificationProvider must be inside AuthProvider (needs token) */}
+      <NotificationProvider>
+        <Router>
+          <Toaster position="top-right" toastOptions={{
+            duration: 3500,
+            style: { fontSize:'14px', fontFamily:'Plus Jakarta Sans, sans-serif', borderRadius:'12px' }
+          }}/>
+          <AppRoutes />
+        </Router>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
