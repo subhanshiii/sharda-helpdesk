@@ -266,3 +266,34 @@ exports.addReply = async (req, res, next) => {
     res.status(200).json({ success: true, data: updated });
   } catch (error) { next(error); }
 };
+
+
+// ── Re-export with cache invalidation ─────────────────
+// We patch createTicket and updateTicket to also invalidate stats cache
+
+const { invalidateStatsCache } = require('./statsController');
+const { queueTicketCreatedEmail } = require('../queues/emailQueue');
+
+const originalCreate = exports.createTicket;
+exports.createTicket = async (req, res, next) => {
+  // Store original res.json to intercept response
+  const originalJson = res.json.bind(res);
+  res.json = async (body) => {
+    if (body.success && body.data) {
+      // Invalidate stats cache after ticket creation
+      await invalidateStatsCache(req.user.id, req.user.role).catch(() => {});
+
+      // Queue confirmation email to student
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      queueTicketCreatedEmail({
+        toEmail:    req.user.email,
+        userName:   req.user.name,
+        ticketId:   body.data.ticketId,
+        ticketTitle: body.data.title,
+        ticketLink: `${frontendUrl}/tickets/${body.data._id}`,
+      }).catch(() => {}); // Don't fail if queue is down
+    }
+    return originalJson(body);
+  };
+  return originalCreate(req, res, next);
+};
