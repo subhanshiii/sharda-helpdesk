@@ -1,30 +1,41 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
 
-// Helper: send token response
+// ── Cookie options ─────────────────────────────────────
+// httpOnly = JS cannot access this cookie (prevents XSS token theft)
+// secure   = only sent over HTTPS in production
+// sameSite = prevents CSRF attacks
+const getCookieOptions = () => ({
+  httpOnly: true,
+  secure:   process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+});
+
+// ── Send token response ────────────────────────────────
+// Sets JWT in httpOnly cookie AND returns it in body (for mobile clients)
 const sendTokenResponse = (user, statusCode, res) => {
   const token = user.getSignedJwtToken();
 
   const userData = {
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    department: user.department,
+    _id:          user._id,
+    name:         user.name,
+    email:        user.email,
+    role:         user.role,
+    department:   user.department,
     enrollmentId: user.enrollmentId,
-    avatar: user.avatar,
-    createdAt: user.createdAt,
+    avatar:       user.avatar,
+    createdAt:    user.createdAt,
   };
 
-  res.status(statusCode).json({
-    success: true,
-    token,
-    user: userData,
-  });
+  res
+    .status(statusCode)
+    .cookie('token', token, getCookieOptions())
+    .json({ success: true, token, user: userData });
 };
 
 // @desc    Register user
-// @route   POST /api/auth/register
+// @route   POST /api/v1/auth/register
 // @access  Public
 exports.register = async (req, res, next) => {
   try {
@@ -33,29 +44,24 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: errors.array()[0].msg });
     }
 
-    const { name, email, password, role, department, enrollmentId } = req.body;
+    const { name, email, password, department, enrollmentId } = req.body;
 
-    // Only allow student registration publicly; agents/admins must be created by admin
-    const allowedPublicRoles = ['student'];
-    const finalRole = allowedPublicRoles.includes(role) ? role : 'student';
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'Email already registered' });
+    }
 
     const user = await User.create({
-      name,
-      email,
-      password,
-      role: finalRole,
-      department,
-      enrollmentId,
+      name, email, password, role: 'student', department, enrollmentId,
     });
 
     sendTokenResponse(user, 201, res);
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 // @desc    Login user
-// @route   POST /api/auth/login
+// @route   POST /api/v1/auth/login
 // @access  Public
 exports.login = async (req, res, next) => {
   try {
@@ -66,13 +72,14 @@ exports.login = async (req, res, next) => {
 
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
+      // Generic message — don't reveal if email exists
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     if (!user.isActive) {
-      return res.status(401).json({ success: false, message: 'Account is deactivated. Contact admin.' });
+      return res.status(401).json({ success: false, message: 'Account deactivated. Contact admin.' });
     }
 
     const isMatch = await user.matchPassword(password);
@@ -80,65 +87,65 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Update last login
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
     sendTokenResponse(user, 200, res);
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-// @desc    Get current logged-in user
-// @route   GET /api/auth/me
+// @desc    Logout — clears httpOnly cookie
+// @route   POST /api/v1/auth/logout
+// @access  Private
+exports.logout = (req, res) => {
+  res
+    .cookie('token', 'none', { httpOnly: true, expires: new Date(Date.now() + 5 * 1000) })
+    .json({ success: true, message: 'Logged out successfully' });
+};
+
+// @desc    Get current user
+// @route   GET /api/v1/auth/me
 // @access  Private
 exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
     res.status(200).json({ success: true, data: user });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-// @desc    Update user profile
-// @route   PUT /api/auth/updateprofile
+// @desc    Update profile
+// @route   PUT /api/v1/auth/updateprofile
 // @access  Private
 exports.updateProfile = async (req, res, next) => {
   try {
-    const fieldsToUpdate = {
-      name: req.body.name,
-      department: req.body.department,
-      enrollmentId: req.body.enrollmentId,
-    };
-
-    // Remove undefined fields
-    Object.keys(fieldsToUpdate).forEach(
-      (key) => fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
-    );
-
-    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
-      new: true,
-      runValidators: true,
+    const allowedFields = ['name', 'department', 'enrollmentId'];
+    const updates = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
 
+    const user = await User.findByIdAndUpdate(req.user.id, updates, {
+      new: true, runValidators: true,
+    });
     res.status(200).json({ success: true, data: user });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
 // @desc    Change password
-// @route   PUT /api/auth/changepassword
+// @route   PUT /api/v1/auth/changepassword
 // @access  Private
 exports.changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Both passwords are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+    }
 
     const user = await User.findById(req.user.id).select('+password');
     const isMatch = await user.matchPassword(currentPassword);
-
     if (!isMatch) {
       return res.status(400).json({ success: false, message: 'Current password is incorrect' });
     }
@@ -147,7 +154,5 @@ exports.changePassword = async (req, res, next) => {
     await user.save();
 
     sendTokenResponse(user, 200, res);
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
