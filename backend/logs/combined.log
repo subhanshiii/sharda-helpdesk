@@ -1,0 +1,2 @@
+{"environment":"development","level":"\u001b[32minfo\u001b[39m","message":"📬 Email queue worker initialized","service":"sharda-helpdesk","timestamp":"18:57:19","version":"4.0.0"}
+{"environment":"development","features":["Socket.io","Redis Cache","Bull Queue","Winston Logging","Performance Monitor"],"level":"\u001b[32minfo\u001b[39m","message":"🚀 Sharda Platform v4.0 running on port 8080","port":"8080","service":"sharda-helpdesk","timestamp":"18:57:19","version":"4.0.0"}

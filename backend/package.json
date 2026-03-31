@@ -1,6 +1,6 @@
 {
   "name": "sharda-helpdesk-backend",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Sharda University Student Platform — Production Backend",
   "main": "server.js",
   "scripts": {
@@ -25,9 +25,10 @@
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "openai": "^6.33.0",
+    "openai": "^4.20.1",
     "resend": "^2.0.0",
-    "socket.io": "^4.6.2"
+    "socket.io": "^4.6.2",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
