@@ -1,10 +1,22 @@
-const express = require('express');
-const router  = express.Router();
-const { chat, getFAQs, getSuggestions } = require('../controllers/chatController');
-const { protect } = require('../middleware/auth');
+const express  = require('express');
+const router   = express.Router();
+const { chat, categorize, summarize, getFAQs, getSuggestions } = require('../controllers/chatController');
+const { protect, authorize } = require('../middleware/auth');
+const { generalLimiter }     = require('../middleware/security');
+const rateLimit = require('express-rate-limit');
 
-router.post('/',            protect, chat);
-router.get('/faqs',         protect, getFAQs);
-router.get('/suggestions',  protect, getSuggestions);
+// Stricter rate limit for AI endpoint — 30 requests per hour per user
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max:      30,
+  keyGenerator: (req) => req.user?.id || req.ip, // per-user limit
+  message:  { success: false, message: 'AI chat limit reached. Try again in 1 hour.' },
+});
+
+router.post('/',                    protect, aiLimiter, chat);
+router.post('/categorize',          protect, categorize);
+router.get('/summarize/:ticketId',  protect, authorize('admin', 'agent'), summarize);
+router.get('/faqs',                 protect, getFAQs);
+router.get('/suggestions',          protect, getSuggestions);
 
 module.exports = router;

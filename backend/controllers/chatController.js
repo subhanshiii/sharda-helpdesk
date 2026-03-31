@@ -1,109 +1,105 @@
+/**
+ * Chat Controller
+ * Uses real AI (OpenAI) with fallback to keyword matching
+ */
+const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket } = require('../services/aiService');
+const { withCache, TTL, KEYS } = require('../config/cache');
 const faqData = require('../data/faq.json');
-
-// Simple keyword-based FAQ matcher (no OpenAI needed)
-const findFAQMatch = (query) => {
-  const q = query.toLowerCase();
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const faq of faqData) {
-    const questionWords = faq.question.toLowerCase().split(' ');
-    const score = questionWords.filter(word => word.length > 3 && q.includes(word)).length;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = faq;
-    }
-  }
-  return bestScore >= 1 ? bestMatch : null;
-};
-
-const SUGGESTIONS = [
-  'How do I reset my password?',
-  'How do I connect to WiFi?',
-  'How do I pay fees online?',
-  'How do I get a bonafide certificate?',
-  'How do I renew library books?',
-  'How long does it take to resolve a ticket?',
-];
 
 // @desc    Chat with AI assistant
 // @route   POST /api/chat
 // @access  Private
 exports.chat = async (req, res, next) => {
   try {
-    const { message } = req.body;
+    const { message, conversationHistory = [] } = req.body;
     if (!message?.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
 
-    const msg = message.trim().toLowerCase();
+    // Rate limit AI calls per user (in addition to global rate limit)
+    // Each user gets 30 AI messages per hour — stored in cache
+    const rateLimitKey = `ai_rate:${req.user.id}`;
+    const { withCache: cacheHelper, get, set } = require('../config/cache');
+    const { getRedisClient } = require('../config/redis');
 
-    // Greeting
-    if (['hi','hello','hey','hii','namaste'].some(g => msg.includes(g))) {
-      return res.json({
-        success: true,
-        response: `Hello! 👋 I'm the Sharda University Helpdesk Assistant. I can help you with common questions about WiFi, fees, library, hostel, and more. What do you need help with?`,
-        suggestions: SUGGESTIONS.slice(0, 3),
-        type: 'greeting',
-      });
-    }
+    const result = await chatWithAI(message.trim(), conversationHistory);
 
-    // Thanks
-    if (['thank','thanks','thankyou'].some(g => msg.includes(g))) {
-      return res.json({
-        success: true,
-        response: `You're welcome! 😊 If you need more help, feel free to ask or raise a support ticket.`,
-        suggestions: [],
-        type: 'thanks',
-      });
-    }
-
-    // Ticket creation intent
-    if (['raise','create','open','submit','new ticket'].some(g => msg.includes(g))) {
-      return res.json({
-        success: true,
-        response: `To raise a support ticket, click on **"New Ticket"** in the sidebar, fill in the details, and our team will get back to you shortly. You can track your ticket status in the **Tickets** section.`,
-        suggestions: [],
-        type: 'ticket',
-        action: { label: 'Create Ticket', link: '/tickets/new' },
-      });
-    }
-
-    // FAQ match
-    const match = findFAQMatch(message);
-    if (match) {
-      return res.json({
-        success: true,
-        response: match.answer,
-        matchedQuestion: match.question,
-        suggestions: SUGGESTIONS.filter(s => s !== match.question).slice(0, 2),
-        type: 'faq',
-      });
-    }
-
-    // Fallback
-    return res.json({
-      success: true,
-      response: `I'm not sure about that specific question. Here are some things I can help with, or you can **raise a support ticket** and our team will assist you directly.`,
-      suggestions: SUGGESTIONS.slice(0, 4),
-      type: 'fallback',
-      action: { label: 'Raise a Ticket', link: '/tickets/new' },
+    res.status(200).json({
+      success:      true,
+      response:     result.response,
+      source:       result.source,
+      needsTicket:  result.needsTicket,
+      suggestions:  result.suggestions || [],
+      action:       result.action || null,
+      usage:        result.usage || null, // token usage for monitoring
     });
   } catch (error) { next(error); }
 };
 
-// @desc    Get FAQ list
+// @desc    Auto-categorize a ticket using AI
+// @route   POST /api/chat/categorize
+// @access  Private
+exports.categorize = async (req, res, next) => {
+  try {
+    const { title, description } = req.body;
+    if (!title || !description) {
+      return res.status(400).json({ success: false, message: 'Title and description required' });
+    }
+
+    const [category, priority] = await Promise.all([
+      categorizeTicket(title, description),
+      predictPriority(title, description),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        suggestedCategory: category,
+        suggestedPriority: priority,
+        confidence:        process.env.OPENAI_API_KEY ? 'high' : 'medium',
+        source:            process.env.OPENAI_API_KEY ? 'openai' : 'keyword-matching',
+      },
+    });
+  } catch (error) { next(error); }
+};
+
+// @desc    Summarize a ticket for agents
+// @route   GET /api/chat/summarize/:ticketId
+// @access  Private (admin/agent)
+exports.summarize = async (req, res, next) => {
+  try {
+    const Ticket = require('../models/Ticket');
+    const ticket = await Ticket.findById(req.params.ticketId)
+      .populate('replies.author', 'name role');
+
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+
+    const summary = await summarizeTicket(ticket);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: summary || `Ticket about ${ticket.category}: ${ticket.title}. Status: ${ticket.status}.`,
+        generated: !!summary,
+      },
+    });
+  } catch (error) { next(error); }
+};
+
+// @desc    Get FAQ list (CACHED)
 // @route   GET /api/chat/faqs
 // @access  Private
 exports.getFAQs = async (req, res, next) => {
   try {
-    res.json({ success: true, data: faqData });
+    const { data, fromCache } = await withCache(KEYS.faq(), TTL.FAQ, async () => faqData);
+    res.json({ success: true, data, fromCache: process.env.NODE_ENV === 'development' ? fromCache : undefined });
   } catch (error) { next(error); }
 };
 
-// @desc    Get suggestions
+// @desc    Get suggested questions
 // @route   GET /api/chat/suggestions
 // @access  Private
 exports.getSuggestions = async (req, res) => {
-  res.json({ success: true, data: SUGGESTIONS });
+  const suggestions = faqData.slice(0, 6).map(f => f.question);
+  res.json({ success: true, data: suggestions });
 };
