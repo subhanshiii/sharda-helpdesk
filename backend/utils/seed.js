@@ -204,7 +204,11 @@ const seedData = async () => {
     },
   ];
 
-  const createdTickets = await Ticket.insertMany(tickets);
+  const createdTickets = [];
+  for (const ticketData of tickets) {
+    const createdTicket = await Ticket.create(ticketData);
+    createdTickets.push(createdTicket);
+  }
   console.log('✅ Tickets created');
 
   const ticket1 = await Ticket.findById(createdTickets[1]._id);

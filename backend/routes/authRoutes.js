@@ -31,7 +31,8 @@ router.post('/login',
   login
 );
 
-router.post('/logout', protect, logout);
+// Logout should clear cookie state even when the session is already invalidated.
+router.post('/logout', logout);
 
 // Password reset
 router.post('/forgot-password',  passwordResetLimiter, forgotPassword);

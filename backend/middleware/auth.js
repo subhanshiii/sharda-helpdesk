@@ -7,11 +7,11 @@ exports.protect = async (req, res, next) => {
   let token;
 
   // 1. Try httpOnly cookie first (more secure)
-  if (req.cookies && req.cookies.token) {
+  if (req.cookies && req.cookies.token && req.cookies.token !== 'none') {
     token = req.cookies.token;
   }
   // 2. Fall back to Authorization header (for API clients)
-  else if (req.headers.authorization?.startsWith('Bearer')) {
+  if (!token && req.headers.authorization?.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
 

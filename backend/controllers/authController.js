@@ -5,11 +5,19 @@ const { validationResult } = require('express-validator');
 // httpOnly = JS cannot access this cookie (prevents XSS token theft)
 // secure   = only sent over HTTPS in production
 // sameSite = prevents CSRF attacks
+// path     = ensure the cookie is available across the entire app
 const getCookieOptions = () => ({
   httpOnly: true,
   secure:   process.env.NODE_ENV === 'production',
   sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  path:     '/',
   maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+});
+
+const getClearCookieOptions = () => ({
+  ...getCookieOptions(),
+  expires: new Date(Date.now() + 5 * 1000),
+  maxAge:  5,
 });
 
 // ── Send token response ────────────────────────────────
@@ -96,10 +104,10 @@ exports.login = async (req, res, next) => {
 
 // @desc    Logout — clears httpOnly cookie
 // @route   POST /api/v1/auth/logout
-// @access  Private
+// @access  Public
 exports.logout = (req, res) => {
   res
-    .cookie('token', 'none', { httpOnly: true, expires: new Date(Date.now() + 5 * 1000) })
+    .cookie('token', 'none', getClearCookieOptions())
     .json({ success: true, message: 'Logged out successfully' });
 };
 

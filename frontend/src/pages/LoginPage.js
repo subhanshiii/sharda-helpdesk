@@ -35,9 +35,14 @@ export default function LoginPage() {
   };
 
   const demoLogin = async (email, password) => {
+    if (loading) return;
     const result = await login(email, password);
-    if (result.success) { toast.success('Logged in!'); navigate('/dashboard'); }
-    else toast.error('Demo login failed — make sure the backend is running and seeded.');
+    if (result.success) {
+      toast.success('Logged in!');
+      navigate('/dashboard');
+    } else {
+      toast.error(result.message || 'Demo login failed — make sure the backend is running and seeded.');
+    }
   };
 
   return (
@@ -179,8 +184,8 @@ export default function LoginPage() {
                 { label: 'Agent',   email: 'it.support@sharda.ac.in', pass: 'agent123',   color: 'from-blue-500 to-cyan-500' },
                 { label: 'Student', email: 'student@sharda.ac.in',    pass: 'student123', color: 'from-emerald-500 to-teal-500' },
               ].map((d) => (
-                <button key={d.label} type="button" onClick={() => demoLogin(d.email, d.pass)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white border border-transparent hover:border-gray-200 hover:shadow-sm transition-all text-left">
+                <button key={d.label} type="button" onClick={() => !loading && demoLogin(d.email, d.pass)} disabled={loading}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white border border-transparent hover:border-gray-200 hover:shadow-sm transition-all text-left disabled:cursor-not-allowed disabled:opacity-60">
                   <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${d.color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
                     {d.label[0]}
                   </div>

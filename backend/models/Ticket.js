@@ -103,13 +103,42 @@ const ticketSchema = new mongoose.Schema(
   }
 );
 
+const Counter = require('./Counter');
+
 // Auto-generate ticketId before saving
 ticketSchema.pre('save', async function (next) {
   if (!this.ticketId) {
-    const count = await mongoose.model('Ticket').countDocuments();
     const year = new Date().getFullYear();
-    this.ticketId = `SU-${year}-${String(count + 1).padStart(4, '0')}`;
+    const counterName = `ticket_${year}`;
+
+    // First, check if counter exists
+    let counter = await Counter.findOne({ name: counterName });
+
+    if (!counter) {
+      // Counter doesn't exist, find the highest existing ticket ID for this year
+      const latestTicket = await mongoose.model('Ticket')
+        .findOne({ ticketId: new RegExp(`^SU-${year}-`) })
+        .sort({ ticketId: -1 })
+        .lean();
+
+      const currentSeq = latestTicket
+        ? parseInt(latestTicket.ticketId.split('-').pop(), 10)
+        : 0;
+
+      // Create the counter with the correct initial sequence
+      counter = await Counter.create({ name: counterName, seq: currentSeq });
+    }
+
+    // Now increment the counter
+    counter = await Counter.findOneAndUpdate(
+      { name: counterName },
+      { $inc: { seq: 1 } },
+      { new: true }
+    );
+
+    this.ticketId = `SU-${year}-${String(counter.seq).padStart(4, '0')}`;
   }
+
   // Set resolvedAt / closedAt timestamps
   if (this.isModified('status')) {
     if (this.status === 'Resolved' && !this.resolvedAt) {
