@@ -59,10 +59,11 @@ const groupSchema = new mongoose.Schema(
           ref: 'User',
           required: true,
         },
-        // Role within this group: admin, teacher, student
+        // Role within this group: admin, agent, student
+        // Keep "teacher" for backward compatibility with older records.
         role: {
           type: String,
-          enum: ['admin', 'teacher', 'student'],
+          enum: ['admin', 'agent', 'teacher', 'student'],
           default: 'student',
         },
         // When they joined the group

@@ -170,6 +170,9 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
   }, []);
 
   const isMine = (msg) => msg.sender?._id === user?._id || msg.sender === user?._id;
+  const canModerateGroup = user?.role === 'admin' || group.members?.some(
+    (member) => member.user?._id === user?._id && member.role === 'admin'
+  );
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -241,7 +244,7 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
                   message={message}
                   isOwn={isMine(message)}
                   showAvatar={showAvatar}
-                  onDelete={isMine(message) ? handleDelete : null}
+                  onDelete={isMine(message) || canModerateGroup ? handleDelete : null}
                 />
               </React.Fragment>
             );

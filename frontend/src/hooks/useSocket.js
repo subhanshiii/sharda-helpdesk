@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,13 +9,19 @@ let socketInstance = null;
 export const useSocket = () => {
   const { token, user } = useAuth();
   const socketRef = useRef(null);
+  const [socket, setSocket] = useState(socketInstance);
 
   useEffect(() => {
-    if (!token || !user) return;
+    if (!token || !user) {
+      socketRef.current = null;
+      setSocket(null);
+      return;
+    }
 
     // Reuse existing connection if already connected
-    if (socketInstance?.connected) {
+    if (socketInstance) {
       socketRef.current = socketInstance;
+      setSocket(socketInstance);
       return;
     }
 
@@ -46,6 +52,7 @@ export const useSocket = () => {
 
     socketInstance  = socket;
     socketRef.current = socket;
+    setSocket(socket);
 
     // Cleanup on unmount
     return () => {
@@ -54,7 +61,7 @@ export const useSocket = () => {
     };
   }, [token, user]);
 
-  return socketRef.current;
+  return socket || socketRef.current;
 };
 
 // ── Hook for ticket-specific real-time events ──────────
@@ -97,7 +104,7 @@ export const useTicketSocket = (ticketId, callbacks) => {
       socket.off('user_stopped_typing');
       console.log(`📋 Left ticket room: ${ticketId}`);
     };
-  }, [socket, ticketId]);
+  }, [socket, ticketId, callbacks]);
 
   // Emit typing event
   const emitTyping = useCallback((isTyping) => {
@@ -130,6 +137,9 @@ export const useNotifications = (callbacks) => {
     if (callbacks.onOnlineCount) {
       socket.on('online_count',       callbacks.onOnlineCount);
     }
+    if (callbacks.onChatMessage) {
+      socket.on('chat:message', callbacks.onChatMessage);
+    }
 
     return () => {
       socket.off('ticket:new');
@@ -137,6 +147,7 @@ export const useNotifications = (callbacks) => {
       socket.off('notification:new_reply');
       socket.off('ticket:status_changed');
       socket.off('online_count');
+      socket.off('chat:message');
     };
-  }, [socket]);
+  }, [socket, callbacks]);
 };

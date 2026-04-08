@@ -68,7 +68,7 @@ const GroupItem = memo(({ group, isActive, onClick }) => (
 
 export default function GroupSidebar({
   groups, activeGroup, onGroupSelect, onCreateGroup,
-  isAdmin, searchQuery, onSearchChange, isOnline,
+  canCreateGroup, searchQuery, onSearchChange, isOnline,
 }) {
   const filtered = groups.filter(g =>
     g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,7 +88,7 @@ export default function GroupSidebar({
               {isOnline ? 'Live' : 'Offline'}
             </div>
           </div>
-          {isAdmin && (
+          {canCreateGroup && (
             <button onClick={onCreateGroup}
               className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors shadow-sm">
               <FiPlus size={16} />
@@ -116,7 +116,7 @@ export default function GroupSidebar({
             <p className="text-sm text-gray-500">
               {searchQuery ? 'No groups match your search' : 'No groups yet'}
             </p>
-            {isAdmin && !searchQuery && (
+            {canCreateGroup && !searchQuery && (
               <button onClick={onCreateGroup}
                 className="mt-3 text-xs text-blue-600 hover:underline font-medium">
                 + Create first group

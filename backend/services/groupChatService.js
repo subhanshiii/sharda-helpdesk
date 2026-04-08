@@ -9,6 +9,95 @@ const Message = require('../models/Message');
 const User    = require('../models/User');
 const logger  = require('../utils/logger');
 
+const GROUP_MEMBER_ROLES = ['student', 'agent', 'admin'];
+
+const normalizeGroupValue = (value) => {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = String(value).trim();
+  return trimmed || '';
+};
+
+const isGroupManager = (group, userId) => group.members.some(
+  (member) => member.user.toString() === userId.toString() && member.role === 'admin'
+);
+
+const canManageGroup = async (groupId, userId) => {
+  const requester = await User.findById(userId).select('role');
+  if (!requester) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const group = await Group.findById(groupId);
+  if (!group || !group.isActive) {
+    const err = new Error('Group not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const isManager = isGroupManager(group, userId);
+  if (!isManager && requester.role !== 'admin') {
+    const err = new Error('Only group admins can manage this group');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return { group, requester, isManager };
+};
+
+const canCreateGroup = async (userId) => {
+  const requester = await User.findById(userId).select('role');
+  if (!requester) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (requester.role === 'admin') return requester;
+
+  const managesAnyGroup = await Group.exists({
+    isActive: true,
+    members: { $elemMatch: { user: userId, role: 'admin' } },
+  });
+
+  if (!managesAnyGroup) {
+    const err = new Error('Only system admins or existing group admins can create groups');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return requester;
+};
+
+const canAccessGroup = async (groupId, userId) => {
+  const user = await User.findById(userId).select('role');
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const group = await Group.findById(groupId);
+  if (!group || !group.isActive) {
+    const err = new Error('Group not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const isMember = group.members.some(
+    (member) => member.user.toString() === userId.toString()
+  );
+
+  if (!isMember && user.role !== 'admin') {
+    const err = new Error('You are not a member of this group');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return { group, user, isMember };
+};
+
 // ── GROUP OPERATIONS ───────────────────────────────────
 
 /**
@@ -16,8 +105,16 @@ const logger  = require('../utils/logger');
  * Only admins can create groups
  */
 const createGroup = async ({ name, department, year, section, description, creatorId }) => {
+  await canCreateGroup(creatorId);
+
+  const normalizedName = normalizeGroupValue(name);
+  const normalizedDepartment = normalizeGroupValue(department);
+  const normalizedYear = normalizeGroupValue(year);
+  const normalizedSection = normalizeGroupValue(section);
+  const normalizedDescription = normalizeGroupValue(description);
+
   // Check duplicate group name
-  const existing = await Group.findOne({ name: name.trim(), isActive: true });
+  const existing = await Group.findOne({ name: normalizedName, isActive: true });
   if (existing) {
     const err = new Error(`A group named "${name}" already exists`);
     err.statusCode = 400;
@@ -25,11 +122,11 @@ const createGroup = async ({ name, department, year, section, description, creat
   }
 
   const group = await Group.create({
-    name: name.trim(),
-    department,
-    year,
-    section,
-    description,
+    name: normalizedName,
+    department: normalizedDepartment,
+    year: normalizedYear,
+    section: normalizedSection,
+    description: normalizedDescription,
     createdBy: creatorId,
     // Creator is automatically added as admin member
     members: [{ user: creatorId, role: 'admin' }],
@@ -108,12 +205,10 @@ const getGroup = async (groupId, userId) => {
     throw err;
   }
 
-  // Check if user is a member
-  const isMember = group.members.some(
-    (m) => m.user._id.toString() === userId.toString()
-  );
+  const requester = await User.findById(userId).select('role');
+  const isMember = group.members.some((m) => m.user._id.toString() === userId.toString());
 
-  if (!isMember) {
+  if (!isMember && requester?.role !== 'admin') {
     const err = new Error('You are not a member of this group');
     err.statusCode = 403;
     throw err;
@@ -126,31 +221,14 @@ const getGroup = async (groupId, userId) => {
  * Add members to a group
  */
 const addMembers = async (groupId, userIds, roles, adminId) => {
-  const group = await Group.findById(groupId);
-  if (!group) {
-    const err = new Error('Group not found');
-    err.statusCode = 404;
-    throw err;
-  }
-
-  // Check if requester is group admin or app admin
-  const requester = await User.findById(adminId);
-  const isGroupAdmin = group.members.some(
-    (m) => m.user.toString() === adminId.toString() && m.role === 'admin'
-  );
-
-  if (!isGroupAdmin && requester.role !== 'admin') {
-    const err = new Error('Only group admins can add members');
-    err.statusCode = 403;
-    throw err;
-  }
+  const { group } = await canManageGroup(groupId, adminId);
 
   const addedUsers = [];
   const skippedUsers = [];
 
   for (let i = 0; i < userIds.length; i++) {
     const userId = userIds[i];
-    const role   = roles?.[i] || 'student';
+    const role = GROUP_MEMBER_ROLES.includes(roles?.[i]) ? roles[i] : 'student';
 
     // Check if already a member
     const alreadyMember = group.members.some(
@@ -187,6 +265,51 @@ const addMembers = async (groupId, userIds, roles, adminId) => {
 };
 
 /**
+ * Update an existing member role inside a group
+ */
+const updateMemberRole = async (groupId, userId, role, requesterId) => {
+  if (!GROUP_MEMBER_ROLES.includes(role)) {
+    const err = new Error('Invalid group role');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { group, requester } = await canManageGroup(groupId, requesterId);
+  const member = group.members.find((entry) => entry.user.toString() === userId.toString());
+
+  if (!member) {
+    const err = new Error('Member not found in this group');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const adminCount = group.members.filter((entry) => entry.role === 'admin').length;
+  if (
+    member.role === 'admin' &&
+    role !== 'admin' &&
+    adminCount === 1
+  ) {
+    const err = new Error('A group must have at least one group admin');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  member.role = role;
+  await group.save();
+
+  const updatedMember = await User.findById(userId).select('name');
+  await Message.create({
+    group: groupId,
+    sender: requesterId,
+    type: 'system',
+    systemMessage: `${updatedMember?.name || 'A member'} is now ${role === 'admin' ? 'a group admin' : `a ${role}`}`,
+  });
+
+  logger.info('Group member role updated', { groupId, userId, role, requesterId, requesterRole: requester.role });
+  return group;
+};
+
+/**
  * Remove a member from a group
  */
 const removeMember = async (groupId, userId, requesterId) => {
@@ -210,6 +333,17 @@ const removeMember = async (groupId, userId, requesterId) => {
   }
 
   const userToRemove = await User.findById(userId);
+  const adminCount = group.members.filter((m) => m.role === 'admin').length;
+  const isRemovingLastAdmin = group.members.some(
+    (m) => m.user.toString() === userId.toString() && m.role === 'admin'
+  ) && adminCount === 1;
+
+  if (isRemovingLastAdmin) {
+    const err = new Error('A group must have at least one group admin');
+    err.statusCode = 400;
+    throw err;
+  }
+
   group.members = group.members.filter(
     (m) => m.user.toString() !== userId.toString()
   );
@@ -257,11 +391,60 @@ const deleteGroup = async (groupId, adminId) => {
     throw err;
   }
 
-  // Soft delete — keep messages in DB
+  // Soft delete the group, but remove related chat history.
   group.isActive = false;
+  group.lastMessage = null;
   await group.save();
+  await Message.deleteMany({ group: groupId });
 
   logger.info('Group deleted', { groupId, adminId });
+};
+
+/**
+ * Update a group (admin only)
+ */
+const updateGroup = async (groupId, updates, adminId) => {
+  const { group } = await canManageGroup(groupId, adminId);
+
+  const nextName = normalizeGroupValue(updates.name);
+  const nextDepartment = normalizeGroupValue(updates.department);
+  const nextYear = normalizeGroupValue(updates.year);
+  const nextSection = normalizeGroupValue(updates.section);
+  const nextDescription = normalizeGroupValue(updates.description);
+
+  if (!nextName) {
+    const err = new Error('Group name is required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const duplicate = await Group.findOne({
+    _id: { $ne: groupId },
+    name: nextName,
+    isActive: true,
+  });
+
+  if (duplicate) {
+    const err = new Error(`A group named "${nextName}" already exists`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Update allowed fields
+  group.name = nextName;
+  if (updates.department !== undefined) group.department = nextDepartment;
+  if (updates.year !== undefined) group.year = nextYear;
+  if (updates.section !== undefined) group.section = nextSection;
+  if (updates.description !== undefined) group.description = nextDescription;
+
+  await group.save();
+
+  const populated = await Group.findById(group._id)
+    .populate('createdBy', 'name email role')
+    .populate('members.user', 'name email role department');
+
+  logger.info('Group updated', { groupId, updates, adminId });
+  return populated;
 };
 
 // ── MESSAGE OPERATIONS ─────────────────────────────────
@@ -271,18 +454,7 @@ const deleteGroup = async (groupId, adminId) => {
  * Returns messages in chronological order
  */
 const getMessages = async (groupId, userId, page = 1, limit = 50) => {
-  // Verify user is a member
-  const group = await Group.findOne({
-    _id:            groupId,
-    'members.user': userId,
-    isActive:       true,
-  });
-
-  if (!group) {
-    const err = new Error('Group not found or you are not a member');
-    err.statusCode = 403;
-    throw err;
-  }
+  await canAccessGroup(groupId, userId);
 
   const total    = await Message.countDocuments({ group: groupId, isDeleted: false });
   const messages = await Message.find({ group: groupId, isDeleted: false })
@@ -321,18 +493,7 @@ const getMessages = async (groupId, userId, page = 1, limit = 50) => {
  * Save a new message (called from socket handler)
  */
 const saveMessage = async ({ groupId, senderId, content, type = 'text', file }) => {
-  // Verify sender is a member
-  const group = await Group.findOne({
-    _id:            groupId,
-    'members.user': senderId,
-    isActive:       true,
-  });
-
-  if (!group) {
-    const err = new Error('Not a member of this group');
-    err.statusCode = 403;
-    throw err;
-  }
+  await canAccessGroup(groupId, senderId);
 
   // Create message
   const message = await Message.create({
@@ -353,6 +514,7 @@ const saveMessage = async ({ groupId, senderId, content, type = 'text', file }) 
 
   // Populate sender info before returning
   const populated = await Message.findById(message._id)
+    .populate('group', 'name')
     .populate('sender', 'name email role department')
     .lean();
 
@@ -370,9 +532,17 @@ const deleteMessage = async (messageId, userId) => {
     throw err;
   }
 
-  // Only sender can delete their message
-  if (message.sender.toString() !== userId.toString()) {
-    const err = new Error('You can only delete your own messages');
+  const group = await Group.findById(message.group);
+  const requester = await User.findById(userId).select('role');
+  const isManager = group ? isGroupManager(group, userId) : false;
+
+  // Sender, group admin, or system admin can delete the message
+  if (
+    message.sender.toString() !== userId.toString() &&
+    !isManager &&
+    requester?.role !== 'admin'
+  ) {
+    const err = new Error('You are not authorized to delete this message');
     err.statusCode = 403;
     throw err;
   }
@@ -388,6 +558,6 @@ const deleteMessage = async (messageId, userId) => {
 
 module.exports = {
   createGroup, getUserGroups, getGroup, getAllGroups, deleteGroup,
-  addMembers, removeMember,
-  getMessages, saveMessage, deleteMessage,
+  addMembers, updateMemberRole, removeMember,
+  updateGroup, getMessages, saveMessage, deleteMessage,
 };

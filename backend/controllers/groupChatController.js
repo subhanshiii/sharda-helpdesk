@@ -5,6 +5,33 @@
  */
 
 const chatService = require('../services/groupChatService');
+const Group = require('../models/Group');
+const User = require('../models/User');
+
+const emitGroupEventToMembers = async (io, groupId, event, payload) => {
+  if (!io) return;
+
+  const [group, admins] = await Promise.all([
+    Group.findById(groupId).select('members.user'),
+    User.find({ role: 'admin', isActive: true }).select('_id'),
+  ]);
+
+  const recipientIds = new Set(admins.map((admin) => admin._id.toString()));
+  if (group) {
+    group.members.forEach((member) => {
+      recipientIds.add(member.user.toString());
+    });
+  }
+
+  recipientIds.forEach((recipientId) => {
+    io.to(`user:${recipientId}`).emit(event, payload);
+  });
+};
+
+const getGroupSnapshot = async (groupId) => Group.findById(groupId)
+  .populate('createdBy', 'name email role')
+  .populate('members.user', 'name email role department enrollmentId')
+  .populate('lastMessage');
 
 // ── GROUP ENDPOINTS ────────────────────────────────────
 
@@ -19,10 +46,7 @@ exports.createGroup = async (req, res, next) => {
       creatorId: req.user.id,
     });
 
-    // Notify all connected sockets that a new group was created
-    if (req.io) {
-      req.io.emit('group:created', { group });
-    }
+    await emitGroupEventToMembers(req.io, group._id, 'group:created', { group });
 
     res.status(201).json({ success: true, data: group });
   } catch (error) {
@@ -66,6 +90,7 @@ exports.addMembers = async (req, res, next) => {
     if (!userIds?.length) return res.status(400).json({ success: false, message: 'userIds array is required' });
 
     const result = await chatService.addMembers(req.params.id, userIds, roles, req.user.id);
+    const group = await chatService.getGroup(req.params.id, req.user.id);
 
     // Notify added users via socket
     if (req.io) {
@@ -74,7 +99,27 @@ exports.addMembers = async (req, res, next) => {
       });
     }
 
-    res.status(200).json({ success: true, data: result });
+    await emitGroupEventToMembers(req.io, req.params.id, 'group:updated', { group });
+
+    res.status(200).json({ success: true, data: { ...result, group } });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+// PUT /api/chat-groups/:id/members/:userId — update member role
+exports.updateMemberRole = async (req, res, next) => {
+  try {
+    const { role } = req.body;
+    if (!role) return res.status(400).json({ success: false, message: 'Member role is required' });
+
+    await chatService.updateMemberRole(req.params.id, req.params.userId, role, req.user.id);
+    const group = await chatService.getGroup(req.params.id, req.user.id);
+
+    await emitGroupEventToMembers(req.io, req.params.id, 'group:updated', { group });
+
+    res.status(200).json({ success: true, data: group });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     next(error);
@@ -84,11 +129,14 @@ exports.addMembers = async (req, res, next) => {
 // DELETE /api/chat-groups/:id/members/:userId — remove member
 exports.removeMember = async (req, res, next) => {
   try {
-    const group = await chatService.removeMember(req.params.id, req.params.userId, req.user.id);
+    await chatService.removeMember(req.params.id, req.params.userId, req.user.id);
+    const group = await getGroupSnapshot(req.params.id);
 
     if (req.io) {
       req.io.to(`user:${req.params.userId}`).emit('group:removed', { groupId: req.params.id });
     }
+
+    await emitGroupEventToMembers(req.io, req.params.id, 'group:updated', { group });
 
     res.status(200).json({ success: true, data: group });
   } catch (error) {
@@ -101,8 +149,27 @@ exports.removeMember = async (req, res, next) => {
 exports.deleteGroup = async (req, res, next) => {
   try {
     await chatService.deleteGroup(req.params.id, req.user.id);
-    if (req.io) req.io.emit('group:deleted', { groupId: req.params.id });
+    await emitGroupEventToMembers(req.io, req.params.id, 'group:deleted', { groupId: req.params.id });
     res.status(200).json({ success: true, message: 'Group deleted' });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+// PUT /api/chat-groups/:id — update group
+exports.updateGroup = async (req, res, next) => {
+  try {
+    const { name, department, year, section, description } = req.body;
+    if (!name) return res.status(400).json({ success: false, message: 'Group name is required' });
+
+    const group = await chatService.updateGroup(req.params.id, {
+      name, department, year, section, description,
+    }, req.user.id);
+
+    await emitGroupEventToMembers(req.io, group._id, 'group:updated', { group });
+
+    res.status(200).json({ success: true, data: group });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     next(error);
@@ -155,10 +222,8 @@ exports.sendMessage = async (req, res, next) => {
       file,
     });
 
-    // Broadcast via socket
-    if (req.io) {
-      req.io.to(`group:${req.params.id}`).emit('chat:message', message);
-    }
+    // Broadcast via socket to all group members
+    await emitGroupEventToMembers(req.io, req.params.id, 'chat:message', message);
 
     res.status(201).json({ success: true, data: message });
   } catch (error) {
@@ -172,12 +237,10 @@ exports.deleteMessage = async (req, res, next) => {
   try {
     const message = await chatService.deleteMessage(req.params.messageId, req.user.id);
 
-    if (req.io) {
-      req.io.to(`group:${message.group}`).emit('chat:message_deleted', {
-        messageId: message._id,
-        groupId:   message.group,
-      });
-    }
+    await emitGroupEventToMembers(req.io, message.group, 'chat:message_deleted', {
+      messageId: message._id,
+      groupId: message.group,
+    });
 
     res.status(200).json({ success: true, message: 'Message deleted' });
   } catch (error) {
@@ -192,7 +255,6 @@ exports.searchUsers = async (req, res, next) => {
     const { q, role } = req.query;
     if (!q || q.length < 2) return res.status(400).json({ success: false, message: 'Search query must be at least 2 characters' });
 
-    const User  = require('../models/User');
     const query = {
       $or: [
         { name:         { $regex: q, $options: 'i' } },

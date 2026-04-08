@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { useNotifications } from '../hooks/useSocket';
+import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
 const NotificationContext = createContext();
 
 export const NotificationProvider = ({ children }) => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount,   setUnreadCount]   = useState(0);
   const [onlineCount,   setOnlineCount]   = useState(0);
@@ -38,6 +40,23 @@ export const NotificationProvider = ({ children }) => {
       toast('🔄 ' + data.message, { duration: 4000 });
     },
     onOnlineCount: (count) => setOnlineCount(count),
+    onChatMessage: (message) => {
+      const senderId = message.sender?._id || message.sender;
+      if (!message?.group || senderId === user?._id) return;
+
+      addNotification({
+        type: 'group_chat',
+        title: message.group?.name || 'New Group Message',
+        body: message.type === 'system'
+          ? message.systemMessage
+          : `${message.sender?.name || 'Someone'}: ${message.content || (message.file ? 'Sent an attachment' : 'New message')}`,
+        groupId: message.group?._id || message.group,
+      });
+
+      toast(message.group?.name ? `New message in ${message.group.name}` : 'New group message', {
+        duration: 3000,
+      });
+    },
   });
 
   const markAllRead = () => {

@@ -5,7 +5,8 @@ import { useSocket } from '../hooks/useSocket';
 import GroupSidebar from '../components/chat/GroupSidebar';
 import ChatWindow from '../components/chat/ChatWindow';
 import CreateGroupModal from '../components/chat/CreateGroupModal';
-import { FiMessageSquare, FiUsers, FiMenu, FiX } from 'react-icons/fi';
+import GroupInfoModal from '../components/chat/GroupInfoModal';
+import { FiMessageSquare, FiUsers, FiMenu } from 'react-icons/fi';
 
 export default function GroupChatPage() {
   const { user }                = useAuth();
@@ -17,8 +18,18 @@ export default function GroupChatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(true); // Mobile toggle
   const [isOnline, setIsOnline] = useState(false);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  const canCreateGroup = isAdmin || groups.some(
+    (group) => group.myRole === 'admin' || group.members?.some(
+      (member) => member.user?._id === user?._id && member.role === 'admin'
+    )
+  );
+  const activeGroupRole = activeGroup?.myRole || activeGroup?.members?.find(
+    (member) => member.user?._id === user?._id
+  )?.role;
+  const canManageGroup = isAdmin || activeGroupRole === 'admin';
 
   // ── Fetch user's groups ────────────────────────────────
   const fetchGroups = useCallback(async () => {
@@ -34,7 +45,7 @@ export default function GroupChatPage() {
     } finally { setLoading(false); }
   }, [isAdmin, activeGroup]);
 
-  useEffect(() => { fetchGroups(); }, []);
+  useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
   // ── Socket: listen for new groups + group updates ─────
   useEffect(() => {
@@ -59,6 +70,10 @@ export default function GroupChatPage() {
     const onGroupDeleted = ({ groupId }) => {
       setGroups(prev => prev.filter(g => g._id !== groupId));
       if (activeGroup?._id === groupId) setActiveGroup(null);
+    };
+    const onGroupUpdated = ({ group }) => {
+      setGroups(prev => prev.map(g => g._id === group._id ? group : g));
+      if (activeGroup?._id === group._id) setActiveGroup(group);
     };
 
     // Update last message preview in sidebar
@@ -85,6 +100,7 @@ export default function GroupChatPage() {
     socket.on('group:added',    onGroupAdded);
     socket.on('group:removed',  onGroupRemoved);
     socket.on('group:deleted',  onGroupDeleted);
+    socket.on('group:updated',  onGroupUpdated);
     socket.on('chat:message',   onNewMessage);
 
     return () => {
@@ -94,6 +110,7 @@ export default function GroupChatPage() {
       socket.off('group:added',   onGroupAdded);
       socket.off('group:removed', onGroupRemoved);
       socket.off('group:deleted', onGroupDeleted);
+      socket.off('group:updated', onGroupUpdated);
       socket.off('chat:message',  onNewMessage);
     };
   }, [socket, activeGroup, fetchGroups]);
@@ -110,6 +127,25 @@ export default function GroupChatPage() {
     setActiveGroup(newGroup);
     setShowSidebar(false);
   }, []);
+
+  const handleGroupInfo = useCallback(() => {
+    setShowGroupInfo(true);
+  }, []);
+
+  const handleGroupUpdated = useCallback((updatedGroup) => {
+    setGroups(prev => prev.map(g => g._id === updatedGroup._id ? updatedGroup : g));
+    if (activeGroup?._id === updatedGroup._id) {
+      setActiveGroup(updatedGroup);
+    }
+    setShowGroupInfo(false);
+  }, [activeGroup]);
+
+  const handleGroupDeleted = useCallback((groupId) => {
+    setGroups(prev => prev.filter(g => g._id !== groupId));
+    if (activeGroup?._id === groupId) {
+      setActiveGroup(null);
+    }
+  }, [activeGroup]);
 
   if (loading) {
     return (
@@ -132,6 +168,19 @@ export default function GroupChatPage() {
         />
       )}
 
+      {showGroupInfo && activeGroup && (
+        <GroupInfoModal
+          group={activeGroup}
+          isOpen={showGroupInfo}
+          onClose={() => setShowGroupInfo(false)}
+          canManageGroup={canManageGroup}
+          isSystemAdmin={isAdmin}
+          currentUserId={user?._id}
+          onGroupUpdated={handleGroupUpdated}
+          onGroupDeleted={handleGroupDeleted}
+        />
+      )}
+
       {/* ── Sidebar ── */}
       <div className={`${showSidebar ? 'flex' : 'hidden'} md:flex flex-col w-72 flex-shrink-0`}>
         <GroupSidebar
@@ -139,7 +188,7 @@ export default function GroupChatPage() {
           activeGroup={activeGroup}
           onGroupSelect={handleGroupSelect}
           onCreateGroup={() => setShowCreate(true)}
-          isAdmin={isAdmin}
+          canCreateGroup={canCreateGroup}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isOnline={isOnline}
@@ -160,7 +209,7 @@ export default function GroupChatPage() {
             </div>
             <ChatWindow
               group={activeGroup}
-              onGroupInfoClick={() => {/* TODO: Group info panel */}}
+              onGroupInfoClick={handleGroupInfo}
             />
           </>
         ) : (
@@ -181,7 +230,7 @@ export default function GroupChatPage() {
                     ? 'No groups yet. Create the first group!'
                     : 'You have not been added to any groups yet. Contact your admin.'}
                 </div>
-                {isAdmin && (
+                {canCreateGroup && (
                   <button onClick={() => setShowCreate(true)} className="btn-primary">
                     + Create First Group
                   </button>

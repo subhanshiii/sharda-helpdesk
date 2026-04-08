@@ -9,6 +9,7 @@ const TYPE_CONFIG = {
   assigned:   { icon:'📋', color:'text-violet-600', bg:'bg-violet-50' },
   reply:      { icon:'💬', color:'text-green-600',  bg:'bg-green-50'  },
   status:     { icon:'🔄', color:'text-orange-600', bg:'bg-orange-50' },
+  group_chat: { icon:'💬', color:'text-cyan-600', bg:'bg-cyan-50' },
 };
 
 export default function NotificationBell() {
@@ -66,7 +67,7 @@ export default function NotificationBell() {
                 return (
                   <Link
                     key={notif.id}
-                    to={notif.ticketId ? `/tickets/${notif.ticketId}` : '/tickets'}
+                    to={notif.groupId ? '/group-chat' : notif.ticketId ? `/tickets/${notif.ticketId}` : '/tickets'}
                     onClick={() => { markRead(notif.id); setOpen(false); }}
                     className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${!notif.read ? 'bg-blue-50/40' : ''}`}>
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${cfg.bg}`}>

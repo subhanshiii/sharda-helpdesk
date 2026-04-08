@@ -28,15 +28,17 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
 // ── Group routes ───────────────────────────────────────
-router.post('/',                       protect, authorize('admin'), ctrl.createGroup);
+router.post('/',                       protect, ctrl.createGroup);
 router.get('/',                        protect, authorize('admin'), ctrl.getAllGroups);
 router.get('/my',                      protect, ctrl.getMyGroups);
 router.get('/users/search',            protect, ctrl.searchUsers);
 router.get('/:id',                     protect, ctrl.getGroup);
+router.put('/:id',                     protect, ctrl.updateGroup);
 router.delete('/:id',                  protect, authorize('admin'), ctrl.deleteGroup);
 
 // Member management
 router.post('/:id/members',            protect, ctrl.addMembers);
+router.put('/:id/members/:userId',     protect, ctrl.updateMemberRole);
 router.delete('/:id/members/:userId',  protect, ctrl.removeMember);
 
 // Message routes

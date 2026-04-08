@@ -6,7 +6,11 @@ import { FiX, FiPlus, FiSearch, FiTrash2, FiUsers } from 'react-icons/fi';
 const DEPARTMENTS = ['CSE','ECE','EEE','MECH','CIVIL','MBA','MCA','BBA','BTECH','Other'];
 const YEARS       = ['1','2','3','4','5'];
 const SECTIONS    = ['A','B','C','D','E'];
-const ROLES       = ['student','teacher','admin'];
+const ROLE_OPTIONS = [
+  { value: 'student', label: 'Student' },
+  { value: 'agent', label: 'Agent' },
+  { value: 'admin', label: 'Group Admin' },
+];
 
 const UserSearchResult = ({ user, onAdd }) => (
   <button onClick={() => onAdd(user)}
@@ -25,6 +29,7 @@ const UserSearchResult = ({ user, onAdd }) => (
 export default function CreateGroupModal({ onClose, onCreated }) {
   const [step,         setStep]         = useState(1); // 1=details, 2=members
   const [form,         setForm]         = useState({ name:'', department:'', year:'', section:'', description:'' });
+  const [nameTouched, setNameTouched] = useState(false);
   const [searchQuery,  setSearchQuery]  = useState('');
   const [searchResults,setSearchResults]= useState([]);
   const [selectedUsers,setSelectedUsers]= useState([]);
@@ -37,13 +42,13 @@ export default function CreateGroupModal({ onClose, onCreated }) {
   const handleFormChange = useCallback((key, value) => {
     setForm(prev => {
       const updated = { ...prev, [key]: value };
-      if (['department','year','section'].includes(key)) {
+      if (!nameTouched && ['department','year','section'].includes(key)) {
         const parts = [updated.department, updated.year && `Year ${updated.year}`, updated.section && `Sec ${updated.section}`].filter(Boolean);
         updated.name = parts.join(' - ');
       }
       return updated;
     });
-  }, []);
+  }, [nameTouched]);
 
   // Search users to add
   const handleSearch = useCallback(async (q) => {
@@ -60,9 +65,17 @@ export default function CreateGroupModal({ onClose, onCreated }) {
 
   const addUser = useCallback((user) => {
     setSelectedUsers(prev => [...prev, user]);
-    setUserRoles(prev => ({ ...prev, [user._id]: user.role === 'admin' ? 'admin' : user.role === 'teacher' ? 'teacher' : 'student' }));
+    setUserRoles(prev => ({
+      ...prev,
+      [user._id]: user.role === 'admin' ? 'admin' : user.role === 'agent' ? 'agent' : 'student',
+    }));
     setSearchResults(prev => prev.filter(u => u._id !== user._id));
     setSearchQuery('');
+  }, []);
+
+  const handleNameChange = useCallback((value) => {
+    setNameTouched(true);
+    setForm(prev => ({ ...prev, name: value }));
   }, []);
 
   const removeUser = useCallback((userId) => {
@@ -131,38 +144,54 @@ export default function CreateGroupModal({ onClose, onCreated }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Department</label>
-                  <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.department} onChange={e => handleFormChange('department', e.target.value)}>
-                    <option value="">Select</option>
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <input
+                    list="department-options"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    value={form.department}
+                    onChange={e => handleFormChange('department', e.target.value)}
+                    placeholder="Select or type department"
+                  />
+                  <datalist id="department-options">
+                    {DEPARTMENTS.map(d => <option key={d} value={d} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Year</label>
-                  <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.year} onChange={e => handleFormChange('year', e.target.value)}>
-                    <option value="">Select</option>
-                    {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
+                  <input
+                    list="year-options"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    value={form.year}
+                    onChange={e => handleFormChange('year', e.target.value)}
+                    placeholder="Select or type year"
+                  />
+                  <datalist id="year-options">
+                    {YEARS.map(y => <option key={y} value={y} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Section</label>
-                  <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.section} onChange={e => handleFormChange('section', e.target.value)}>
-                    <option value="">Select</option>
-                    {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <input
+                    list="section-options"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    value={form.section}
+                    onChange={e => handleFormChange('section', e.target.value)}
+                    placeholder="Select or type section"
+                  />
+                  <datalist id="section-options">
+                    {SECTIONS.map(s => <option key={s} value={s} />)}
+                  </datalist>
                 </div>
               </div>
+              <p className="text-xs text-gray-400">You can choose a suggested value or type a custom one in any field.</p>
 
               {/* Group name (auto-generated or manual) */}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Group Name *</label>
                 <input className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   value={form.name}
-                  onChange={e => setForm(p => ({...p, name: e.target.value}))}
+                  onChange={e => handleNameChange(e.target.value)}
                   placeholder="e.g. CSE Year 2 - Sec A" />
-                <p className="text-xs text-gray-400 mt-1">Auto-filled from department/year/section, or type custom name</p>
+                <p className="text-xs text-gray-400 mt-1">Auto-filled from your group details until you type a custom name</p>
               </div>
 
               {/* Description */}
@@ -223,7 +252,7 @@ export default function CreateGroupModal({ onClose, onCreated }) {
                           value={userRoles[u._id] || 'student'}
                           onChange={e => setUserRoles(prev => ({...prev, [u._id]: e.target.value}))}
                           className="text-xs border border-blue-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400">
-                          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                          {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                         </select>
                         <button onClick={() => removeUser(u._id)}
                           className="p-1 text-gray-400 hover:text-red-500 rounded-lg transition-colors flex-shrink-0">

@@ -11,10 +11,18 @@ export const useGroupChat = (groupId, initialMessages = []) => {
 
   useEffect(() => {
     if (!socket || !groupId) return;
-    socket.emit('group:join', { groupId });
-    setIsConnected(true);
+
+    const joinGroup = () => {
+      socket.emit('group:join', { groupId });
+      setIsConnected(socket.connected);
+    };
+
+    joinGroup();
 
     const onMessage = (message) => {
+      const messageGroupId = message.group?._id || message.group;
+      if (messageGroupId !== groupId) return;
+
       setMessages(prev => {
         const exists = prev.some(m => m._id === message._id);
         if (exists) return prev;
@@ -23,7 +31,8 @@ export const useGroupChat = (groupId, initialMessages = []) => {
       setTypingUsers(prev => prev.filter(u => u.userId !== message.sender?._id));
     };
 
-    const onMessageDeleted = ({ messageId }) => {
+    const onMessageDeleted = ({ messageId, groupId: deletedGroupId }) => {
+      if (deletedGroupId !== groupId) return;
       setMessages(prev => prev.map(m =>
         m._id === messageId ? { ...m, isDeleted: true, content: null } : m
       ));
@@ -42,9 +51,19 @@ export const useGroupChat = (groupId, initialMessages = []) => {
     };
 
     const onStopTyping  = ({ userId }) => { clearTimeout(typingTimers.current[userId]); setTypingUsers(prev => prev.filter(u => u.userId !== userId)); };
-    const onUserOnline  = ({ userId, userName }) => setOnlineMembers(prev => prev.some(u => u.userId === userId) ? prev : [...prev, { userId, userName }]);
-    const onUserOffline = ({ userId }) => setOnlineMembers(prev => prev.filter(u => u.userId !== userId));
+    const onUserOnline  = ({ userId, userName, groupId: onlineGroupId }) => {
+      if (onlineGroupId !== groupId) return;
+      setOnlineMembers(prev => prev.some(u => u.userId === userId) ? prev : [...prev, { userId, userName }]);
+    };
+    const onUserOffline = ({ userId, groupId: offlineGroupId }) => {
+      if (offlineGroupId !== groupId) return;
+      setOnlineMembers(prev => prev.filter(u => u.userId !== userId));
+    };
+    const onConnect = () => joinGroup();
+    const onDisconnect = () => setIsConnected(false);
 
+    socket.on('connect',              onConnect);
+    socket.on('disconnect',           onDisconnect);
     socket.on('chat:message',         onMessage);
     socket.on('chat:message_deleted', onMessageDeleted);
     socket.on('chat:typing',          onTyping);
@@ -54,6 +73,8 @@ export const useGroupChat = (groupId, initialMessages = []) => {
 
     return () => {
       socket.emit('group:leave', { groupId });
+      socket.off('connect',              onConnect);
+      socket.off('disconnect',           onDisconnect);
       socket.off('chat:message',         onMessage);
       socket.off('chat:message_deleted', onMessageDeleted);
       socket.off('chat:typing',          onTyping);
@@ -64,7 +85,7 @@ export const useGroupChat = (groupId, initialMessages = []) => {
     };
   }, [socket, groupId]);
 
-  useEffect(() => { setMessages(initialMessages); }, [groupId]);
+  useEffect(() => { setMessages(initialMessages); }, [groupId, initialMessages, setMessages]);
 
   const sendMessage    = useCallback((content) => { if (!socket || !content?.trim()) return false; socket.emit('chat:send', { groupId, content: content.trim() }); return true; }, [socket, groupId]);
   const startTyping    = useCallback(() => { if (socket) socket.emit('chat:typing_start', { groupId }); }, [socket, groupId]);

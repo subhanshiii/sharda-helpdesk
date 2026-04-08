@@ -3,6 +3,7 @@ import { FiFile, FiImage, FiDownload, FiTrash2, FiInfo } from 'react-icons/fi';
 
 const ROLE_COLORS = {
   admin:   { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Admin'   },
+  agent:   { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Agent' },
   teacher: { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Teacher' },
   student: { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Student' },
 };
@@ -112,7 +113,7 @@ const MessageBubble = memo(({ message, isOwn, showAvatar, onDelete }) => {
       {showAvatar ? (
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mb-1 shadow-sm ${
           senderRole === 'admin'   ? 'bg-gradient-to-br from-purple-500 to-purple-700' :
-          senderRole === 'teacher' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+          ['agent', 'teacher'].includes(senderRole) ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
                                      'bg-gradient-to-br from-green-500 to-teal-600'
         }`}>
           {initials}

@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+const Group = require('../models/Group');
 
 const onlineUsers = new Map();
 
@@ -41,6 +42,24 @@ const initSocket = (server) => {
     io.emit('online_count', onlineUsers.size);
     socket.join(`user:${user._id}`);
 
+    const emitToGroupAudience = async (groupId, event, payload) => {
+      const [groupMembers, admins] = await Promise.all([
+        Group.findById(groupId).select('members.user'),
+        User.find({ role: 'admin', isActive: true }).select('_id'),
+      ]);
+
+      const recipientIds = new Set(admins.map((admin) => admin._id.toString()));
+      if (groupMembers) {
+        groupMembers.members.forEach((member) => {
+          recipientIds.add(member.user.toString());
+        });
+      }
+
+      recipientIds.forEach((recipientId) => {
+        io.to(`user:${recipientId}`).emit(event, payload);
+      });
+    };
+
     // ── Ticket events ──
     socket.on('join_ticket',   (ticketId) => { socket.join(`ticket:${ticketId}`); });
     socket.on('leave_ticket',  (ticketId) => { socket.leave(`ticket:${ticketId}`); });
@@ -50,9 +69,14 @@ const initSocket = (server) => {
     // ── Group chat events ──
     socket.on('group:join', async ({ groupId }) => {
       try {
-        const Group = require('../models/Group');
-        const group = await Group.findOne({ _id: groupId, 'members.user': user._id, isActive: true });
-        if (!group) { socket.emit('group:error', { message: 'Not a member of this group' }); return; }
+        const group = await Group.findById(groupId).select('members.user isActive');
+        const isMember = group?.members.some((member) => member.user.toString() === user._id.toString());
+
+        if (!group?.isActive || (!isMember && user.role !== 'admin')) {
+          socket.emit('group:error', { message: 'Not authorized for this group' });
+          return;
+        }
+
         socket.join(`group:${groupId}`);
         socket.to(`group:${groupId}`).emit('group:user_online', { userId: user._id, userName: user.name, groupId });
         console.log(`💬 ${user.name} joined group:${groupId}`);
@@ -69,7 +93,7 @@ const initSocket = (server) => {
         if (!content?.trim()) return;
         const { saveMessage } = require('../services/groupChatService');
         const message = await saveMessage({ groupId, senderId: user._id, content: content.trim(), type: 'text' });
-        io.to(`group:${groupId}`).emit('chat:message', message);
+        await emitToGroupAudience(groupId, 'chat:message', message);
       } catch (err) {
         socket.emit('group:error', { message: err.statusCode === 403 ? 'You are not a member of this group' : 'Failed to send message' });
       }
