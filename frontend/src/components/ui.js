@@ -1,5 +1,5 @@
 import React from 'react';
-import { getStatusColor, getPriorityColor, getCategoryIcon } from '../utils/helpers';
+import { getCategoryIcon } from '../utils/helpers';
 
 export const StatusBadge = ({ status }) => {
   const map = {

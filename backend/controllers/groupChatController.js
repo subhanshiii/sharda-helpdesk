@@ -199,7 +199,7 @@ exports.sendMessage = async (req, res, next) => {
     if (req.file) {
       file = {
         originalName: req.file.originalname,
-        url:          `/uploads/chat/${req.file.filename}`,
+        url:          `/api/files/chat/${req.file.filename}`,
         mimeType:     req.file.mimetype,
         size:         req.file.size,
         filename:     req.file.filename,

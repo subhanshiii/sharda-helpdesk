@@ -1,20 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const { getUsers, getUser, createUser, updateUser, deleteUser, getAgents } = require('../controllers/userController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, permissionMiddleware } = require('../middleware/auth');
 
-// Get agents list (admin + agent can see)
-router.get('/agents', protect, authorize('admin', 'agent'), getAgents);
+// Legacy path kept for compatibility — returns support staff assignees.
+router.get('/agents', protect, permissionMiddleware('canHandleTickets'), getAgents);
+router.get('/staff', protect, permissionMiddleware('canHandleTickets'), getAgents);
 
 router
   .route('/')
-  .get(protect, authorize('admin'), getUsers)
-  .post(protect, authorize('admin'), createUser);
+  .get(protect, permissionMiddleware('canManageUsers'), getUsers)
+  .post(protect, permissionMiddleware('canManageUsers'), createUser);
 
 router
   .route('/:id')
-  .get(protect, authorize('admin'), getUser)
-  .put(protect, authorize('admin'), updateUser)
-  .delete(protect, authorize('admin'), deleteUser);
+  .get(protect, permissionMiddleware('canManageUsers'), getUser)
+  .put(protect, permissionMiddleware('canManageUsers'), updateUser)
+  .delete(protect, permissionMiddleware('canManageUsers'), deleteUser);
 
 module.exports = router;

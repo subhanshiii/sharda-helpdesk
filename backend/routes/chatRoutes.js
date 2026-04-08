@@ -1,7 +1,7 @@
 const express  = require('express');
 const router   = express.Router();
 const { chat, categorize, summarize, getFAQs, getSuggestions } = require('../controllers/chatController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, permissionMiddleware } = require('../middleware/auth');
 const { generalLimiter }     = require('../middleware/security');
 const rateLimit = require('express-rate-limit');
 
@@ -15,7 +15,7 @@ const aiLimiter = rateLimit({
 
 router.post('/',                    protect, aiLimiter, chat);
 router.post('/categorize',          protect, categorize);
-router.get('/summarize/:ticketId',  protect, authorize('admin', 'agent'), summarize);
+router.get('/summarize/:ticketId',  protect, permissionMiddleware('canHandleTickets'), summarize);
 router.get('/faqs',                 protect, getFAQs);
 router.get('/suggestions',          protect, getSuggestions);
 

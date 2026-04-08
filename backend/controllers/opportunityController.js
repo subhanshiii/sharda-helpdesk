@@ -65,7 +65,7 @@ exports.getOpportunity = async (req, res, next) => {
 
 // @desc    Create opportunity
 // @route   POST /api/opportunities
-// @access  Private (admin/clubhead)
+// @access  Private (roles with notice-posting permission)
 exports.createOpportunity = async (req, res, next) => {
   try {
     const { title, description, type, company, location, externalLink, deadline, stipend, eligibility, tags } = req.body;
@@ -84,7 +84,7 @@ exports.createOpportunity = async (req, res, next) => {
 
 // @desc    Update opportunity
 // @route   PUT /api/opportunities/:id
-// @access  Private (admin/clubhead - own post)
+// @access  Private (admins or the original opportunity author)
 exports.updateOpportunity = async (req, res, next) => {
   try {
     let opp = await Opportunity.findById(req.params.id);
@@ -103,7 +103,7 @@ exports.updateOpportunity = async (req, res, next) => {
 
 // @desc    Delete opportunity
 // @route   DELETE /api/opportunities/:id
-// @access  Private (admin/clubhead - own post)
+// @access  Private (admins or the original opportunity author)
 exports.deleteOpportunity = async (req, res, next) => {
   try {
     const opp = await Opportunity.findById(req.params.id);

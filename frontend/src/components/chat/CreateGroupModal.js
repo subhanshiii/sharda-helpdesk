@@ -2,13 +2,15 @@ import React, { useState, useCallback } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
 import { FiX, FiPlus, FiSearch, FiTrash2, FiUsers } from 'react-icons/fi';
+import { getRoleLabel } from '../../utils/helpers';
 
 const DEPARTMENTS = ['CSE','ECE','EEE','MECH','CIVIL','MBA','MCA','BBA','BTECH','Other'];
 const YEARS       = ['1','2','3','4','5'];
 const SECTIONS    = ['A','B','C','D','E'];
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
-  { value: 'agent', label: 'Agent' },
+  { value: 'faculty', label: 'Faculty' },
+  { value: 'staff', label: 'Staff' },
   { value: 'admin', label: 'Group Admin' },
 ];
 
@@ -20,7 +22,7 @@ const UserSearchResult = ({ user, onAdd }) => (
     </div>
     <div className="flex-1 min-w-0">
       <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-      <p className="text-xs text-gray-500 truncate">{user.email} · {user.role}</p>
+      <p className="text-xs text-gray-500 truncate">{user.email} · {getRoleLabel(user.role)}</p>
     </div>
     <FiPlus size={15} className="text-blue-500 flex-shrink-0" />
   </button>
@@ -67,7 +69,13 @@ export default function CreateGroupModal({ onClose, onCreated }) {
     setSelectedUsers(prev => [...prev, user]);
     setUserRoles(prev => ({
       ...prev,
-      [user._id]: user.role === 'admin' ? 'admin' : user.role === 'agent' ? 'agent' : 'student',
+      [user._id]: user.role === 'admin'
+        ? 'admin'
+        : user.role === 'faculty'
+        ? 'faculty'
+        : user.role === 'staff' || user.role === 'agent'
+        ? 'staff'
+        : 'student',
     }));
     setSearchResults(prev => prev.filter(u => u._id !== user._id));
     setSearchQuery('');

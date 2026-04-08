@@ -63,9 +63,9 @@ exports.categorize = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// @desc    Summarize a ticket for agents
+// @desc    Summarize a ticket for support staff
 // @route   GET /api/chat/summarize/:ticketId
-// @access  Private (admin/agent)
+// @access  Private (roles with ticket-handling permission)
 exports.summarize = async (req, res, next) => {
   try {
     const Ticket = require('../models/Ticket');

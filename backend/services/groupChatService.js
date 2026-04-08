@@ -9,7 +9,7 @@ const Message = require('../models/Message');
 const User    = require('../models/User');
 const logger  = require('../utils/logger');
 
-const GROUP_MEMBER_ROLES = ['student', 'agent', 'admin'];
+const GROUP_MEMBER_ROLES = ['student', 'faculty', 'staff', 'agent', 'admin'];
 
 const normalizeGroupValue = (value) => {
   if (value === undefined || value === null) return undefined;

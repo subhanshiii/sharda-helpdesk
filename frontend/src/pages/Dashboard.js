@@ -49,9 +49,9 @@ const QUICK_LINKS = [
   { label: 'New Ticket',    icon: '🎫', link: '/tickets/new',   bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-100'   },
   { label: 'AI Assistant',  icon: '🤖', link: '/ai-assistant',  bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-100'   },
   { label: 'FAQ',           icon: '❓', link: '/faq',           bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
-  { label: 'Announcements', icon: '📢', link: '/announcements', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100'  },
-  { label: 'Events',        icon: '🎉', link: '/events',        bg: 'bg-pink-50',   text: 'text-pink-700',   border: 'border-pink-100'   },
-  { label: 'Opportunities', icon: '💼', link: '/opportunities', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-100'  },
+  { label: 'Notice Board', icon: '📢', link: '/notice-board', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100'  },
+  { label: 'Campus Events', icon: '🎉', link: '/events',        bg: 'bg-pink-50',   text: 'text-pink-700',   border: 'border-pink-100'   },
+  { label: 'Calendar',      icon: '📅', link: '/notice-board?view=calendar', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-100'  },
 ];
 
 // ── Announcement item ─────────────────────────────────
@@ -72,7 +72,7 @@ const AnnouncementItem = ({ a }) => {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
-        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{a.message}</p>
+        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{a.description || a.message}</p>
         <p className="text-xs text-gray-400 mt-1">{formatRelative(a.createdAt)}</p>
       </div>
     </div>
@@ -201,15 +201,15 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       API.get('/stats'),
-      API.get('/announcements'),
+      API.get('/content?view=feed&limit=5'),
       API.get('/events?filter=upcoming&limit=5'),
       API.get('/opportunities?limit=5'),
       API.get('/opportunities/bookmarked'),
-      API.get('/academic-calendar'),
+      API.get('/content?view=calendar&limit=5&upcoming=1'),
     ]).then(([stats, ann, events, opps, bookmarked, calendar]) => {
       setData({
         stats:       stats.data.data,
-        announcements: ann.data.data?.slice(0,5) || [],
+        announcements: ann.data.data || [],
         events:      events.data.data || [],
         opportunities: opps.data.data || [],
         bookmarked:  bookmarked.data.data || [],
@@ -274,12 +274,12 @@ export default function Dashboard() {
       {/* ── Main widget grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
 
-        {/* Announcements */}
-        <Widget title="Latest Announcements" icon={FiSpeaker} iconColor="text-amber-500"
-          action={{ label:'View all', link:'/announcements' }}>
+        {/* Notice Board */}
+        <Widget title="Notice Board" icon={FiSpeaker} iconColor="text-amber-500"
+          action={{ label:'Open Board', link:'/notice-board' }}>
           {data?.announcements?.length > 0
             ? data.announcements.map(a => <AnnouncementItem key={a._id} a={a} />)
-            : <Empty icon="📢" text="No announcements yet" />
+            : <Empty icon="📢" text="No notices yet" />
           }
         </Widget>
 
@@ -294,7 +294,7 @@ export default function Dashboard() {
 
         {/* Academic calendar */}
         <Widget title="Academic Calendar" icon={FiClock} iconColor="text-red-500"
-          action={{ label:'View all', link:'/academic-calendar' }}>
+          action={{ label:'Open Calendar', link:'/notice-board?view=calendar' }}>
           {data?.calendar?.length > 0
             ? data.calendar.slice(0,5).map(c => <CalendarItem key={c._id} item={c} />)
             : (
@@ -302,7 +302,7 @@ export default function Dashboard() {
                 <div className="text-3xl mb-2">📅</div>
                 <p className="text-xs text-gray-400 mb-3">No upcoming dates</p>
                 {user?.role === 'admin' && (
-                  <Link to="/academic-calendar" className="text-xs text-blue-600 hover:underline">+ Add dates</Link>
+                  <Link to="/notice-board?view=calendar" className="text-xs text-blue-600 hover:underline">+ Add dates</Link>
                 )}
               </div>
             )

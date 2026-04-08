@@ -3,10 +3,12 @@ import API from '../../utils/api';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../context/ThemeContext';
 import { FiX, FiEdit3, FiTrash2, FiUsers, FiSave, FiSearch, FiUserPlus } from 'react-icons/fi';
+import { getRoleLabel } from '../../utils/helpers';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
-  { value: 'agent', label: 'Agent' },
+  { value: 'faculty', label: 'Faculty' },
+  { value: 'staff', label: 'Staff' },
   { value: 'admin', label: 'Group Admin' },
 ];
 
@@ -279,7 +281,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-medium truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{user.name}</p>
-                          <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{user.email}</p>
+                          <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{user.email} · {getRoleLabel(user.role)}</p>
                         </div>
                         <button
                           onClick={() => handleAddMember(user._id)}
@@ -303,7 +305,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                   </div>
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{member.user.name}</p>
-                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{ROLE_OPTIONS.find((role) => role.value === member.role)?.label || member.role}</p>
+                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{ROLE_OPTIONS.find((role) => role.value === member.role)?.label || getRoleLabel(member.role)}</p>
                   </div>
                   {canManageMembers ? (
                     <>

@@ -18,6 +18,12 @@ const academicCalendarSchema = new mongoose.Schema(
       default: 'Other',
     },
     description: { type: String, trim: true },
+    targetAudience: {
+      roles: [{ type: String, trim: true }],
+      departments: [{ type: String, trim: true }],
+      years: [{ type: String, trim: true }],
+      sections: [{ type: String, trim: true }],
+    },
     postedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

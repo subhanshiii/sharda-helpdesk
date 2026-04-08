@@ -6,7 +6,7 @@ import { useGroupChat } from '../../hooks/useGroupChat';
 import MessageBubble, { DateSeparator } from './MessageBubble';
 import toast from 'react-hot-toast';
 import {
-  FiSend, FiPaperclip, FiUsers, FiInfo, FiX,
+  FiSend, FiPaperclip, FiInfo, FiX,
   FiChevronUp, FiWifi, FiWifiOff,
 } from 'react-icons/fi';
 
@@ -49,7 +49,6 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
   const { user }         = useAuth();
   const { isDark }       = useTheme();
   const messagesEndRef   = useRef(null);
-  const messagesTopRef   = useRef(null);
   const inputRef         = useRef(null);
   const fileInputRef     = useRef(null);
   const typingTimerRef   = useRef(null);

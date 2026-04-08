@@ -14,7 +14,7 @@ const replySchema = new mongoose.Schema(
     },
     authorRole: {
       type: String,
-      enum: ['student', 'agent', 'admin'],
+      enum: ['student', 'faculty', 'staff', 'admin', 'agent'],
     },
     attachments: [
       {
@@ -27,7 +27,7 @@ const replySchema = new mongoose.Schema(
     ],
     isInternal: {
       type: Boolean,
-      default: false, // Internal notes visible only to agents/admins
+      default: false, // Internal notes visible only to support staff/admins
     },
   },
   {

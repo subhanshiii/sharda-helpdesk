@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
 import { useTicketSocket } from '../hooks/useSocket';
 import toast from 'react-hot-toast';
 import {
   StatusBadge, PriorityBadge, CategoryBadge,
   FullPageSpinner, Avatar, Alert,
 } from '../components/ui';
-import { formatDate, formatRelative, getRoleColor, STATUSES, PRIORITIES, CATEGORIES } from '../utils/helpers';
+import { formatDate, formatRelative, getAssetUrl, getRoleColor, getRoleLabel, STATUSES, PRIORITIES, CATEGORIES } from '../utils/helpers';
 import { FiSend, FiArrowLeft, FiEdit2, FiTrash2, FiPaperclip, FiLock, FiCheck, FiWifi } from 'react-icons/fi';
 
 // ── Reply bubble ──────────────────────────────────────
@@ -18,7 +19,7 @@ const ReplyBubble = ({ reply, isOwn }) => (
     <div className={`max-w-[75%] flex flex-col gap-1 ${isOwn ? 'items-end' : 'items-start'}`}>
       <div className="flex items-center gap-2 text-xs text-gray-400">
         {!isOwn && <span className="font-medium text-gray-700">{reply.author?.name}</span>}
-        <span className={`badge text-xs ${getRoleColor(reply.authorRole)}`}>{reply.authorRole}</span>
+        <span className={`badge text-xs ${getRoleColor(reply.authorRole)}`}>{getRoleLabel(reply.authorRole)}</span>
         {reply.isInternal && (
           <span className="flex items-center gap-1 text-orange-500 font-semibold">
             <FiLock size={10}/> Internal
@@ -37,7 +38,7 @@ const ReplyBubble = ({ reply, isOwn }) => (
         {reply.attachments?.length > 0 && (
           <div className="mt-2 space-y-1">
             {reply.attachments.map((a, i) => (
-              <a key={i} href={a.url} target="_blank" rel="noreferrer"
+              <a key={i} href={getAssetUrl(a.url)} target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-xs underline opacity-80 hover:opacity-100">
                 <FiPaperclip size={10}/> {a.originalName}
               </a>
@@ -76,6 +77,7 @@ const InfoRow = ({ label, value }) => (
 export default function TicketDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const navigate  = useNavigate();
   const bottomRef = useRef(null);
   const typingTimerRef = useRef(null);
@@ -86,7 +88,7 @@ export default function TicketDetail() {
   const [isInternal, setIsInternal] = useState(false);
   const [sending,    setSending]    = useState(false);
   const [editing,    setEditing]    = useState(false);
-  const [agents,     setAgents]     = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]);
   const [editForm,   setEditForm]   = useState({});
   const [error,      setError]      = useState('');
   const [typingUser, setTypingUser] = useState(null); // who is typing
@@ -128,16 +130,7 @@ export default function TicketDetail() {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    fetchTicket();
-    if (['admin','agent'].includes(user?.role)) fetchAgents();
-  }, [id]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [ticket?.replies?.length, typingUser]);
-
-  const fetchTicket = async () => {
+  const fetchTicket = useCallback(async () => {
     try {
       const res = await API.get(`/tickets/${id}`);
       setTicket(res.data.data);
@@ -151,14 +144,29 @@ export default function TicketDetail() {
       toast.error('Ticket not found');
       navigate('/tickets');
     } finally { setLoading(false); }
-  };
+  }, [id, navigate]);
 
-  const fetchAgents = async () => {
+  const fetchStaffMembers = useCallback(async () => {
     try {
-      const res = await API.get('/users/agents');
-      setAgents(res.data.data);
+      const res = await API.get('/users/staff');
+      setStaffMembers(res.data.data);
     } catch {}
-  };
+  }, []);
+
+  const loadTicket = useCallback(async () => {
+    await fetchTicket();
+    if (hasPermission('canHandleTickets')) {
+      await fetchStaffMembers();
+    }
+  }, [fetchStaffMembers, fetchTicket, hasPermission]);
+
+  useEffect(() => {
+    loadTicket();
+  }, [loadTicket]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [ticket?.replies?.length, typingUser]);
 
   // Handle typing events
   const handleReplyChange = (e) => {
@@ -217,10 +225,10 @@ export default function TicketDetail() {
   if (loading) return <FullPageSpinner />;
   if (!ticket) return null;
 
-  const canManage = ['admin','agent'].includes(user?.role);
-  const visibleReplies = user?.role === 'student'
-    ? ticket.replies.filter(r => !r.isInternal)
-    : ticket.replies;
+  const canManage = hasPermission('canHandleTickets');
+  const visibleReplies = canManage
+    ? ticket.replies
+    : ticket.replies.filter(r => !r.isInternal);
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -267,7 +275,7 @@ export default function TicketDetail() {
             {ticket.attachments?.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
                 {ticket.attachments.map((a,i) => (
-                  <a key={i} href={a.url} target="_blank" rel="noreferrer"
+                  <a key={i} href={getAssetUrl(a.url)} target="_blank" rel="noreferrer"
                     className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-100 rounded-md hover:bg-gray-200 text-gray-600">
                     <FiPaperclip size={11}/> {a.originalName}
                   </a>
@@ -359,10 +367,12 @@ export default function TicketDetail() {
                 ))}
                 <div>
                   <label className="label text-xs">Assign To</label>
-                  <select className="input text-sm" value={editForm.assignedTo}
-                    onChange={e => setEditForm(f => ({...f, assignedTo: e.target.value}))}>
+                    <select className="input text-sm" value={editForm.assignedTo}
+                      onChange={e => setEditForm(f => ({...f, assignedTo: e.target.value}))}>
                     <option value="">Unassigned</option>
-                    {agents.map(a => <option key={a._id} value={a._id}>{a.name} ({a.role})</option>)}
+                    {staffMembers.map((member) => (
+                      <option key={member._id} value={member._id}>{member.name} ({member.role})</option>
+                    ))}
                   </select>
                 </div>
                 <button onClick={handleUpdate} className="btn-primary w-full justify-center">

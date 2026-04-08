@@ -5,18 +5,6 @@ import toast from 'react-hot-toast';
 import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
 import { Alert } from '../components/ui';
 
-const ShardaLogo = () => (
-  <svg width="52" height="62" viewBox="0 0 80 95" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="40,8 44,26 36,26" fill="white"/>
-    <ellipse cx="40" cy="56" rx="8" ry="22" fill="#f59e0b"/>
-    <ellipse cx="40" cy="56" rx="7" ry="19" fill="#ec4899" transform="rotate(35,40,56)"/>
-    <ellipse cx="40" cy="56" rx="7" ry="19" fill="#06b6d4" transform="rotate(-35,40,56)"/>
-    <ellipse cx="40" cy="56" rx="6" ry="17" fill="#10b981" transform="rotate(65,40,56)"/>
-    <ellipse cx="40" cy="56" rx="6" ry="17" fill="#10b981" transform="rotate(-65,40,56)"/>
-    <ellipse cx="40" cy="56" rx="5" ry="14" fill="#f97316" transform="rotate(90,40,56)"/>
-  </svg>
-);
-
 export default function LoginPage() {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
@@ -181,7 +169,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               {[
                 { label: 'Admin',   email: 'admin@sharda.ac.in',      pass: 'admin123',   color: 'from-violet-500 to-purple-600' },
-                { label: 'Agent',   email: 'it.support@sharda.ac.in', pass: 'agent123',   color: 'from-blue-500 to-cyan-500' },
+                { label: 'Staff',   email: 'it.support@sharda.ac.in', pass: 'staff123',   color: 'from-blue-500 to-cyan-500' },
                 { label: 'Student', email: 'student@sharda.ac.in',    pass: 'student123', color: 'from-emerald-500 to-teal-500' },
               ].map((d) => (
                 <button key={d.label} type="button" onClick={() => !loading && demoLogin(d.email, d.pass)} disabled={loading}

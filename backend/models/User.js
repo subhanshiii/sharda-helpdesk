@@ -26,10 +26,19 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['student', 'agent', 'admin'],
+      // Keep "agent" as a legacy alias so older records remain valid during migration.
+      enum: ['student', 'faculty', 'staff', 'admin', 'agent'],
       default: 'student',
     },
     department: {
+      type: String,
+      trim: true,
+    },
+    year: {
+      type: String,
+      trim: true,
+    },
+    section: {
       type: String,
       trim: true,
     },

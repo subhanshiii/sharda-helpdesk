@@ -1,6 +1,7 @@
 const User   = require('../models/User');
 const Ticket = require('../models/Ticket');
 const { withCache, del, TTL, KEYS } = require('../config/cache');
+const { isSupportRole, normalizeRole } = require('../utils/roleHelpers');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -42,14 +43,14 @@ exports.getUser = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// @desc    Create user (admin creates agents/admins)
+// @desc    Create user
 exports.createUser = async (req, res, next) => {
   try {
-    const { name, email, password, role, department } = req.body;
-    const user = await User.create({ name, email, password, role, department });
+    const { name, email, password, role, department, year, section } = req.body;
+    const normalizedRole = normalizeRole(role);
+    const user = await User.create({ name, email, password, role: normalizedRole, department, year, section });
 
-    // Invalidate agents cache if creating an agent
-    if (['agent', 'admin'].includes(role)) await del(KEYS.agents());
+    if (isSupportRole(normalizedRole)) await del(KEYS.agents());
 
     res.status(201).json({
       success: true,
@@ -61,10 +62,10 @@ exports.createUser = async (req, res, next) => {
 // @desc    Update user
 exports.updateUser = async (req, res, next) => {
   try {
-    const { name, email, role, department, isActive } = req.body;
+    const { name, email, role, department, year, section, isActive } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, role, department, isActive },
+      { name, email, role: role ? normalizeRole(role) : undefined, department, year, section, isActive },
       { new: true, runValidators: true }
     ).select('-password');
 
@@ -95,9 +96,9 @@ exports.deleteUser = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// @desc    Get all agents (CACHED — used in ticket assignment dropdown)
+// @desc    Get support staff list (CACHED — used in ticket assignment dropdown)
 // @route   GET /api/users/agents
-// @access  Private (admin/agent)
+// @access  Private (roles with ticket-handling permission)
 exports.getAgents = async (req, res, next) => {
   try {
     // Agent list changes rarely — cache for 10 minutes
@@ -105,8 +106,8 @@ exports.getAgents = async (req, res, next) => {
       KEYS.agents(),
       TTL.AGENTS,
       async () => {
-        return await User.find({ role: { $in: ['agent', 'admin'] }, isActive: true })
-          .select('name email role department')
+        return await User.find({ role: { $in: ['staff', 'admin', 'agent'] }, isActive: true })
+          .select('name email role department year section')
           .sort({ name: 1 });
       }
     );

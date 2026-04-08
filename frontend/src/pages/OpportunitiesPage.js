@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import API from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
 import { PageHeader, EmptyState, Alert } from '../components/ui';
 import { OpportunitiesSkeleton } from '../components/skeletons/SkeletonComponents';
@@ -168,8 +168,7 @@ const OpportunityModal = memo(({ onClose, onSaved }) => {
 });
 
 export default function OpportunitiesPage() {
-  const { user } = useAuth();
-  const [rawOpps, setRawOpps]   = useState([]);
+  const { hasPermission } = usePermissions();
   const [loading, setLoading]   = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBookmarked, setShowBookmarked] = useState(false);
@@ -180,14 +179,13 @@ export default function OpportunitiesPage() {
   // useOptimisticUpdate: bookmarks update instantly without waiting for server
   const { data: opportunities, setData: setOpportunities, optimisticUpdate } = useOptimisticUpdate([]);
 
-  const canPost = ['admin', 'clubhead'].includes(user?.role);
+  const canPost = hasPermission('canPostNotice');
 
   const fetchOpps = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       if (showBookmarked) {
         const res = await API.get('/opportunities/bookmarked');
-        setRawOpps(res.data.data);
         setOpportunities(res.data.data);
         setPagination({ total: res.data.count, totalPages: 1, currentPage: 1 });
       } else {
@@ -195,13 +193,12 @@ export default function OpportunitiesPage() {
         if (activeType) params.append('type',   activeType);
         if (search)     params.append('search', search);
         const res = await API.get(`/opportunities?${params}`);
-        setRawOpps(res.data.data);
         setOpportunities(res.data.data);
         setPagination({ total: res.data.total, totalPages: res.data.totalPages, currentPage: res.data.currentPage });
       }
     } catch { setOpportunities([]); }
     finally { setLoading(false); }
-  }, [activeType, search, showBookmarked]);
+  }, [activeType, search, showBookmarked, setOpportunities]);
 
   useEffect(() => { fetchOpps(1); }, [fetchOpps]);
 
@@ -219,7 +216,7 @@ export default function OpportunitiesPage() {
     } catch {
       toast.error('Failed to update bookmark');
     }
-  }, [optimisticUpdate, showBookmarked]);
+  }, [optimisticUpdate, setOpportunities, showBookmarked]);
 
   const handleDelete = useCallback(async (id) => {
     if (!window.confirm('Delete this opportunity?')) return;
@@ -228,7 +225,7 @@ export default function OpportunitiesPage() {
       setOpportunities(prev => prev.filter(o => o._id !== id));
       toast.success('Deleted');
     } catch { toast.error('Delete failed'); }
-  }, []);
+  }, [setOpportunities]);
 
   const bookmarkedCount = opportunities.filter(o => o.isBookmarked).length;
 

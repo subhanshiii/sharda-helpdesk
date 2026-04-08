@@ -5,14 +5,15 @@
 const Ticket = require('../models/Ticket');
 const User   = require('../models/User');
 const { del, delPattern, withCache, TTL, KEYS } = require('../config/cache');
+const { isSupportRole, normalizeRole } = require('../utils/roleHelpers');
 
 const getStats = async (user) => {
   const cacheKey = KEYS.stats(user.id, user.role);
 
   const { data, fromCache } = await withCache(cacheKey, TTL.STATS, async () => {
     let baseQuery = {};
-    if (user.role === 'student') baseQuery.user = user.id;
-    if (user.role === 'agent')   baseQuery.$or  = [{ assignedTo: user.id }, { assignedTo: null }];
+    if (normalizeRole(user.role) !== 'admin' && !isSupportRole(user.role)) baseQuery.user = user.id;
+    if (isSupportRole(user.role) && normalizeRole(user.role) !== 'admin') baseQuery.$or  = [{ assignedTo: user.id }, { assignedTo: null }];
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -48,12 +49,12 @@ const getStats = async (user) => {
     ]);
 
     let adminStats = {};
-    if (['admin', 'agent'].includes(user.role)) {
-      const [totalUsers, totalAgents] = await Promise.all([
+    if (isSupportRole(user.role)) {
+      const [totalUsers, totalStaff] = await Promise.all([
         User.countDocuments({ role: 'student' }),
-        User.countDocuments({ role: { $in: ['agent', 'admin'] } }),
+        User.countDocuments({ role: { $in: ['staff', 'admin', 'agent', 'faculty'] } }),
       ]);
-      adminStats = { totalUsers, totalAgents };
+      adminStats = { totalUsers, totalStaff };
     }
 
     return {
@@ -72,7 +73,9 @@ const invalidateStatsCache = async (userId, userRole) => {
     await Promise.all([
       del(KEYS.stats(userId, userRole)),
       delPattern('stats:admin:*'),
+      delPattern('stats:staff:*'),
       delPattern('stats:agent:*'),
+      delPattern('stats:faculty:*'),
     ]);
   } catch (err) {
     console.warn('Stats cache invalidation error:', err.message);

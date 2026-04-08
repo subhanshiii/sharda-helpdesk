@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
 import { PageHeader, FullPageSpinner, EmptyState, Alert } from '../components/ui';
-import { formatDate } from '../utils/helpers';
+import { formatDate, getAssetUrl } from '../utils/helpers';
 import {
   FiPlus, FiSearch, FiX, FiCalendar, FiMapPin,
   FiUsers, FiExternalLink, FiVideo, FiUpload, FiHeart,
-  FiClock, FiTag,
+  FiTag,
 } from 'react-icons/fi';
 
 // ── Category config ───────────────────────────────────
@@ -50,7 +50,7 @@ const EventCard = ({ event, onInterest, canDelete, onDelete }) => {
       {/* Poster / gradient banner */}
       {event.poster?.url ? (
         <div className="h-44 overflow-hidden">
-          <img src={event.poster.url} alt={event.title}
+          <img src={getAssetUrl(event.poster.url)} alt={event.title}
             className="w-full h-full object-cover" />
         </div>
       ) : (
@@ -323,7 +323,7 @@ const EventModal = ({ onClose, onSaved }) => {
 
 // ── Main Page ─────────────────────────────────────────
 export default function EventsPage() {
-  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const [events,     setEvents]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [showModal,  setShowModal]  = useState(false);
@@ -332,7 +332,7 @@ export default function EventsPage() {
   const [search,     setSearch]     = useState('');
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
 
-  const canPost = ['admin', 'clubhead'].includes(user?.role);
+  const canPost = hasPermission('canPostNotice');
 
   const fetchEvents = useCallback(async (page = 1) => {
     setLoading(true);

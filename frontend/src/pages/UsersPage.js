@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import { PageHeader, FullPageSpinner, EmptyState, Avatar, Alert } from '../components/ui';
-import { getRoleColor, formatDate } from '../utils/helpers';
+import { getRoleColor, getRoleLabel, formatDate } from '../utils/helpers';
 import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiSearch } from 'react-icons/fi';
 
-const ROLES = ['student', 'agent', 'admin'];
+const ROLES = ['student', 'faculty', 'staff', 'admin'];
 
 function UserModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState(
     user
-      ? { name: user.name, email: user.email, role: user.role, department: user.department || '', isActive: user.isActive }
-      : { name: '', email: '', password: '', role: 'agent', department: '' }
+      ? { name: user.name, email: user.email, role: user.role === 'agent' ? 'staff' : user.role, department: user.department || '', year: user.year || '', section: user.section || '', isActive: user.isActive }
+      : { name: '', email: '', password: '', role: 'staff', department: '', year: '', section: '' }
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +37,7 @@ function UserModal({ user, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md animate-fade-in">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-fade-in">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">{user ? 'Edit User' : 'Add New User'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><FiX size={20} /></button>
@@ -62,12 +62,22 @@ function UserModal({ user, onClose, onSaved }) {
             <div>
               <label className="label">Role</label>
               <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{getRoleLabel(r)}</option>)}
               </select>
             </div>
             <div>
               <label className="label">Department</label>
               <input className="input" value={form.department} onChange={e => setForm(f => ({...f, department: e.target.value}))} placeholder="e.g. IT Dept" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Year</label>
+              <input className="input" value={form.year} onChange={e => setForm(f => ({...f, year: e.target.value}))} placeholder="e.g. 2" />
+            </div>
+            <div>
+              <label className="label">Section</label>
+              <input className="input" value={form.section} onChange={e => setForm(f => ({...f, section: e.target.value}))} placeholder="e.g. A" />
             </div>
           </div>
           {user && (
@@ -96,7 +106,7 @@ export default function UsersPage() {
   const [modal, setModal] = useState(null); // null | 'create' | user object
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
 
-  const fetchUsers = async (page = 1) => {
+  const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 15 });
@@ -106,9 +116,9 @@ export default function UsersPage() {
       setUsers(res.data.data);
       setPagination({ total: res.data.total, totalPages: res.data.totalPages, currentPage: res.data.currentPage });
     } catch {} finally { setLoading(false); }
-  };
+  }, [roleFilter, search]);
 
-  useEffect(() => { fetchUsers(); }, [roleFilter, search]);
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this user?')) return;
@@ -152,7 +162,7 @@ export default function UsersPage() {
         </div>
         <select className="input w-auto" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
           <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          {ROLES.map(r => <option key={r} value={r}>{getRoleLabel(r)}</option>)}
         </select>
       </div>
 
@@ -183,9 +193,11 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`badge ${getRoleColor(u.role)}`}>{u.role}</span>
+                      <span className={`badge ${getRoleColor(u.role)}`}>{getRoleLabel(u.role)}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500">{u.department || '—'}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {[u.department, u.year && `Year ${u.year}`, u.section && `Sec ${u.section}`].filter(Boolean).join(' · ') || '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                         {u.isActive ? 'Active' : 'Inactive'}

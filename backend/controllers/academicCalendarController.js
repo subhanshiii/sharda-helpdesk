@@ -1,30 +1,57 @@
-const AcademicCalendar = require('../models/AcademicCalendar');
+const contentService = require('../services/contentService');
 
 exports.getEvents = async (req, res, next) => {
   try {
-    const events = await AcademicCalendar.find({ date: { $gte: new Date() } })
-      .sort({ date: 1 }).limit(20).populate('postedBy', 'name');
+    const events = await contentService.listContent({
+      user: req.user,
+      view: 'calendar',
+      search: req.query.search,
+      month: req.query.month,
+      limit: req.query.limit || 20,
+      upcomingOnly: true,
+    });
     res.json({ success: true, data: events });
   } catch (e) { next(e); }
 };
 
 exports.getAllEvents = async (req, res, next) => {
   try {
-    const events = await AcademicCalendar.find().sort({ date: 1 }).populate('postedBy', 'name');
+    const events = await contentService.listContent({
+      user: req.user,
+      view: 'calendar',
+      search: req.query.search,
+      month: req.query.month,
+      limit: req.query.limit,
+    });
     res.json({ success: true, data: events });
   } catch (e) { next(e); }
 };
 
 exports.createEvent = async (req, res, next) => {
   try {
-    const event = await AcademicCalendar.create({ ...req.body, postedBy: req.user.id });
-    res.status(201).json({ success: true, data: event });
+    const data = await contentService.createContent({
+      body: {
+        ...req.body,
+        contentType: 'calendar',
+        startsAt: req.body.startsAt || req.body.date,
+        endsAt: req.body.endsAt || req.body.endDate,
+      },
+      userId: req.user.id,
+    });
+    res.status(201).json({ success: true, data });
   } catch (e) { next(e); }
 };
 
 exports.deleteEvent = async (req, res, next) => {
   try {
-    await AcademicCalendar.findByIdAndDelete(req.params.id);
+    await contentService.deleteContent({
+      contentId: req.params.id,
+      requesterId: req.user.id,
+      requesterRole: req.user.role,
+    });
     res.json({ success: true, message: 'Deleted' });
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e.statusCode) return res.status(e.statusCode).json({ success: false, message: e.message });
+    next(e);
+  }
 };

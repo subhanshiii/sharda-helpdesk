@@ -29,60 +29,60 @@ const seedData = async () => {
   const itAgent = await User.create({
     name: 'Rahul Sharma',
     email: 'it.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'IT Support',
   });
 
   const hostelAgent = await User.create({
     name: 'Priya Singh',
     email: 'hostel.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Hostel',
   });
 
   const libraryAgent = await User.create({
     name: 'Amit Kumar',
     email: 'library.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Library',
   });
 
   const financeAgent = await User.create({
     name: 'Sneha Gupta',
     email: 'finance.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Finance',
   });
 
   const academicAgent = await User.create({
     name: 'Dr. Vikram Patel',
     email: 'academic.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Academic',
   });
 
   const infraAgent = await User.create({
     name: 'Suresh Yadav',
     email: 'infra.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Infrastructure',
   });
 
   const adminAgent = await User.create({
     name: 'Meena Verma',
     email: 'admin.support@sharda.ac.in',
-    password: 'agent123',
-    role: 'agent',
+    password: 'staff123',
+    role: 'staff',
     department: 'Administration',
   });
 
-  console.log('✅ Agents created');
+  console.log('✅ Staff users created');
 
   const student1 = await User.create({
     name: 'John Student',
@@ -212,18 +212,18 @@ const seedData = async () => {
   console.log('✅ Tickets created');
 
   const ticket1 = await Ticket.findById(createdTickets[1]._id);
-  ticket1.replies.push({ message: 'We are looking into this issue. Please try clearing your browser cache and try again.', author: libraryAgent._id, authorRole: 'agent' });
+  ticket1.replies.push({ message: 'We are looking into this issue. Please try clearing your browser cache and try again.', author: libraryAgent._id, authorRole: 'staff' });
   ticket1.replies.push({ message: 'I tried clearing the cache but the issue still persists.', author: student1._id, authorRole: 'student' });
-  ticket1.replies.push({ message: 'We have escalated this to the library IT team. Should be fixed within 24 hours.', author: libraryAgent._id, authorRole: 'agent' });
+  ticket1.replies.push({ message: 'We have escalated this to the library IT team. Should be fixed within 24 hours.', author: libraryAgent._id, authorRole: 'staff' });
   await ticket1.save();
 
   const ticket2 = await Ticket.findById(createdTickets[2]._id);
-  ticket2.replies.push({ message: 'Our maintenance team has been notified. They will visit room 204 Block B tomorrow morning.', author: hostelAgent._id, authorRole: 'agent' });
+  ticket2.replies.push({ message: 'Our maintenance team has been notified. They will visit room 204 Block B tomorrow morning.', author: hostelAgent._id, authorRole: 'staff' });
   ticket2.replies.push({ message: 'Thank you! Please let them know it is quite urgent as nights are very cold.', author: student2._id, authorRole: 'student' });
   await ticket2.save();
 
   const ticket3 = await Ticket.findById(createdTickets[3]._id);
-  ticket3.replies.push({ message: 'The payment gateway issue has been fixed. Please try again and let us know if you face any issues.', author: financeAgent._id, authorRole: 'agent' });
+  ticket3.replies.push({ message: 'The payment gateway issue has been fixed. Please try again and let us know if you face any issues.', author: financeAgent._id, authorRole: 'staff' });
   ticket3.replies.push({ message: 'It worked! Thank you so much.', author: student1._id, authorRole: 'student' });
   await ticket3.save();
 
@@ -236,7 +236,7 @@ const seedData = async () => {
   console.log('ADMIN:');
   console.log('  admin@sharda.ac.in           / admin123');
   console.log('');
-  console.log('AGENTS (password: agent123)');
+  console.log('STAFF (password: staff123)');
   console.log('  it.support@sharda.ac.in      → IT Support');
   console.log('  hostel.support@sharda.ac.in  → Hostel');
   console.log('  library.support@sharda.ac.in → Library');

@@ -1,9 +1,12 @@
 import React, { memo } from 'react';
-import { FiFile, FiImage, FiDownload, FiTrash2, FiInfo } from 'react-icons/fi';
+import { FiFile, FiDownload, FiTrash2, FiInfo } from 'react-icons/fi';
+import { getAssetUrl } from '../../utils/helpers';
 
 const ROLE_COLORS = {
   admin:   { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Admin'   },
-  agent:   { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Agent' },
+  agent:   { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Staff' },
+  staff:   { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Staff' },
+  faculty: { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Faculty' },
   teacher: { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Teacher' },
   student: { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Student' },
 };
@@ -48,26 +51,31 @@ export const SystemMessage = memo(({ message }) => (
 // ── File attachment preview ────────────────────────────
 const FileAttachment = memo(({ file, isOwn }) => {
   const isImage = file.mimeType?.startsWith('image/');
-  const apiBase = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8080';
-  const fileUrl = file.url?.startsWith('http') ? file.url : `${apiBase}${file.url}`;
+  const fileUrl = getAssetUrl(file.url);
+  const downloadUrl = `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}download=1`;
 
   if (isImage) {
     return (
-      <div className="mt-2 rounded-xl overflow-hidden max-w-xs">
+      <div className="mt-2 rounded-xl overflow-hidden max-w-xs space-y-2">
         <img
           src={fileUrl}
           alt={file.originalName}
           className="w-full h-auto max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
-          onClick={() => window.open(fileUrl, '_blank')}
+          onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}
           onError={e => { e.target.style.display = 'none'; }}
         />
-        <p className="text-xs mt-1 opacity-70">{file.originalName}</p>
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <p className="opacity-70 truncate">{file.originalName}</p>
+          <a href={downloadUrl} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 ${isOwn ? 'text-white/80' : 'text-blue-600'}`}>
+            <FiDownload size={12} /> Download
+          </a>
+        </div>
       </div>
     );
   }
 
   return (
-    <a href={fileUrl} target="_blank" rel="noreferrer" download={file.originalName}
+    <a href={downloadUrl} target="_blank" rel="noreferrer"
       className={`flex items-center gap-3 mt-2 p-3 rounded-xl border transition-colors ${
         isOwn
           ? 'bg-white/10 border-white/20 hover:bg-white/20'
@@ -113,7 +121,8 @@ const MessageBubble = memo(({ message, isOwn, showAvatar, onDelete }) => {
       {showAvatar ? (
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mb-1 shadow-sm ${
           senderRole === 'admin'   ? 'bg-gradient-to-br from-purple-500 to-purple-700' :
-          ['agent', 'teacher'].includes(senderRole) ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+          ['faculty', 'teacher'].includes(senderRole) ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+          ['staff', 'agent'].includes(senderRole) ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' :
                                      'bg-gradient-to-br from-green-500 to-teal-600'
         }`}>
           {initials}

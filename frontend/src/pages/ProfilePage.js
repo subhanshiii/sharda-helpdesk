@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
-import { PageHeader, Alert, Avatar } from '../components/ui';
+import { PageHeader, Alert } from '../components/ui';
 import { getRoleColor, formatDate } from '../utils/helpers';
 import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck } from 'react-icons/fi';
 

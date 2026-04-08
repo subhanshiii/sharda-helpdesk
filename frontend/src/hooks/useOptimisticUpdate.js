@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 /**
  * useOptimisticUpdate
@@ -62,10 +62,10 @@ export const useOptimisticUpdate = (initialData) => {
 export const useDebounce = (value, delay = 500) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(() => setDebouncedValue(value), delay);
     return () => clearTimeout(timer);
-  });
+  }, [value, delay]);
 
   return debouncedValue;
 };
@@ -76,7 +76,7 @@ export const useDebounce = (value, delay = 500) => {
  */
 export const usePagination = (initialPage = 1, initialLimit = 10) => {
   const [page,  setPage]  = useState(initialPage);
-  const [limit, setLimit] = useState(initialLimit);
+  const [limit] = useState(initialLimit);
   const [total, setTotal] = useState(0);
 
   const totalPages  = Math.ceil(total / limit);

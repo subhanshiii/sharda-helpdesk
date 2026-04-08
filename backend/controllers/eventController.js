@@ -67,7 +67,7 @@ exports.getEvent = async (req, res, next) => {
 
 // @desc    Create event
 // @route   POST /api/events
-// @access  Private (admin/clubhead)
+// @access  Private (roles with notice-posting permission)
 exports.createEvent = async (req, res, next) => {
   try {
     const {
@@ -80,7 +80,7 @@ exports.createEvent = async (req, res, next) => {
     if (req.file) {
       poster = {
         filename: req.file.filename,
-        url: `/uploads/${req.file.filename}`,
+        url: `/api/files/general/${req.file.filename}`,
       };
     }
 
@@ -100,7 +100,7 @@ exports.createEvent = async (req, res, next) => {
 
 // @desc    Update event
 // @route   PUT /api/events/:id
-// @access  Private (admin/clubhead - own)
+// @access  Private (admins or the original event author)
 exports.updateEvent = async (req, res, next) => {
   try {
     let event = await Event.findById(req.params.id);
@@ -111,7 +111,7 @@ exports.updateEvent = async (req, res, next) => {
     }
 
     if (req.file) {
-      req.body.poster = { filename: req.file.filename, url: `/uploads/${req.file.filename}` };
+      req.body.poster = { filename: req.file.filename, url: `/api/files/general/${req.file.filename}` };
     }
 
     event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
@@ -123,7 +123,7 @@ exports.updateEvent = async (req, res, next) => {
 
 // @desc    Delete event
 // @route   DELETE /api/events/:id
-// @access  Private (admin/clubhead - own)
+// @access  Private (admins or the original event author)
 exports.deleteEvent = async (req, res, next) => {
   try {
     const event = await Event.findById(req.params.id);

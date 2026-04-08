@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../utils/api';
-import { useAuth } from '../context/AuthContext';
 import { EmptyState } from '../components/ui';
 import { TicketListSkeleton, TicketCardSkeleton } from '../components/skeletons/SkeletonComponents';
 import TicketCard from '../components/TicketCard';
@@ -26,7 +25,6 @@ const FilterSelect = memo(({ value, onChange, options, placeholder }) => (
 const MemoTicketCard = memo(TicketCard);
 
 export default function TicketList() {
-  const { user } = useAuth();
   const [tickets,     setTickets]     = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

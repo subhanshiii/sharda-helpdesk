@@ -4,17 +4,17 @@ const {
   getEvents, getEvent, createEvent,
   updateEvent, deleteEvent, toggleInterest,
 } = require('../controllers/eventController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, permissionMiddleware } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 router.route('/')
   .get(protect, getEvents)
-  .post(protect, authorize('admin', 'clubhead'), upload.single('poster'), createEvent);
+  .post(protect, permissionMiddleware('canPostNotice'), upload.single('poster'), createEvent);
 
 router.route('/:id')
   .get(protect, getEvent)
-  .put(protect, authorize('admin', 'clubhead'), upload.single('poster'), updateEvent)
-  .delete(protect, authorize('admin', 'clubhead'), deleteEvent);
+  .put(protect, permissionMiddleware('canPostNotice'), upload.single('poster'), updateEvent)
+  .delete(protect, permissionMiddleware('canPostNotice'), deleteEvent);
 
 router.put('/:id/interest', protect, toggleInterest);
 

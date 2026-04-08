@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { PermissionProvider, usePermissions } from './context/PermissionContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { FullPageSpinner } from './components/ui';
 import ThemeToggle from './components/ThemeToggle';
@@ -23,15 +24,18 @@ const OpportunitiesPage    = lazy(() => import('./pages/OpportunitiesPage'));
 const EventsPage           = lazy(() => import('./pages/EventsPage'));
 const AIAssistant          = lazy(() => import('./pages/AIAssistant'));
 const FAQPage              = lazy(() => import('./pages/FAQPage'));
-const AcademicCalendarPage = lazy(() => import('./pages/AcademicCalendarPage'));
 const GroupChatPage        = lazy(() => import('./pages/GroupChatPage'));   // ← NEW
+const PermissionsPage      = lazy(() => import('./pages/PermissionsPage'));
 const NotFound             = lazy(() => import('./pages/NotFound'));
 const Layout               = lazy(() => import('./components/Layout'));
 
-const ProtectedRoute = ({ children, roles }) => {
+const ProtectedRoute = ({ children, roles, permission }) => {
   const { user, token } = useAuth();
+  const { hasPermission, loading } = usePermissions();
   if (!token || !user) return <Navigate to="/login" replace />;
+  if (permission && loading) return <FullPageSpinner />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (permission && !hasPermission(permission)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -56,14 +60,16 @@ function AppRoutes() {
         <Route path="/tickets/new"       element={<Suspense fallback={<FullPageSpinner />}><CreateTicket /></Suspense>} />
         <Route path="/tickets/:id"       element={<Suspense fallback={<FullPageSpinner />}><TicketDetail /></Suspense>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
-        <Route path="/announcements"     element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
+        <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
+        <Route path="/announcements"     element={<Navigate to="/notice-board" replace />} />
         <Route path="/opportunities"     element={<Suspense fallback={<FullPageSpinner />}><OpportunitiesPage /></Suspense>} />
         <Route path="/events"            element={<Suspense fallback={<FullPageSpinner />}><EventsPage /></Suspense>} />
         <Route path="/ai-assistant"      element={<Suspense fallback={<FullPageSpinner />}><AIAssistant /></Suspense>} />
         <Route path="/faq"               element={<Suspense fallback={<FullPageSpinner />}><FAQPage /></Suspense>} />
-        <Route path="/academic-calendar" element={<Suspense fallback={<FullPageSpinner />}><AcademicCalendarPage /></Suspense>} />
+        <Route path="/academic-calendar" element={<Navigate to="/notice-board?view=calendar" replace />} />
         <Route path="/group-chat"        element={<Suspense fallback={<FullPageSpinner />}><GroupChatPage /></Suspense>} />
-        <Route path="/users"             element={<ProtectedRoute roles={['admin']}><Suspense fallback={<FullPageSpinner />}><UsersPage /></Suspense></ProtectedRoute>} />
+        <Route path="/users"             element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UsersPage /></Suspense></ProtectedRoute>} />
+        <Route path="/permissions"       element={<ProtectedRoute permission="canManagePermissions"><Suspense fallback={<FullPageSpinner />}><PermissionsPage /></Suspense></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Suspense fallback={null}><NotFound /></Suspense>} />
@@ -99,11 +105,13 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <NotificationProvider>
-          <Router>
-            <AppShell />
-          </Router>
-        </NotificationProvider>
+        <PermissionProvider>
+          <NotificationProvider>
+            <Router>
+              <AppShell />
+            </Router>
+          </NotificationProvider>
+        </PermissionProvider>
       </AuthProvider>
     </ThemeProvider>
   );

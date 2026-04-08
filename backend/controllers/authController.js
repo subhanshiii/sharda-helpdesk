@@ -31,6 +31,8 @@ const sendTokenResponse = (user, statusCode, res) => {
     email:        user.email,
     role:         user.role,
     department:   user.department,
+    year:         user.year,
+    section:      user.section,
     enrollmentId: user.enrollmentId,
     avatar:       user.avatar,
     createdAt:    user.createdAt,
@@ -52,7 +54,7 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: errors.array()[0].msg });
     }
 
-    const { name, email, password, department, enrollmentId } = req.body;
+    const { name, email, password, department, year, section, enrollmentId } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -61,7 +63,7 @@ exports.register = async (req, res, next) => {
     }
 
     const user = await User.create({
-      name, email, password, role: 'student', department, enrollmentId,
+      name, email, password, role: 'student', department, year, section, enrollmentId,
     });
 
     sendTokenResponse(user, 201, res);
@@ -126,7 +128,7 @@ exports.getMe = async (req, res, next) => {
 // @access  Private
 exports.updateProfile = async (req, res, next) => {
   try {
-    const allowedFields = ['name', 'department', 'enrollmentId'];
+    const allowedFields = ['name', 'department', 'year', 'section', 'enrollmentId'];
     const updates = {};
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

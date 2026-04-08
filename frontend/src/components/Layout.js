@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import NotificationBell from "./NotificationBell";
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getInitials, getRoleColor } from '../utils/helpers';
+import { usePermissions } from '../context/PermissionContext';
+import { getInitials, getRoleColor, getRoleLabel } from '../utils/helpers';
 import { useTheme } from '../context/ThemeContext';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiChevronRight,
-  FiSpeaker, FiBriefcase, FiCalendar, FiMessageSquare, FiHelpCircle, FiClock,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -37,6 +38,7 @@ const SectionLabel = ({ label }) => (
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { hasPermission } = usePermissions();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,14 +53,35 @@ export default function Layout() {
     '/tickets/new':   'New Ticket',
     '/users':         'User Management',
     '/profile':       'My Profile',
-    '/announcements': 'Announcements',
-    '/opportunities': 'Opportunities',
-    '/events':        'Events',
-    '/academic-calendar': 'Academic Calendar',
+    '/notice-board':  'Notice Board',
+    '/announcements': 'Notice Board',
     '/ai-assistant':  'AI Assistant',
     '/faq':           'FAQ',
+    '/group-chat':    'Group Chat',
+    '/permissions':   'Permissions',
   };
   const pageTitle = pageTitles[location.pathname] || 'Sharda Platform';
+
+  const mainNavItems = [
+    { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
+    { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
+    { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: hasPermission('canViewChat') },
+  ].filter((item) => item.visible !== false);
+
+  const helpdeskNavItems = [
+    { to: '/tickets', icon: FiList, label: 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
+    { to: '/tickets/new', icon: FiPlusCircle, label: 'New Ticket', visible: hasPermission('canCreateTickets') },
+  ].filter((item) => item.visible !== false);
+
+  const supportNavItems = [
+    { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
+    { to: '/faq', icon: FiHelpCircle, label: 'FAQ' },
+  ];
+
+  const adminNavItems = [
+    { to: '/users', icon: FiUsers, label: 'User Management', visible: hasPermission('canManageUsers') },
+    { to: '/permissions', icon: FiShield, label: 'Permissions', visible: hasPermission('canManagePermissions') },
+  ].filter((item) => item.visible !== false);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full sidebar-bg">
@@ -88,25 +111,30 @@ export default function Layout() {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto relative">
         <SectionLabel label="Main" />
-        <NavItem to="/dashboard"     icon={FiHome}         label="Dashboard"     end onClick={closeSidebar} />
-        <NavItem to="/announcements" icon={FiSpeaker}      label="Announcements"     onClick={closeSidebar} />
-        <NavItem to="/events"              icon={FiCalendar}      label="Events"            onClick={closeSidebar} />
-        <NavItem to="/academic-calendar"   icon={FiClock}         label="Academic Calendar" onClick={closeSidebar} />
-        <NavItem to="/opportunities" icon={FiBriefcase}    label="Opportunities"     onClick={closeSidebar} />
-        <NavItem to="/group-chat" icon={FiMessageCircle} label="Group Chat" onClick={closeSidebar} />
+        {mainNavItems.map((item) => (
+          <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} end={item.end} onClick={closeSidebar} />
+        ))}
 
-        <SectionLabel label="Helpdesk" />
-        <NavItem to="/tickets"       icon={FiList}         label="My Tickets"        onClick={closeSidebar} />
-        <NavItem to="/tickets/new"   icon={FiPlusCircle}   label="New Ticket"        onClick={closeSidebar} />
+        {helpdeskNavItems.length > 0 && (
+          <>
+            <SectionLabel label="Helpdesk" />
+            {helpdeskNavItems.map((item) => (
+              <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
+            ))}
+          </>
+        )}
 
         <SectionLabel label="Support" />
-        <NavItem to="/ai-assistant"  icon={FiMessageSquare} label="AI Assistant"     onClick={closeSidebar} />
-        <NavItem to="/faq"           icon={FiHelpCircle}   label="FAQ"               onClick={closeSidebar} />
+        {supportNavItems.map((item) => (
+          <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
+        ))}
 
-        {user?.role === 'admin' && (
+        {adminNavItems.length > 0 && (
           <>
             <SectionLabel label="Admin" />
-            <NavItem to="/users"     icon={FiUsers}        label="User Management"   onClick={closeSidebar} />
+            {adminNavItems.map((item) => (
+              <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
+            ))}
           </>
         )}
       </nav>
@@ -130,7 +158,7 @@ export default function Layout() {
             <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
             <p className="text-xs text-blue-300/70 truncate">{user?.email}</p>
           </div>
-          <span className={`badge text-xs ${getRoleColor(user?.role)}`}>{user?.role}</span>
+          <span className={`badge text-xs ${getRoleColor(user?.role)}`}>{getRoleLabel(user?.role)}</span>
         </div>
       </div>
     </div>

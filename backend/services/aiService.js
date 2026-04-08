@@ -191,7 +191,7 @@ Respond with ONLY one word: ${priorities.join(', ')}.`,
   }
 };
 
-// ── Generate ticket summary for agents ────────────────
+// ── Generate ticket summary for support staff ─────────
 const summarizeTicket = async (ticket) => {
   const openai = getOpenAI();
   if (!openai) return null;
@@ -207,7 +207,7 @@ const summarizeTicket = async (ticket) => {
       messages: [
         {
           role: 'system',
-          content: 'Summarize this support ticket conversation in 2-3 sentences for an agent. Include the core issue and current status.',
+          content: 'Summarize this support ticket conversation in 2-3 sentences for a support staff member. Include the core issue and current status.',
         },
         {
           role: 'user',

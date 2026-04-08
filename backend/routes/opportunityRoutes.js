@@ -4,18 +4,18 @@ const {
   getOpportunities, getOpportunity, createOpportunity,
   updateOpportunity, deleteOpportunity, toggleBookmark, getBookmarked,
 } = require('../controllers/opportunityController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, permissionMiddleware } = require('../middleware/auth');
 
 router.get('/bookmarked', protect, getBookmarked);
 
 router.route('/')
   .get(protect, getOpportunities)
-  .post(protect, authorize('admin', 'clubhead'), createOpportunity);
+  .post(protect, permissionMiddleware('canPostNotice'), createOpportunity);
 
 router.route('/:id')
   .get(protect, getOpportunity)
-  .put(protect, authorize('admin', 'clubhead'), updateOpportunity)
-  .delete(protect, authorize('admin', 'clubhead'), deleteOpportunity);
+  .put(protect, permissionMiddleware('canPostNotice'), updateOpportunity)
+  .delete(protect, permissionMiddleware('canPostNotice'), deleteOpportunity);
 
 router.put('/:id/bookmark', protect, toggleBookmark);
 

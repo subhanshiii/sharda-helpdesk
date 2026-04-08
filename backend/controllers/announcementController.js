@@ -1,91 +1,78 @@
-const Announcement = require('../models/Announcement');
-const { withCache, del, TTL, KEYS } = require('../config/cache');
+const { del, KEYS } = require('../config/cache');
+const contentService = require('../services/contentService');
 
-// @desc    Get all active announcements (CACHED)
+// @desc    Get active notice board feed
 // @route   GET /api/announcements
 // @access  Private
 exports.getAnnouncements = async (req, res, next) => {
   try {
-    const { data, fromCache } = await withCache(
-      KEYS.announcements(),
-      TTL.ANNOUNCEMENTS,
-      async () => {
-        return await Announcement.find({ isActive: true })
-          .populate('postedBy', 'name role')
-          .sort({ createdAt: -1 })
-          .limit(20);
-      }
-    );
-
-    const meta = process.env.NODE_ENV === 'development' ? { fromCache } : {};
-    res.status(200).json({ success: true, data, ...meta });
-  } catch (error) { next(error); }
-};
-
-// @desc    Create announcement
-// @route   POST /api/announcements
-// @access  Private (admin/agent)
-exports.createAnnouncement = async (req, res, next) => {
-  try {
-    const { title, message, type, expiresAt } = req.body;
-    if (!title || !message) {
-      return res.status(400).json({ success: false, message: 'Title and message are required' });
-    }
-
-    const announcement = await Announcement.create({
-      title, message, type: type || 'info',
-      postedBy: req.user.id,
-      expiresAt: expiresAt || null,
+    const data = await contentService.listContent({
+      user: req.user,
+      view: 'feed',
+      category: req.query.category,
+      priority: req.query.priority,
+      search: req.query.search,
+      limit: req.query.limit,
     });
 
-    const populated = await Announcement.findById(announcement._id).populate('postedBy', 'name role');
-
-    // Invalidate cache — new announcement means cached list is stale
-    await del(KEYS.announcements());
-
-    res.status(201).json({ success: true, data: populated });
+    res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };
 
-// @desc    Delete announcement
+// @desc    Create notice
+// @route   POST /api/announcements
+// @access  Private (roles with notice-posting permission)
+exports.createAnnouncement = async (req, res, next) => {
+  try {
+    const data = await contentService.createContent({
+      body: { ...req.body, contentType: 'notice' },
+      files: req.files,
+      userId: req.user.id,
+    });
+
+    await del(KEYS.announcements());
+
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+// @desc    Delete notice
 // @route   DELETE /api/announcements/:id
-// @access  Private (admin/agent)
+// @access  Private (admins or the original notice author)
 exports.deleteAnnouncement = async (req, res, next) => {
   try {
-    const announcement = await Announcement.findById(req.params.id);
-    if (!announcement) {
-      return res.status(404).json({ success: false, message: 'Announcement not found' });
-    }
-
-    if (req.user.role !== 'admin' && announcement.postedBy.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
-    }
-
-    await announcement.deleteOne();
-
-    // Invalidate cache
+    await contentService.deleteContent({
+      contentId: req.params.id,
+      requesterId: req.user.id,
+      requesterRole: req.user.role,
+    });
     await del(KEYS.announcements());
 
     res.status(200).json({ success: true, message: 'Announcement deleted' });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
 };
 
-// @desc    Update announcement
+// @desc    Update notice
 // @route   PUT /api/announcements/:id
-// @access  Private (admin/agent)
+// @access  Private (admins or the original notice author)
 exports.updateAnnouncement = async (req, res, next) => {
   try {
-    const announcement = await Announcement.findByIdAndUpdate(
-      req.params.id, req.body, { new: true }
-    ).populate('postedBy', 'name role');
+    const data = await contentService.updateContent({
+      contentId: req.params.id,
+      body: { ...req.body, contentType: 'notice' },
+      files: req.files,
+      requesterId: req.user.id,
+      requesterRole: req.user.role,
+    });
 
-    if (!announcement) {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
-
-    // Invalidate cache
     await del(KEYS.announcements());
 
-    res.status(200).json({ success: true, data: announcement });
-  } catch (error) { next(error); }
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
 };

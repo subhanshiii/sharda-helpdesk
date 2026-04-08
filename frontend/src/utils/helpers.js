@@ -1,5 +1,40 @@
 import { formatDistanceToNow, format } from 'date-fns';
 
+export const normalizeUserRole = (role) => {
+  if (role === 'agent') return 'staff';
+  return role || 'student';
+};
+
+export const getAssetUrl = (assetPath) => {
+  if (!assetPath) return '';
+  if (assetPath.startsWith('http')) return assetPath;
+
+  const apiBase = process.env.REACT_APP_API_URL || '/api';
+  const originBase = apiBase.replace(/\/api\/?$/, '');
+  const normalizedPath = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
+  const url = new URL(`${originBase}${normalizedPath}`, window.location.origin);
+
+  if (normalizedPath.startsWith('/api/files/')) {
+    const token = localStorage.getItem('token');
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+  }
+
+  return url.toString();
+};
+
+export const getRoleLabel = (role) => {
+  const normalizedRole = normalizeUserRole(role);
+  const labels = {
+    admin: 'Admin',
+    staff: 'Staff',
+    faculty: 'Faculty',
+    student: 'Student',
+  };
+  return labels[normalizedRole] || normalizedRole;
+};
+
 export const formatDate = (date) => {
   if (!date) return 'N/A';
   return format(new Date(date), 'dd MMM yyyy, hh:mm a');
@@ -55,12 +90,14 @@ export const getCategoryIcon = (category) => {
 };
 
 export const getRoleColor = (role) => {
+  const normalizedRole = normalizeUserRole(role);
   const map = {
-    'admin':   'bg-purple-100 text-purple-700',
-    'agent':   'bg-indigo-100 text-indigo-700',
-    'student': 'bg-teal-100 text-teal-700',
+    admin: 'bg-purple-100 text-purple-700',
+    staff: 'bg-indigo-100 text-indigo-700',
+    faculty: 'bg-blue-100 text-blue-700',
+    student: 'bg-teal-100 text-teal-700',
   };
-  return map[role] || 'bg-gray-100 text-gray-600';
+  return map[normalizedRole] || 'bg-gray-100 text-gray-600';
 };
 
 export const getInitials = (name = '') => {

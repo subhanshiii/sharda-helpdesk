@@ -17,15 +17,16 @@ const { emitToTicket, emitToUser, emitToAll } = require('../socket/socketManager
 const { queueTicketCreatedEmail, queueTicketUpdatedEmail, queueTicketAssignedEmail } = require('../queues/emailQueue');
 const { invalidateStatsCache } = require('./statsService');
 const logger = require('../utils/logger');
+const { isSupportRole, getAssignableRoles } = require('../utils/roleHelpers');
 
 // ── Query builder ──────────────────────────────────────
 const buildTicketQuery = (user, filters = {}) => {
   let query = {};
 
   // Role-based filtering
-  if (user.role === 'student') {
+  if (!isSupportRole(user.role)) {
     query.user = user.id;
-  } else if (user.role === 'agent') {
+  } else if (user.role !== 'admin') {
     query.$or = [{ assignedTo: user.id }, { assignedTo: null }];
   }
 
@@ -90,14 +91,14 @@ const getTicketById = async (ticketId, user) => {
   }
 
   // Students can only see own tickets
-  if (user.role === 'student' && ticket.user._id.toString() !== user.id) {
+  if (!isSupportRole(user.role) && ticket.user._id.toString() !== user.id) {
     const err = new Error('Not authorized to view this ticket');
     err.statusCode = 403;
     throw err;
   }
 
   // Filter internal notes for students
-  if (user.role === 'student') {
+  if (!isSupportRole(user.role)) {
     ticket.replies = ticket.replies.filter(r => !r.isInternal);
   }
 
@@ -113,7 +114,7 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
     originalName: file.originalname,
     mimetype:     file.mimetype,
     size:         file.size,
-    url:          `/uploads/${file.filename}`,
+    url:          `/api/files/general/${file.filename}`,
   }));
 
   const ticket = await Ticket.create({
@@ -167,7 +168,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
   }
 
   // Student can only update own open tickets
-  if (user.role === 'student') {
+  if (!isSupportRole(user.role)) {
     if (ticket.user.toString() !== user.id) {
       const err = new Error('Not authorized');
       err.statusCode = 403;
@@ -199,16 +200,16 @@ const updateTicket = async (ticketId, updates, user, io) => {
     if (!updates.assignedTo || updates.assignedTo === '') {
       ticket.assignedTo = null;
     } else {
-      const agent = await User.findById(updates.assignedTo);
-      if (!agent || !['agent', 'admin'].includes(agent.role)) {
-        const err = new Error('Invalid agent ID');
+      const assignee = await User.findById(updates.assignedTo);
+      if (!assignee || !getAssignableRoles().includes(assignee.role)) {
+        const err = new Error('Invalid staff assignee');
         err.statusCode = 400;
         throw err;
       }
       ticket.assignedTo = updates.assignedTo;
       if (ticket.status === 'Open') ticket.status = 'In Progress';
 
-      // Notify newly assigned agent
+      // Notify newly assigned staff member
       const isNewAssignment = oldAssignedTo !== updates.assignedTo;
       if (io && isNewAssignment) {
         emitToUser(io, updates.assignedTo, 'ticket:assigned', {
@@ -221,8 +222,8 @@ const updateTicket = async (ticketId, updates, user, io) => {
       // Queue assignment email
       if (isNewAssignment) {
         queueTicketAssignedEmail({
-          toEmail:     agent.email,
-          agentName:   agent.name,
+          toEmail:     assignee.email,
+          agentName:   assignee.name,
           ticketId:    ticket.ticketId,
           ticketTitle: ticket.title,
         }).catch(() => {});
@@ -289,7 +290,7 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     throw err;
   }
 
-  if (user.role === 'student' && ticket.user.toString() !== user.id) {
+  if (!isSupportRole(user.role) && ticket.user.toString() !== user.id) {
     const err = new Error('Not authorized');
     err.statusCode = 403;
     throw err;
@@ -306,7 +307,7 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     originalName: file.originalname,
     mimetype:     file.mimetype,
     size:         file.size,
-    url:          `/uploads/${file.filename}`,
+    url:          `/api/files/general/${file.filename}`,
   }));
 
   const reply = {
@@ -314,16 +315,16 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     author:     user.id,
     authorRole: user.role,
     attachments,
-    isInternal: user.role !== 'student' && replyData.isInternal === 'true',
+    isInternal: isSupportRole(user.role) && replyData.isInternal === 'true',
   };
 
   ticket.replies.push(reply);
 
   // Business rules for status transitions
-  if (['agent', 'admin'].includes(user.role) && ticket.status === 'Open') {
+  if (isSupportRole(user.role) && ticket.status === 'Open') {
     ticket.status = 'In Progress';
   }
-  if (user.role === 'student' && ticket.status === 'Resolved') {
+  if (!isSupportRole(user.role) && ticket.status === 'Resolved') {
     ticket.status = 'In Progress';
   }
 
@@ -344,8 +345,8 @@ const addReply = async (ticketId, replyData, user, files, io) => {
       ticketId: ticket._id, reply: newReply, ticket: updated,
     });
 
-    // Notify student if agent replied (non-internal)
-    if (['agent', 'admin'].includes(user.role) && !reply.isInternal) {
+    // Notify student if a support staff member replied (non-internal)
+    if (isSupportRole(user.role) && !reply.isInternal) {
       emitToUser(io, ticket.user.toString(), 'notification:new_reply', {
         ticketId:    ticket._id,
         ticketTitle: ticket.title,
@@ -354,8 +355,8 @@ const addReply = async (ticketId, replyData, user, files, io) => {
       });
     }
 
-    // Notify agent if student replied
-    if (user.role === 'student' && ticket.assignedTo) {
+    // Notify assigned staff member if the student replied
+    if (!isSupportRole(user.role) && ticket.assignedTo) {
       emitToUser(io, ticket.assignedTo.toString(), 'notification:new_reply', {
         ticketId:    ticket._id,
         ticketTitle: ticket.title,
