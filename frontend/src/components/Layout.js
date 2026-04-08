@@ -3,6 +3,7 @@ import NotificationBell from "./NotificationBell";
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getInitials, getRoleColor } from '../utils/helpers';
+import { useTheme } from '../context/ThemeContext';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
@@ -36,6 +37,7 @@ const SectionLabel = ({ label }) => (
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -135,7 +137,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#f0f4ff' }}>
+    <div className="app-shell flex h-screen overflow-hidden">
       <div className="hidden md:flex flex-col w-60 flex-shrink-0 relative overflow-hidden shadow-xl">
         <SidebarContent />
       </div>
@@ -163,7 +165,9 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-xs font-bold text-white cursor-pointer shadow-md">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white cursor-pointer shadow-md ${
+              isDark ? 'bg-gradient-to-br from-slate-700 to-slate-900' : 'bg-gradient-to-br from-blue-600 to-blue-800'
+            }`}>
               {getInitials(user?.name)}
             </div>
           </div>

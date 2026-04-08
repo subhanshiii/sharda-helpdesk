@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { FullPageSpinner } from './components/ui';
+import ThemeToggle from './components/ThemeToggle';
 
 // Lazy load all pages
 const LoginPage            = lazy(() => import('./pages/LoginPage'));
@@ -69,18 +71,40 @@ function AppRoutes() {
   );
 }
 
+function AppShell() {
+  const { isDark } = useTheme();
+
+  return (
+    <>
+      <Toaster position="top-right" toastOptions={{
+        duration: 3500,
+        style: {
+          fontSize: '14px',
+          fontFamily: 'Plus Jakarta Sans, sans-serif',
+          borderRadius: '12px',
+          background: isDark ? '#111827' : '#ffffff',
+          color: isDark ? '#e5eefb' : '#1f2937',
+          border: isDark ? '1px solid rgba(148, 163, 184, 0.22)' : '1px solid rgba(209, 213, 219, 0.65)',
+        },
+      }} />
+      <div className="fixed bottom-4 right-4 z-[60]">
+        <ThemeToggle />
+      </div>
+      <AppRoutes />
+    </>
+  );
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <Router>
-          <Toaster position="top-right" toastOptions={{
-            duration: 3500,
-            style: { fontSize: '14px', fontFamily: 'Plus Jakarta Sans, sans-serif', borderRadius: '12px' },
-          }} />
-          <AppRoutes />
-        </Router>
-      </NotificationProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <NotificationProvider>
+          <Router>
+            <AppShell />
+          </Router>
+        </NotificationProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

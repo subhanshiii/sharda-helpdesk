@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../../context/ThemeContext';
 import { FiX, FiEdit3, FiTrash2, FiUsers, FiSave, FiSearch, FiUserPlus } from 'react-icons/fi';
 
 const ROLE_OPTIONS = [
@@ -10,6 +11,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup, isSystemAdmin, currentUserId, onGroupUpdated, onGroupDeleted }) {
+  const { isDark } = useTheme();
   const canManageMembers = canManageGroup || isSystemAdmin;
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ name: group?.name || '', department: group?.department || '', year: group?.year || '', section: group?.section || '', description: group?.description || '' });
@@ -154,12 +156,16 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-xl">
+      <div className={`rounded-2xl max-w-md w-full shadow-xl ${
+        isDark ? 'bg-slate-950 border border-slate-800' : 'bg-white'
+      }`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-xl font-bold text-gray-900">Group Info</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-            <FiX size={20} className="text-gray-400" />
+        <div className={`flex items-center justify-between p-6 ${
+          isDark ? 'border-b border-slate-800' : 'border-b border-gray-100'
+        }`}>
+          <h2 className={`text-xl font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>Group Info</h2>
+          <button onClick={onClose} className={`p-2 rounded-xl transition-colors ${isDark ? 'hover:bg-slate-900' : 'hover:bg-gray-100'}`}>
+            <FiX size={20} className={isDark ? 'text-slate-400' : 'text-gray-400'} />
           </button>
         </div>
 
@@ -179,9 +185,9 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                   placeholder="Group name"
                 />
               ) : (
-                <h3 className="text-lg font-bold text-gray-900">{group.name}</h3>
+                <h3 className={`text-lg font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{group.name}</h3>
               )}
-              <p className="text-sm text-gray-500">
+              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                 {group.members?.length || 0} members
                 {group.department && ` · ${group.department}`}
                 {group.year && ` Year ${group.year}`}
@@ -192,7 +198,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Group Structure</label>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Group Structure</label>
             {isEditing ? (
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <input
@@ -215,7 +221,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                 />
               </div>
             ) : null}
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Description</label>
             {isEditing ? (
               <textarea
                 value={form.description}
@@ -225,7 +231,9 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                 placeholder="Group description (optional)"
               />
             ) : (
-              <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 min-h-[60px]">
+              <p className={`text-sm rounded-xl p-3 min-h-[60px] ${
+                isDark ? 'text-slate-300 bg-slate-900' : 'text-gray-600 bg-gray-50'
+              }`}>
                 {group.description || 'No description'}
               </p>
             )}
@@ -233,7 +241,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
 
           {/* Members */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <h4 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
               <FiUsers size={16} />
               Members ({group.members?.length || 0})
             </h4>
@@ -259,17 +267,19 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                     ))}
                   </select>
                 </div>
-                {searching && <p className="text-xs text-gray-400">Searching users...</p>}
+                {searching && <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>Searching users...</p>}
                 {searchResults.length > 0 && (
-                  <div className="space-y-2 max-h-36 overflow-y-auto border border-gray-100 rounded-xl p-2">
+                  <div className={`space-y-2 max-h-36 overflow-y-auto rounded-xl p-2 ${
+                    isDark ? 'border border-slate-800 bg-slate-900/70' : 'border border-gray-100'
+                  }`}>
                     {searchResults.map((user) => (
-                      <div key={user._id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-blue-50">
+                      <div key={user._id} className={`flex items-center gap-3 px-2 py-2 rounded-xl ${isDark ? 'hover:bg-slate-800' : 'hover:bg-blue-50'}`}>
                         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
                           {user.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                          <p className={`text-sm font-medium truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{user.name}</p>
+                          <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{user.email}</p>
                         </div>
                         <button
                           onClick={() => handleAddMember(user._id)}
@@ -287,13 +297,13 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
             )}
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {group.members?.map((member) => (
-                <div key={member.user._id} className="flex items-center gap-3 p-2 rounded-xl bg-gray-50">
+                <div key={member.user._id} className={`flex items-center gap-3 p-2 rounded-xl ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white text-xs font-bold">
                     {member.user.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{member.user.name}</p>
-                    <p className="text-xs text-gray-500">{ROLE_OPTIONS.find((role) => role.value === member.role)?.label || member.role}</p>
+                    <p className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{member.user.name}</p>
+                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{ROLE_OPTIONS.find((role) => role.value === member.role)?.label || member.role}</p>
                   </div>
                   {canManageMembers ? (
                     <>
@@ -325,7 +335,9 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
 
         {/* Actions */}
         {(canManageMembers || isSystemAdmin) && (
-          <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <div className={`flex items-center justify-between p-6 rounded-b-2xl ${
+            isDark ? 'border-t border-slate-800 bg-slate-900' : 'border-t border-gray-100 bg-gray-50'
+          }`}>
             {canManageMembers && isEditing ? (
               <div className="flex gap-3">
                 <button

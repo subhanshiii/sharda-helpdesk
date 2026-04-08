@@ -56,10 +56,12 @@ const canCreateGroup = async (userId) => {
 
   if (requester.role === 'admin') return requester;
 
-  const managesAnyGroup = await Group.exists({
+  const managedGroups = await Group.find({
+    'members.user': userId,
     isActive: true,
-    members: { $elemMatch: { user: userId, role: 'admin' } },
-  });
+  }).select('members');
+
+  const managesAnyGroup = managedGroups.some((group) => isGroupManager(group, userId));
 
   if (!managesAnyGroup) {
     const err = new Error('Only system admins or existing group admins can create groups');
