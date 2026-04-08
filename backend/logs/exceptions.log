@@ -1,0 +1,284 @@
+[23:12:38] [31merror[39m: uncaughtException: Cannot find module './routes/groupChatRoutes'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module './routes/groupChatRoutes'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)
+    at Module._load (node:internal/modules/cjs/loader:1226:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:89:35)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module './routes/groupChatRoutes'\nRequire stack:\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)\n    at Module._load (node:internal/modules/cjs/loader:1226:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)\n    at require (node:internal/modules/helpers:152:16)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:89:35)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)",
+  "exception": true,
+  "date": "Wed Apr 08 2026 23:12:38 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 10787,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 121274368,
+      "heapTotal": 68943872,
+      "heapUsed": 45020088,
+      "external": 21892894,
+      "arrayBuffers": 18330134
+    }
+  },
+  "os": {
+    "loadavg": [
+      1.94287109375,
+      2.12841796875,
+      2.23876953125
+    ],
+    "uptime": 21825
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1420,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "defaultResolveImpl",
+      "line": 1058,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 22,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "resolveForCJSWithHooks",
+      "line": 1063,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 37,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1226,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 16,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 152,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 35,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": null,
+      "line": 89,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[23:12:49] [31merror[39m: uncaughtException: Cannot find module '../services/groupChatService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/groupChatRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../services/groupChatService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/groupChatRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)
+    at Module._load (node:internal/modules/cjs/loader:1226:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js:7:21)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/groupChatRoutes.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../services/groupChatService'\nRequire stack:\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/groupChatRoutes.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)\n    at Module._load (node:internal/modules/cjs/loader:1226:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)\n    at require (node:internal/modules/helpers:152:16)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js:7:21)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)",
+  "exception": true,
+  "date": "Wed Apr 08 2026 23:12:49 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 10790,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 121208832,
+      "heapTotal": 69206016,
+      "heapUsed": 44743224,
+      "external": 21892894,
+      "arrayBuffers": 18330134
+    }
+  },
+  "os": {
+    "loadavg": [
+      1.94482421875,
+      2.12353515625,
+      2.23583984375
+    ],
+    "uptime": 21836
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1420,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "defaultResolveImpl",
+      "line": 1058,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 22,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "resolveForCJSWithHooks",
+      "line": 1063,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 37,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1226,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 16,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 152,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 21,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/groupChatController.js",
+      "function": null,
+      "line": 7,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}

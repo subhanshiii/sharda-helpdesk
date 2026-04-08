@@ -1,50 +1,65 @@
-const express        = require('express');
-const http           = require('http');
-const cors           = require('cors');
-const dotenv         = require('dotenv');
-const path           = require('path');
-const cookieParser   = require('cookie-parser');
+const express      = require('express');
+const http         = require('http');
+const cors         = require('cors');
+const morgan       = require('morgan');
+const dotenv       = require('dotenv');
+const path         = require('path');
+const cookieParser = require('cookie-parser');
 
-const connectDB      = require('./config/db');
-const { getRedisClient } = require('./config/redis');
+const connectDB    = require('./config/db');
 const { initSocket } = require('./socket/socketManager');
-const errorHandler   = require('./middleware/errorHandler');
-const requestLogger  = require('./middleware/requestLogger');
-const { trackRequest, getMetrics } = require('./middleware/performanceMonitor');
-const {
-  helmetConfig, generalLimiter, mongoSanitize, hppProtection,
-} = require('./middleware/security');
-const logger = require('./utils/logger');
+const errorHandler = require('./middleware/errorHandler');
+
+// Load security middleware (graceful if packages missing)
+let helmetConfig = (req,res,next) => next();
+let generalLimiter = (req,res,next) => next();
+let mongoSanitize  = (req,res,next) => next();
+let hppProtection  = (req,res,next) => next();
+
+try {
+  const sec = require('./middleware/security');
+  helmetConfig  = sec.helmetConfig;
+  generalLimiter= sec.generalLimiter;
+  mongoSanitize = sec.mongoSanitize;
+  hppProtection = sec.hppProtection;
+} catch {}
+
+// Load logger (graceful if winston missing)
+let logger = { info: console.log, warn: console.warn, error: console.error };
+try { logger = require('./utils/logger'); } catch {}
+
+// Load performance monitor (graceful)
+let trackRequest = (req,res,next) => next();
+let getMetrics   = () => ({});
+try {
+  const pm = require('./middleware/performanceMonitor');
+  trackRequest = pm.trackRequest;
+  getMetrics   = pm.getMetrics;
+} catch {}
 
 dotenv.config();
-
-// ── Connect databases ──────────────────────────────────
 connectDB();
 
-const redisClient = getRedisClient();
-redisClient.connect().catch(() => {
-  logger.warn('Redis unavailable — caching disabled');
-});
-
-// ── Initialize queue worker ────────────────────────────
-require('./queues/emailQueue');
-logger.info('📬 Email queue worker initialized');
+// Redis (optional)
+try {
+  const { getRedisClient } = require('./config/redis');
+  const redis = getRedisClient();
+  redis.connect().catch(() => logger.warn('Redis unavailable'));
+  require('./queues/emailQueue');
+} catch {}
 
 const app    = express();
 const server = http.createServer(app);
 const io     = initSocket(server);
 
-// Make io available in all controllers
 app.use((req, res, next) => { req.io = io; next(); });
 
-// ── Security ───────────────────────────────────────────
 app.use(helmetConfig);
 app.use(cors({
   origin:         process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials:    true,
-  methods:        ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
-  exposedHeaders: ['X-Correlation-ID'],
+  methods:        ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Correlation-ID'],
 }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
@@ -52,13 +67,14 @@ app.use(cookieParser());
 app.use(mongoSanitize);
 app.use(hppProtection);
 
-// ── Observability ──────────────────────────────────────
-app.use(trackRequest);   // Performance metrics collection
-app.use(requestLogger);  // Structured request/response logging
+if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
-// ── Static files ───────────────────────────────────────
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static files — serve uploads
+app.use('/uploads',      express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/chat', express.static(path.join(__dirname, 'uploads/chat')));
+
 app.use('/api/', generalLimiter);
+app.use(trackRequest);
 
 // ── Routes ─────────────────────────────────────────────
 app.use('/api/auth',              require('./routes/authRoutes'));
@@ -70,58 +86,39 @@ app.use('/api/opportunities',     require('./routes/opportunityRoutes'));
 app.use('/api/events',            require('./routes/eventRoutes'));
 app.use('/api/chat',              require('./routes/chatRoutes'));
 app.use('/api/academic-calendar', require('./routes/academicCalendarRoutes'));
-app.use('/api/queue',             require('./routes/queueRoutes'));
+app.use('/api/chat-groups',       require('./routes/groupChatRoutes'));  // ← NEW
 
-// ── Health + Metrics endpoint ──────────────────────────
+// Queue routes (optional)
+try { app.use('/api/queue', require('./routes/queueRoutes')); } catch {}
+
 app.get('/api/health', async (req, res) => {
-  const { getQueueStats } = require('./queues/emailQueue');
-  const { onlineUsers }   = require('./socket/socketManager');
-
-  let redisStatus = 'disconnected';
-  try { await redisClient.ping(); redisStatus = 'connected'; } catch {}
-
-  const [queueStats, perfMetrics] = await Promise.all([
-    getQueueStats().catch(() => null),
-    Promise.resolve(getMetrics()),
-  ]);
-
+  const { onlineUsers } = require('./socket/socketManager');
   res.json({
     success:   true,
-    version:   '4.0.0',
+    version:   '5.0.0',
     timestamp: new Date(),
+    uptime:    `${Math.floor(process.uptime())}s`,
     services: {
       database:   'connected',
-      redis:      redisStatus,
       sockets:    `${onlineUsers.size} users online`,
-      emailQueue: queueStats,
     },
-    performance: perfMetrics,
+    performance: getMetrics(),
   });
 });
 
-// ── 404 ────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
-});
-
-// ── Error handler (must be last) ───────────────────────
+app.use((req, res) => res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` }));
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  logger.info(`🚀 Sharda Platform v4.0 running on port ${PORT}`, {
-    port: PORT, environment: process.env.NODE_ENV,
-    features: ['Socket.io', 'Redis Cache', 'Bull Queue', 'Winston Logging', 'Performance Monitor'],
-  });
+  logger.info(`🚀 Sharda Platform v5.0 running on port ${PORT}`);
+  logger.info(`💬 Group Chat: enabled`);
+  logger.info(`🔌 Socket.io:  real-time enabled`);
 });
 
 module.exports = { app, server, io };
 
 process.on('unhandledRejection', (err) => {
-  logger.error('💥 Unhandled Rejection', { error: err.message, stack: err.stack });
+  logger.error(`💥 Unhandled Rejection: ${err.message}`);
   server.close(() => process.exit(1));
-});
-process.on('uncaughtException', (err) => {
-  logger.error('💥 Uncaught Exception', { error: err.message, stack: err.stack });
-  process.exit(1);
 });

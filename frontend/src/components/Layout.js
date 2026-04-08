@@ -3,6 +3,7 @@ import NotificationBell from "./NotificationBell";
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getInitials, getRoleColor } from '../utils/helpers';
+import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiChevronRight,
@@ -90,6 +91,7 @@ export default function Layout() {
         <NavItem to="/events"              icon={FiCalendar}      label="Events"            onClick={closeSidebar} />
         <NavItem to="/academic-calendar"   icon={FiClock}         label="Academic Calendar" onClick={closeSidebar} />
         <NavItem to="/opportunities" icon={FiBriefcase}    label="Opportunities"     onClick={closeSidebar} />
+        <NavItem to="/group-chat" icon={FiMessageCircle} label="Group Chat" onClick={closeSidebar} />
 
         <SectionLabel label="Helpdesk" />
         <NavItem to="/tickets"       icon={FiList}         label="My Tickets"        onClick={closeSidebar} />
