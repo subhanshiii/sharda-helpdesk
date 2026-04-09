@@ -10,8 +10,28 @@ const ROLES = ['student', 'faculty', 'staff', 'admin'];
 function UserModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState(
     user
-      ? { name: user.name, email: user.email, role: user.role === 'agent' ? 'staff' : user.role, department: user.department || '', year: user.year || '', section: user.section || '', isActive: user.isActive }
-      : { name: '', email: '', password: '', role: 'staff', department: '', year: '', section: '' }
+      ? {
+          name: user.name,
+          email: user.email,
+          role: user.role === 'agent' ? 'staff' : user.role,
+          department: user.department || '',
+          year: user.year || '',
+          section: user.section || '',
+          isActive: user.isActive,
+          status: user.status || 'approved',
+          expiryDate: user.expiryDate ? new Date(user.expiryDate).toISOString().slice(0, 10) : '',
+        }
+      : {
+          name: '',
+          email: '',
+          password: '',
+          role: 'staff',
+          department: '',
+          year: '',
+          section: '',
+          status: 'approved',
+          expiryDate: '',
+        }
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -78,6 +98,21 @@ function UserModal({ user, onClose, onSaved }) {
             <div>
               <label className="label">Section</label>
               <input className="input" value={form.section} onChange={e => setForm(f => ({...f, section: e.target.value}))} placeholder="e.g. A" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Status</label>
+              <select className="input" value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Expiry Date</label>
+              <input type="date" className="input" value={form.expiryDate} onChange={e => setForm(f => ({...f, expiryDate: e.target.value}))} />
             </div>
           </div>
           {user && (
@@ -199,11 +234,27 @@ export default function UsersPage() {
                       {[u.department, u.year && `Year ${u.year}`, u.section && `Sec ${u.section}`].filter(Boolean).join(' · ') || '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                        {u.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                          {u.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                        {u.status ? (
+                          <span className={`badge ${
+                            u.status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : u.status === 'pending'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {u.status}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(u.createdAt)}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">
+                      <div>{formatDate(u.createdAt)}</div>
+                      {u.expiryDate ? <div className="mt-1">Expires {formatDate(u.expiryDate)}</div> : null}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => setModal(u)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">

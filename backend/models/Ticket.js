@@ -95,6 +95,18 @@ const ticketSchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
     },
+    firstResponseAt: {
+      type: Date,
+      default: null,
+    },
+    slaDueAt: {
+      type: Date,
+      default: null,
+    },
+    escalatedAt: {
+      type: Date,
+      default: null,
+    },
     closedAt: {
       type: Date,
     },
@@ -159,6 +171,7 @@ ticketSchema.pre('save', async function (next) {
 // Index for faster queries
 ticketSchema.index({ user: 1, status: 1 });
 ticketSchema.index({ assignedTo: 1, status: 1 });
+ticketSchema.index({ slaDueAt: 1, status: 1 });
 ticketSchema.index({ category: 1, priority: 1 });
 ticketSchema.index({ createdAt: -1 });
 

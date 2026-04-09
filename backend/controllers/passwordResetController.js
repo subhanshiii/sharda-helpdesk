@@ -14,7 +14,7 @@ exports.forgotPassword = async (req, res, next) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     // Always return success — don't reveal if email exists (security)
-    if (!user) {
+    if (!user || !user.emailVerified) {
       return res.status(200).json({
         success: true,
         message: 'If this email is registered, a reset link has been sent.',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
 import { useSocket } from '../hooks/useSocket';
 import GroupSidebar from '../components/chat/GroupSidebar';
 import ChatWindow from '../components/chat/ChatWindow';
@@ -11,6 +12,7 @@ import { FiMessageSquare, FiUsers, FiMenu } from 'react-icons/fi';
 
 export default function GroupChatPage() {
   const { user }                = useAuth();
+  const { hasPermission }       = usePermissions();
   const socket                  = useSocket();
   const [searchParams, setSearchParams] = useSearchParams();
   const [groups, setGroups]     = useState([]);
@@ -23,11 +25,7 @@ export default function GroupChatPage() {
   const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const canCreateGroup = isAdmin || groups.some(
-    (group) => group.myRole === 'admin' || group.members?.some(
-      (member) => member.user?._id === user?._id && member.role === 'admin'
-    )
-  );
+  const canCreateGroup = hasPermission('canManageGroups');
   const activeGroupRole = activeGroup?.myRole || activeGroup?.members?.find(
     (member) => member.user?._id === user?._id
   )?.role;
@@ -41,12 +39,16 @@ export default function GroupChatPage() {
       const res = await API.get(endpoint);
       const data = res.data.data || [];
       setGroups(data);
-      // Auto-select first group if none selected
-      if (!activeGroup && data.length > 0) setActiveGroup(data[0]);
+      setActiveGroup((current) => {
+        if (current) {
+          return data.find((group) => group._id === current._id) || current;
+        }
+        return data[0] || null;
+      });
     } catch (err) {
       console.error('Failed to fetch groups:', err);
     } finally { setLoading(false); }
-  }, [isAdmin, activeGroup]);
+  }, [isAdmin]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 

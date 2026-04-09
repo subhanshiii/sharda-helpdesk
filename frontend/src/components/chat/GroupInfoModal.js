@@ -15,6 +15,7 @@ const ROLE_OPTIONS = [
 export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup, isSystemAdmin, currentUserId, onGroupUpdated, onGroupDeleted }) {
   const { isDark } = useTheme();
   const canManageMembers = canManageGroup || isSystemAdmin;
+  const safeMembers = (group?.members || []).filter((member) => member?.user);
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ name: group?.name || '', department: group?.department || '', year: group?.year || '', section: group?.section || '', description: group?.description || '' });
   const [loading, setLoading] = useState(false);
@@ -80,7 +81,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
     setSearching(true);
     try {
       const res = await API.get(`/chat-groups/users/search?q=${encodeURIComponent(value)}`);
-      const currentMemberIds = new Set(group.members?.map((member) => member.user._id));
+      const currentMemberIds = new Set(safeMembers.map((member) => member.user._id));
       setSearchResults((res.data.data || []).filter((user) => !currentMemberIds.has(user._id)));
     } catch {
       toast.error('Failed to search users');
@@ -190,7 +191,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
                 <h3 className={`text-lg font-bold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{group.name}</h3>
               )}
               <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                {group.members?.length || 0} members
+                {safeMembers.length} members
                 {group.department && ` · ${group.department}`}
                 {group.year && ` Year ${group.year}`}
                 {group.section && ` · Section ${group.section}`}
@@ -245,7 +246,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
           <div>
             <h4 className={`text-sm font-medium mb-3 flex items-center gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
               <FiUsers size={16} />
-              Members ({group.members?.length || 0})
+              Members ({safeMembers.length})
             </h4>
             {canManageMembers && (
               <div className="mb-4 space-y-3">
@@ -298,7 +299,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
               </div>
             )}
             <div className="space-y-2 max-h-40 overflow-y-auto">
-              {group.members?.map((member) => (
+              {safeMembers.map((member) => (
                 <div key={member.user._id} className={`flex items-center gap-3 p-2 rounded-xl ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white text-xs font-bold">
                     {member.user.name.slice(0, 2).toUpperCase()}

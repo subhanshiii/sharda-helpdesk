@@ -9,17 +9,16 @@ const cookieParser = require('cookie-parser');
 const connectDB    = require('./config/db');
 const { initSocket } = require('./socket/socketManager');
 const errorHandler = require('./middleware/errorHandler');
+const { ensureInitialAdmin } = require('./utils/bootstrapAdmin');
 
 // Load security middleware (graceful if packages missing)
 let helmetConfig = (req,res,next) => next();
-let generalLimiter = (req,res,next) => next();
 let mongoSanitize  = (req,res,next) => next();
 let hppProtection  = (req,res,next) => next();
 
 try {
   const sec = require('./middleware/security');
   helmetConfig  = sec.helmetConfig;
-  generalLimiter= sec.generalLimiter;
   mongoSanitize = sec.mongoSanitize;
   hppProtection = sec.hppProtection;
 } catch {}
@@ -38,7 +37,6 @@ try {
 } catch {}
 
 dotenv.config();
-connectDB();
 
 // Redis (optional)
 try {
@@ -73,7 +71,6 @@ if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 app.use('/uploads',      express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/chat', express.static(path.join(__dirname, 'uploads/chat')));
 
-app.use('/api/', generalLimiter);
 app.use(trackRequest);
 
 // ── Routes ─────────────────────────────────────────────
@@ -117,11 +114,23 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route ${r
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  logger.info(`🚀 Sharda Platform v5.0 running on port ${PORT}`);
-  logger.info(`💬 Group Chat: enabled`);
-  logger.info(`🔌 Socket.io:  real-time enabled`);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+    await ensureInitialAdmin(logger);
+
+    server.listen(PORT, () => {
+      logger.info(`🚀 Sharda Platform v5.0 running on port ${PORT}`);
+      logger.info(`💬 Group Chat: enabled`);
+      logger.info(`🔌 Socket.io:  real-time enabled`);
+    });
+  } catch (error) {
+    logger.error(`Startup bootstrap failed: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = { app, server, io };
 

@@ -13,6 +13,12 @@ const timetableEntrySchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    subjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject',
+      default: null,
+      index: true,
+    },
     department: {
       type: String,
       trim: true,
@@ -27,6 +33,12 @@ const timetableEntrySchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: [true, 'Section is required'],
+    },
+    sectionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Section',
+      default: null,
+      index: true,
     },
     dayOfWeek: {
       type: String,
@@ -72,6 +84,7 @@ const timetableEntrySchema = new mongoose.Schema(
 );
 
 timetableEntrySchema.index({ department: 1, year: 1, section: 1, dayOfWeek: 1, startTime: 1 });
+timetableEntrySchema.index({ sectionId: 1, dayOfWeek: 1, startTime: 1 });
 timetableEntrySchema.index({ faculty: 1, dayOfWeek: 1, startTime: 1 });
 
 module.exports = mongoose.model('TimetableEntry', timetableEntrySchema);

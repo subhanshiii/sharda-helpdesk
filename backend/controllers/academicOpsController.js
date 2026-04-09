@@ -1,5 +1,8 @@
 const TimetableEntry = require('../models/TimetableEntry');
 const AttendanceSession = require('../models/AttendanceSession');
+const Enrollment = require('../models/Enrollment');
+const Section = require('../models/Section');
+const Subject = require('../models/Subject');
 const User = require('../models/User');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 
@@ -23,24 +26,115 @@ const buildAcademicScope = (user) => {
   return {};
 };
 
+const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: userId, status: 'active' })
+  .populate({
+    path: 'section',
+    populate: [{ path: 'department', select: 'name' }],
+  });
+
+const toMinutes = (value = '') => {
+  const [hours, minutes] = String(value).split(':').map(Number);
+  return (hours * 60) + (minutes || 0);
+};
+
+const overlaps = (startA, endA, startB, endB) => startA < endB && startB < endA;
+
+const buildTimetablePayload = async (body, userId) => {
+  const payload = {
+    ...body,
+    faculty: body.faculty || userId,
+    subjectId: body.subjectId || null,
+    sectionId: body.sectionId || null,
+  };
+
+  if (payload.sectionId) {
+    const section = await Section.findById(payload.sectionId).populate('department');
+    if (!section) {
+      const error = new Error('Section not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    payload.section = section.name;
+    payload.department = section.department?.name || body.department || '';
+  }
+
+  if (payload.subjectId) {
+    const subject = await Subject.findById(payload.subjectId);
+    if (!subject) {
+      const error = new Error('Subject not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    payload.subject = subject.name;
+  }
+
+  return payload;
+};
+
+const ensureTimetableConflicts = async (payload, excludeId = null) => {
+  const baseQuery = {
+    dayOfWeek: payload.dayOfWeek,
+    isActive: true,
+  };
+  if (excludeId) baseQuery._id = { $ne: excludeId };
+
+  const sectionQuery = payload.sectionId
+    ? { ...baseQuery, sectionId: payload.sectionId }
+    : { ...baseQuery, department: payload.department, year: payload.year, section: payload.section };
+
+  const facultyQuery = {
+    ...baseQuery,
+    faculty: payload.faculty,
+  };
+
+  const [sectionEntries, facultyEntries] = await Promise.all([
+    TimetableEntry.find(sectionQuery).select('startTime endTime').lean(),
+    TimetableEntry.find(facultyQuery).select('startTime endTime').lean(),
+  ]);
+
+  const start = toMinutes(payload.startTime);
+  const end = toMinutes(payload.endTime);
+
+  if (sectionEntries.some((entry) => overlaps(start, end, toMinutes(entry.startTime), toMinutes(entry.endTime)))) {
+    const error = new Error('Section already has a class during this time');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (facultyEntries.some((entry) => overlaps(start, end, toMinutes(entry.startTime), toMinutes(entry.endTime)))) {
+    const error = new Error('Faculty is already scheduled during this time');
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
 exports.getTimetable = async (req, res, next) => {
   try {
     const role = normalizeRole(req.user.role);
     const query = { isActive: true };
 
     if (role === 'student') {
-      query.department = req.user.department;
-      query.year = req.user.year;
-      query.section = req.user.section;
+      const enrollment = await getActiveEnrollment(req.user.id);
+      if (enrollment?.section?._id) {
+        query.sectionId = enrollment.section._id;
+      } else {
+        query.department = req.user.department;
+        query.year = req.user.year;
+        query.section = req.user.section;
+      }
     } else if (role === 'faculty') {
       query.$or = [
         { faculty: req.user.id },
-        { department: req.user.department },
+        ...(req.user.department ? [{ department: req.user.department }] : []),
       ];
+    } else if (req.query.sectionId) {
+      query.sectionId = req.query.sectionId;
     }
 
     const entries = await TimetableEntry.find(query)
       .populate('faculty', 'name email role department')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .sort({ dayOfWeek: 1, startTime: 1 })
       .lean();
 
@@ -56,14 +150,18 @@ exports.createTimetableEntry = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to manage timetable' });
     }
 
+    const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureTimetableConflicts(payload);
+
     const entry = await TimetableEntry.create({
-      ...req.body,
-      faculty: req.body.faculty || req.user.id,
+      ...payload,
       createdBy: req.user.id,
     });
 
     const populated = await TimetableEntry.findById(entry._id)
       .populate('faculty', 'name email role department')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .lean();
 
     res.status(201).json({ success: true, data: populated });
@@ -82,8 +180,13 @@ exports.updateTimetableEntry = async (req, res, next) => {
       ? { _id: req.params.id }
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
-    const updated = await TimetableEntry.findOneAndUpdate(query, req.body, { new: true, runValidators: true })
+    const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureTimetableConflicts(payload, req.params.id);
+
+    const updated = await TimetableEntry.findOneAndUpdate(query, payload, { new: true, runValidators: true })
       .populate('faculty', 'name email role department')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .lean();
 
     if (!updated) {
@@ -123,6 +226,20 @@ exports.getAttendanceOptions = async (req, res, next) => {
     const { department, year, section } = req.query;
     const userScope = buildAcademicScope(req.user);
 
+    if (req.query.sectionId) {
+      const enrollmentQuery = { section: req.query.sectionId, status: 'active' };
+      const enrollments = await Enrollment.find(enrollmentQuery)
+        .populate('student', 'name email department year section sectionId')
+        .lean();
+
+      const students = enrollments
+        .map((enrollment) => enrollment.student)
+        .filter(Boolean)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+      return res.status(200).json({ success: true, data: students });
+    }
+
     const lookup = {
       department: department || userScope.department,
       year: year || userScope.year,
@@ -148,16 +265,25 @@ exports.getAttendanceSessions = async (req, res, next) => {
     const query = {};
 
     if (role === 'student') {
-      query.department = req.user.department;
-      query.year = req.user.year;
-      query.section = req.user.section;
+      const enrollment = await getActiveEnrollment(req.user.id);
+      if (enrollment?.section?._id) {
+        query.sectionId = enrollment.section._id;
+      } else {
+        query.department = req.user.department;
+        query.year = req.user.year;
+        query.section = req.user.section;
+      }
     } else if (role === 'faculty') {
       query.$or = [{ faculty: req.user.id }, { department: req.user.department }];
+    } else if (req.query.sectionId) {
+      query.sectionId = req.query.sectionId;
     }
 
     const sessions = await AttendanceSession.find(query)
       .populate('faculty', 'name email role department')
       .populate('records.student', 'name email department year section')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .sort({ date: -1 })
       .limit(40)
       .lean();
@@ -181,8 +307,9 @@ exports.createAttendanceSession = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to manage attendance' });
     }
 
+    const payload = await buildTimetablePayload(req.body, req.user.id);
     const session = await AttendanceSession.create({
-      ...req.body,
+      ...payload,
       faculty: req.user.id,
       createdBy: req.user.id,
       records: Array.isArray(req.body.records) ? req.body.records : [],
@@ -191,6 +318,8 @@ exports.createAttendanceSession = async (req, res, next) => {
     const populated = await AttendanceSession.findById(session._id)
       .populate('faculty', 'name email role department')
       .populate('records.student', 'name email department year section')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .lean();
 
     res.status(201).json({ success: true, data: populated });
@@ -209,14 +338,17 @@ exports.updateAttendanceSession = async (req, res, next) => {
       ? { _id: req.params.id }
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
+    const payload = await buildTimetablePayload(req.body, req.user.id);
     const update = {
-      title: req.body.title,
-      subject: req.body.subject,
-      department: req.body.department,
-      year: req.body.year,
-      section: req.body.section,
-      date: req.body.date,
-      topic: req.body.topic,
+      title: payload.title,
+      subject: payload.subject,
+      subjectId: payload.subjectId,
+      department: payload.department,
+      year: payload.year,
+      section: payload.section,
+      sectionId: payload.sectionId,
+      date: payload.date,
+      topic: payload.topic,
     };
 
     if (Array.isArray(req.body.records)) {
@@ -230,6 +362,8 @@ exports.updateAttendanceSession = async (req, res, next) => {
     const updated = await AttendanceSession.findOneAndUpdate(query, update, { new: true, runValidators: true })
       .populate('faculty', 'name email role department')
       .populate('records.student', 'name email department year section')
+      .populate('sectionId', 'name')
+      .populate('subjectId', 'name code')
       .lean();
 
     if (!updated) {

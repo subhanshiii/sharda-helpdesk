@@ -46,9 +46,22 @@ exports.getUser = async (req, res, next) => {
 // @desc    Create user
 exports.createUser = async (req, res, next) => {
   try {
-    const { name, email, password, role, department, year, section } = req.body;
+    const { name, email, password, role, department, departmentId, year, section, sectionId, status, expiryDate } = req.body;
     const normalizedRole = normalizeRole(role);
-    const user = await User.create({ name, email, password, role: normalizedRole, department, year, section });
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: normalizedRole,
+      department,
+      departmentId: departmentId || null,
+      year,
+      section,
+      sectionId: sectionId || null,
+      status: status || 'approved',
+      emailVerified: true,
+      expiryDate: expiryDate || null,
+    });
 
     if (isSupportRole(normalizedRole)) await del(KEYS.agents());
 
@@ -62,10 +75,22 @@ exports.createUser = async (req, res, next) => {
 // @desc    Update user
 exports.updateUser = async (req, res, next) => {
   try {
-    const { name, email, role, department, year, section, isActive } = req.body;
+    const { name, email, role, department, departmentId, year, section, sectionId, isActive, status, expiryDate } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, role: role ? normalizeRole(role) : undefined, department, year, section, isActive },
+      {
+        name,
+        email,
+        role: role ? normalizeRole(role) : undefined,
+        department,
+        departmentId,
+        year,
+        section,
+        sectionId,
+        isActive,
+        status,
+        expiryDate,
+      },
       { new: true, runValidators: true }
     ).select('-password');
 

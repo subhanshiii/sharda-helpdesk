@@ -30,6 +30,13 @@ const CATEGORY_ROUTING = {
   Other: 'Student Services',
 };
 
+const SLA_HOURS = {
+  Low: 72,
+  Medium: 48,
+  High: 24,
+  Critical: 8,
+};
+
 const pickBestAssignee = async (category) => {
   const routingDepartment = CATEGORY_ROUTING[category] || 'Student Services';
   const roleQuery = { role: { $in: getAssignableRoles() }, isActive: true };
@@ -173,6 +180,7 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
     assignedTo: assignee?._id || null,
     routingDepartment,
     status: assignee ? 'In Progress' : 'Open',
+    slaDueAt: new Date(Date.now() + ((SLA_HOURS[priority || 'Medium'] || 48) * 60 * 60 * 1000)),
     attachments,
     tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim())) : [],
   });
@@ -267,6 +275,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
       }
       ticket.assignedTo = updates.assignedTo;
       if (ticket.status === 'Open') ticket.status = 'In Progress';
+      if (!ticket.firstResponseAt) ticket.firstResponseAt = new Date();
 
       // Notify newly assigned staff member
       const isNewAssignment = oldAssignedTo !== updates.assignedTo;
@@ -377,6 +386,9 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     isInternal: isSupportRole(user.role) && replyData.isInternal === 'true',
   };
 
+  if (!ticket.firstResponseAt && isSupportRole(user.role)) {
+    ticket.firstResponseAt = new Date();
+  }
   ticket.replies.push(reply);
 
   // Business rules for status transitions

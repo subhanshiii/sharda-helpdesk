@@ -21,6 +21,28 @@ const attachAuthenticatedUser = async (req, token) => {
     throw error;
   }
 
+  if (user.status && user.status !== 'approved') {
+    const error = new Error(
+      user.status === 'pending'
+        ? 'Account pending approval. Please wait for admin approval.'
+        : 'Account is not allowed to sign in.'
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (!user.emailVerified) {
+    const error = new Error('Email verification is required before sign in.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (user.expiryDate && new Date() >= user.expiryDate) {
+    const error = new Error('Account access has expired.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   req.user = user;
 };
 

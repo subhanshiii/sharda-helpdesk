@@ -1,15 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import API from '../../utils/api';
 
-const STORAGE_KEY = 'todays_thought';
+const STORAGE_KEY = 'todays_thought_v2';
 const TYPE_SPEED_MS = 30;
 
 const FALLBACK_QUOTES = [
-  { quote: 'The secret of getting ahead is getting started.', author: 'Mark Twain' },
-  { quote: 'An investment in knowledge pays the best interest.', author: 'Benjamin Franklin' },
-  { quote: 'It always seems impossible until it\'s done.', author: 'Nelson Mandela' },
-  { quote: 'The expert in anything was once a beginner.', author: 'Helen Hayes' },
-  { quote: 'Believe you can and you\'re halfway there.', author: 'Theodore Roosevelt' },
+  { quote: 'The secret of getting ahead is getting started.' },
+  { quote: 'An investment in knowledge pays the best interest.' },
+  { quote: 'It always seems impossible until it\'s done.' },
+  { quote: 'The expert in anything was once a beginner.' },
+  { quote: 'Believe you can and you\'re halfway there.' },
+  { quote: 'Success is the sum of small efforts, repeated day in and day out.' },
+  { quote: 'Excellence is never an accident. It is always the result of high intention and sincere effort.' },
+  { quote: 'The future depends on what you do today.' },
+  { quote: 'Start where you are. Use what you have. Do what you can.' },
+  { quote: 'Perseverance is not a long race; it is many short races one after the other.' },
 ];
 
 const getDateKey = () => {
@@ -21,7 +26,6 @@ const getDateKey = () => {
 };
 
 const getFallbackQuote = () => FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
-
 const readCachedThought = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -87,7 +91,6 @@ export default function TodaysThought() {
         const data = response.data?.data;
         const quote = {
           quote: String(data?.quote || '').trim(),
-          author: String(data?.author || '').trim() || 'Original',
         };
 
         if (!quote.quote) {
@@ -137,8 +140,6 @@ export default function TodaysThought() {
 
   if (loading) return <ThoughtSkeleton />;
 
-  const authorLabel = thought?.author === 'AI' ? 'Original' : (thought?.author || 'Original');
-
   return (
     <section className="card overflow-hidden border-violet-100 bg-gradient-to-r from-violet-50 via-white to-sky-50">
       <div className="px-4 py-4 sm:px-5">
@@ -146,9 +147,6 @@ export default function TodaysThought() {
         <blockquote className="mt-3 text-base font-medium leading-7 text-gray-800 sm:text-lg">
           &ldquo;{displayedQuote}&rdquo;
         </blockquote>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-          <span className="font-semibold text-gray-700">— {authorLabel}</span>
-        </div>
       </div>
     </section>
   );

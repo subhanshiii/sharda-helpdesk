@@ -82,8 +82,11 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       const res = await API.post('/auth/register', formData);
-      dispatch({ type: 'AUTH_SUCCESS', payload: res.data });
-      return { success: true };
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return {
+        success: true,
+        message: res.data?.message || 'Registration submitted for approval',
+      };
     } catch (err) {
       const msg = err.response?.data?.message || 'Registration failed';
       dispatch({ type: 'SET_ERROR', payload: msg });

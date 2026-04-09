@@ -191,6 +191,11 @@ export default function CreateGroupModal({ onClose, onCreated }) {
                 </div>
               </div>
               <p className="text-xs text-gray-400">You can choose a suggested value or type a custom one in any field.</p>
+              {form.department && form.year && form.section && (
+                <div className="px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
+                  Approved users matching {form.department} · Year {form.year} · Section {form.section} will be added automatically. You can still add extra members manually in the next step.
+                </div>
+              )}
 
               {/* Group name (auto-generated or manual) */}
               <div>

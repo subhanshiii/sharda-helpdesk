@@ -29,6 +29,12 @@ const assignmentSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    subjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject',
+      default: null,
+      index: true,
+    },
     dueDate: {
       type: Date,
       required: [true, 'Due date is required'],
@@ -51,6 +57,12 @@ const assignmentSchema = new mongoose.Schema(
       years: [{ type: String, trim: true }],
       sections: [{ type: String, trim: true }],
     },
+    sectionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Section',
+      default: null,
+      index: true,
+    },
     assignedStudents: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -69,6 +81,8 @@ const assignmentSchema = new mongoose.Schema(
 
 assignmentSchema.index({ createdBy: 1, dueDate: -1 });
 assignmentSchema.index({ dueDate: 1, isPublished: 1 });
+assignmentSchema.index({ sectionId: 1, dueDate: 1 });
+assignmentSchema.index({ subjectId: 1, dueDate: 1 });
 assignmentSchema.index({ 'targetAudience.departments': 1 });
 assignmentSchema.index({ 'targetAudience.years': 1 });
 assignmentSchema.index({ 'targetAudience.sections': 1 });

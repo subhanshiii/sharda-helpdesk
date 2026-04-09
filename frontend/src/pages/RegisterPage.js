@@ -5,12 +5,14 @@ import toast from 'react-hot-toast';
 import { FiMail, FiLock, FiUser, FiHash, FiBook, FiHelpCircle } from 'react-icons/fi';
 import { Alert } from '../components/ui';
 
+const ROLE_OPTIONS = ['student', 'faculty', 'staff'];
+
 export default function RegisterPage() {
   const { register, loading } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '', email: '', password: '', confirmPassword: '',
-    department: '', enrollmentId: '',
+    department: '', enrollmentId: '', role: 'student',
   });
   const [error, setError] = useState('');
 
@@ -40,12 +42,12 @@ export default function RegisterPage() {
       password: form.password,
       department: form.department,
       enrollmentId: form.enrollmentId,
-      role: 'student',
+      role: form.role,
     });
 
     if (result.success) {
-      toast.success('Account created! Welcome to Sharda Helpdesk');
-      navigate('/dashboard');
+      toast.success(result.message || 'Registration submitted. Verify your email, then wait for admin approval.');
+      navigate('/login');
     } else {
       setError(result.message);
     }
@@ -59,7 +61,7 @@ export default function RegisterPage() {
             <FiHelpCircle className="text-white" size={24} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-          <p className="text-sm text-gray-500 mt-1">Register for Sharda University Helpdesk</p>
+          <p className="text-sm text-gray-500 mt-1">Register with email and password. Your account will be activated after admin approval.</p>
         </div>
 
         <div className="card p-6">
@@ -90,6 +92,21 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="label">Role</label>
+                <select
+                  name="role"
+                  value={form.role}
+                  onChange={handleChange}
+                  className="input"
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="label">Department</label>
                 <div className="relative">
                   <FiBook className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -97,12 +114,12 @@ export default function RegisterPage() {
                     className="input pl-9" placeholder="e.g. CSE" />
                 </div>
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="label">Enrollment ID</label>
                 <div className="relative">
                   <FiHash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
                   <input name="enrollmentId" value={form.enrollmentId} onChange={handleChange}
-                    className="input pl-9" placeholder="SU2024001" />
+                    className="input pl-9" placeholder={form.role === 'student' ? 'SU2024001' : 'Optional employee/university ID'} />
                 </div>
               </div>
             </div>
@@ -133,6 +150,9 @@ export default function RegisterPage() {
           <p className="text-center text-sm text-gray-500 mt-5">
             Already have an account?{' '}
             <Link to="/login" className="text-primary-600 font-medium hover:underline">Sign in</Link>
+          </p>
+          <p className="text-center text-xs text-gray-400 mt-3">
+            Use your university email address. You must verify the email before admin approval can activate the account.
           </p>
         </div>
       </div>

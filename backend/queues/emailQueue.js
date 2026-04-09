@@ -1,5 +1,5 @@
 const Bull  = require('bull');
-const { sendPasswordResetEmail, sendTicketCreatedEmail } = require('../utils/emailService');
+const { sendPasswordResetEmail, sendTicketCreatedEmail, sendEmailVerificationEmail } = require('../utils/emailService');
 
 // ── Create Bull queue ──────────────────────────────────
 // Bull uses Redis as its backing store for job persistence
@@ -24,6 +24,7 @@ const emailQueue = new Bull('email-queue', {
 // ── Job types ──────────────────────────────────────────
 const JOB_TYPES = {
   PASSWORD_RESET:   'password_reset',
+  EMAIL_VERIFICATION: 'email_verification',
   TICKET_CREATED:   'ticket_created',
   TICKET_UPDATED:   'ticket_updated',
   TICKET_ASSIGNED:  'ticket_assigned',
@@ -34,6 +35,13 @@ const JOB_TYPES = {
 emailQueue.process(JOB_TYPES.PASSWORD_RESET, async (job) => {
   console.log(`📧 Processing password reset email for: ${job.data.toEmail}`);
   const result = await sendPasswordResetEmail(job.data);
+  if (!result.success) throw new Error(`Email failed: ${result.error}`);
+  return result;
+});
+
+emailQueue.process(JOB_TYPES.EMAIL_VERIFICATION, async (job) => {
+  console.log(`📧 Processing email verification for: ${job.data.toEmail}`);
+  const result = await sendEmailVerificationEmail(job.data);
   if (!result.success) throw new Error(`Email failed: ${result.error}`);
   return result;
 });
@@ -81,6 +89,13 @@ const queuePasswordResetEmail = async (data) => {
     priority: 1, // High priority — user is waiting for this
   });
   console.log(`📬 Password reset email queued — job id: ${job.id}`);
+  return job;
+};
+
+const queueEmailVerificationEmail = async (data) => {
+  const job = await emailQueue.add(JOB_TYPES.EMAIL_VERIFICATION, data, {
+    priority: 1,
+  });
   return job;
 };
 
@@ -133,6 +148,7 @@ const getQueueStats = async () => {
 module.exports = {
   emailQueue,
   queuePasswordResetEmail,
+  queueEmailVerificationEmail,
   queueTicketCreatedEmail,
   queueTicketUpdatedEmail,
   queueTicketAssignedEmail,

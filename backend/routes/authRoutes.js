@@ -3,12 +3,12 @@ const { body } = require('express-validator');
 const router  = express.Router();
 
 const {
-  register, login, logout, getMe, updateProfile, changePassword,
+  register, login, adminLogin, logout, getMe, updateProfile, changePassword, getPendingUsers, updateApprovalStatus, verifyEmail, resendVerification,
 } = require('../controllers/authController');
 const {
   forgotPassword, resetPassword, verifyResetToken,
 } = require('../controllers/passwordResetController');
-const { protect }              = require('../middleware/auth');
+const { protect, permissionMiddleware }              = require('../middleware/auth');
 const { authLimiter, passwordResetLimiter } = require('../middleware/security');
 
 // Public routes
@@ -31,6 +31,22 @@ router.post('/login',
   login
 );
 
+router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification',
+  authLimiter,
+  [body('email').isEmail().normalizeEmail().withMessage('Valid email is required')],
+  resendVerification
+);
+
+router.post('/admin/login',
+  authLimiter,
+  [
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').notEmpty().withMessage('Password is required'),
+  ],
+  adminLogin
+);
+
 // Logout should clear cookie state even when the session is already invalidated.
 router.post('/logout', logout);
 
@@ -43,5 +59,15 @@ router.get('/verify-reset-token/:token', verifyResetToken);
 router.get('/me',                protect, getMe);
 router.put('/updateprofile',     protect, updateProfile);
 router.put('/changepassword',    protect, changePassword);
+router.get('/pending-users',     protect, permissionMiddleware('canManageUsers'), getPendingUsers);
+router.patch('/approve/:userId', protect, permissionMiddleware('canManageUsers'), (req, res, next) => {
+  req.body.status = 'approved';
+  return updateApprovalStatus(req, res, next);
+});
+router.patch('/reject/:userId',  protect, permissionMiddleware('canManageUsers'), (req, res, next) => {
+  req.body.status = 'rejected';
+  return updateApprovalStatus(req, res, next);
+});
+router.patch('/status/:userId',  protect, permissionMiddleware('canManageUsers'), updateApprovalStatus);
 
 module.exports = router;

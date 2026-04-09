@@ -4,6 +4,56 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
 const APP_NAME = 'Sharda University Helpdesk';
 
+exports.sendEmailVerificationEmail = async ({ toEmail, userName, verificationLink }) => {
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: toEmail,
+      subject: `Verify Your Email — ${APP_NAME}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0;padding:0;background:#f0f4ff;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#0c1654,#1e3a8a,#1e40af);padding:32px 40px;text-align:center;">
+                    <h1 style="color:white;margin:0;font-size:22px;font-weight:800;">Sharda University</h1>
+                    <p style="color:rgba(147,197,253,0.8);margin:4px 0 0;font-size:13px;">Account Verification</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:40px;">
+                    <h2 style="color:#1e293b;font-size:20px;font-weight:700;margin:0 0 10px;">Verify Your University Email</h2>
+                    <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 22px;">
+                      Hi <strong>${userName}</strong>, verify your email address to continue with account approval and password recovery.
+                    </p>
+                    <div style="text-align:center;margin:30px 0;">
+                      <a href="${verificationLink}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#2563eb);color:white;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;">
+                        Verify Email →
+                      </a>
+                    </div>
+                    <p style="color:#94a3b8;font-size:12px;text-align:center;">
+                      This verification link expires in 24 hours.<br/>
+                      <a href="${verificationLink}" style="color:#2563eb;word-break:break-all;">${verificationLink}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+      `,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('❌ Email verification send failed:', err);
+    return { success: false, error: err.message };
+  }
+};
+
 // ── Forgot Password Email ──────────────────────────────
 exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
   try {

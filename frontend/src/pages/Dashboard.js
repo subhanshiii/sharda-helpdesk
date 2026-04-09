@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import {
   FiArrowRight,
   FiCalendar,
+  FiEye,
+  FiEyeOff,
   FiMessageCircle,
   FiPlus,
   FiPlusCircle,
@@ -100,14 +102,26 @@ const TaskColumn = ({ title, hint, tasks, emptyText, actionLabel, onAction, onDe
   </section>
 );
 
-const SectionCard = ({ title, subtitle, action, children }) => (
+const SectionCard = ({ title, subtitle, action, onHide, children }) => (
   <section className="card overflow-hidden">
     <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3.5">
       <div>
         <h2 className="font-display text-base font-bold text-gray-900">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
       </div>
-      {action}
+      <div className="flex items-center gap-2">
+        {action}
+        {onHide ? (
+          <button
+            type="button"
+            onClick={onHide}
+            className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+          >
+            <FiEyeOff size={13} />
+            Hide
+          </button>
+        ) : null}
+      </div>
     </div>
     <div className="p-4">{children}</div>
   </section>
@@ -124,6 +138,7 @@ export default function Dashboard() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskNote, setNewTaskNote] = useState('');
   const [savingTask, setSavingTask] = useState(false);
+  const hiddenWidgets = workspace.widgetPreferences?.hidden || [];
 
   const canSeeAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
     || hasPermission('canManageAssignments')
@@ -252,13 +267,96 @@ export default function Dashboard() {
     }
   };
 
+  const updateDashboardPreferences = async (nextPreferences) => {
+    try {
+      const res = await API.put('/dashboard/preferences', nextPreferences);
+      setWorkspace((current) => ({
+        ...current,
+        widgetPreferences: res.data?.data || nextPreferences,
+      }));
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to update dashboard preferences');
+    }
+  };
+
+  const hideWidget = async (widgetKey) => {
+    if (hiddenWidgets.includes(widgetKey)) return;
+    const nextHidden = [...hiddenWidgets, widgetKey];
+    setWorkspace((current) => ({
+      ...current,
+      widgetPreferences: {
+        ...(current.widgetPreferences || { hidden: [], pinned: [] }),
+        hidden: nextHidden,
+      },
+    }));
+    await updateDashboardPreferences({
+      hidden: nextHidden,
+      pinned: workspace.widgetPreferences?.pinned || [],
+    });
+  };
+
+  const showWidget = async (widgetKey) => {
+    const nextHidden = hiddenWidgets.filter((item) => item !== widgetKey);
+    setWorkspace((current) => ({
+      ...current,
+      widgetPreferences: {
+        ...(current.widgetPreferences || { hidden: [], pinned: [] }),
+        hidden: nextHidden,
+      },
+    }));
+    await updateDashboardPreferences({
+      hidden: nextHidden,
+      pinned: workspace.widgetPreferences?.pinned || [],
+    });
+  };
+
+  const isWidgetVisible = (widgetKey) => !hiddenWidgets.includes(widgetKey);
+
+  const hiddenWidgetLabels = useMemo(() => ({
+    dailyFocus: 'Daily Focus',
+    academicSnapshot: 'Academic Snapshot',
+    productivityBoard: 'Productivity Board',
+    academicOverview: 'Academic Overview',
+    noticeHighlights: 'Notice Highlights',
+    recentActivity: 'Recent Activity',
+    helpdeskSnapshot: 'Helpdesk Snapshot',
+  }), []);
+
+  const showAcademicSnapshot = isWidgetVisible('academicSnapshot');
+  const showProductivityBoard = isWidgetVisible('productivityBoard');
+  const showAcademicOverview = isWidgetVisible('academicOverview');
+  const showNoticeHighlights = isWidgetVisible('noticeHighlights');
+  const showRecentActivity = isWidgetVisible('recentActivity');
+  const showHelpdeskSnapshot = isWidgetVisible('helpdeskSnapshot');
+  const middleSectionCount = [showProductivityBoard, showAcademicOverview || showNoticeHighlights].filter(Boolean).length;
+  const lowerSectionCount = [showRecentActivity, showHelpdeskSnapshot].filter(Boolean).length;
+
   if (loading) return <FullPageSpinner />;
 
   return (
     <div className="space-y-5">
       <TodaysThought />
 
-      {workspace.dailyInsight?.message ? (
+      {hiddenWidgets.length ? (
+        <section className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Hidden Sections</span>
+            {hiddenWidgets.map((widgetKey) => (
+              <button
+                key={widgetKey}
+                type="button"
+                onClick={() => showWidget(widgetKey)}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200"
+              >
+                <FiEye size={12} />
+                {hiddenWidgetLabels[widgetKey] || widgetKey}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {isWidgetVisible('dailyFocus') && workspace.dailyInsight?.message ? (
         <section className="rounded-3xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 px-4 py-3.5 flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl bg-white text-blue-700 shadow-sm flex items-center justify-center flex-shrink-0">
             <FiZap size={18} />
@@ -267,13 +365,21 @@ export default function Dashboard() {
             <p className="text-[11px] uppercase tracking-[0.18em] text-blue-500 font-semibold">Daily Focus</p>
             <p className="text-sm sm:text-[15px] text-gray-700 leading-7 mt-1">{workspace.dailyInsight.message}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => hideWidget('dailyFocus')}
+            className="ml-auto inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-blue-100 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:border-blue-200 hover:text-blue-700"
+          >
+            <FiEyeOff size={12} />
+            Hide
+          </button>
         </section>
       ) : null}
 
       {error ? <Alert type="warning" message={error} /> : null}
 
       <section className="card p-4 sm:p-5">
-        <div className="grid xl:grid-cols-[1.25fr,0.75fr] gap-4 items-start">
+        <div className={`grid gap-4 items-start ${showAcademicSnapshot ? 'xl:grid-cols-[1.25fr,0.75fr]' : 'grid-cols-1'}`}>
           <div className="space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
@@ -308,28 +414,42 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-gray-400 font-semibold">Academic Snapshot</p>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-              <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
-                <p className="text-xl font-black text-gray-900">{workspace.assignments?.length || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Assignments</p>
+          {showAcademicSnapshot ? (
+            <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-gray-400 font-semibold">Academic Snapshot</p>
+                <button
+                  type="button"
+                  onClick={() => hideWidget('academicSnapshot')}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                >
+                  <FiEyeOff size={12} />
+                  Hide
+                </button>
               </div>
-              <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
-                <p className="text-xl font-black text-gray-900">{workspace.timetable?.length || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Classes</p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
-                <p className="text-xl font-black text-gray-900">{unreadCount}</p>
-                <p className="text-xs text-gray-500 mt-1">Unread</p>
+              <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+                  <p className="text-xl font-black text-gray-900">{workspace.assignments?.length || 0}</p>
+                  <p className="text-xs text-gray-500 mt-1">Assignments</p>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+                  <p className="text-xl font-black text-gray-900">{workspace.timetable?.length || 0}</p>
+                  <p className="text-xs text-gray-500 mt-1">Classes</p>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+                  <p className="text-xl font-black text-gray-900">{unreadCount}</p>
+                  <p className="text-xs text-gray-500 mt-1">Unread</p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
-      <div className="grid xl:grid-cols-[1.35fr,1fr] gap-5">
-        <SectionCard title="Productivity Board" subtitle="Personal todo meets assigned academic work">
+      {middleSectionCount > 0 ? (
+      <div className={`grid gap-5 ${middleSectionCount > 1 ? 'xl:grid-cols-[1.35fr,1fr]' : 'grid-cols-1'}`}>
+        {showProductivityBoard ? (
+        <SectionCard title="Productivity Board" subtitle="Personal todo meets assigned academic work" onHide={() => hideWidget('productivityBoard')}>
           <div className="grid lg:grid-cols-[0.95fr,1fr,1fr] gap-4">
             <div className="space-y-4">
               <form onSubmit={createTask} className="rounded-3xl border border-gray-100 bg-slate-50 p-4 space-y-3">
@@ -384,9 +504,12 @@ export default function Dashboard() {
             </div>
           </div>
         </SectionCard>
+        ) : null}
 
+        {showAcademicOverview || showNoticeHighlights ? (
         <div className="space-y-5">
-          <SectionCard title="Academic Overview" subtitle="Timetable, attendance, and deadlines">
+          {showAcademicOverview ? (
+          <SectionCard title="Academic Overview" subtitle="Timetable, attendance, and deadlines" onHide={() => hideWidget('academicOverview')}>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <Link to="/timetable" className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
@@ -437,8 +560,10 @@ export default function Dashboard() {
               ) : null}
             </div>
           </SectionCard>
+          ) : null}
 
-          <SectionCard title="Notice Highlights" subtitle="Important updates from the university">
+          {showNoticeHighlights ? (
+          <SectionCard title="Notice Highlights" subtitle="Important updates from the university" onHide={() => hideWidget('noticeHighlights')}>
             {(workspace.notices || []).length === 0 ? (
               <EmptyState icon="📌" title="No notices right now" description="New announcements will appear here." />
             ) : (
@@ -463,11 +588,16 @@ export default function Dashboard() {
               </div>
             )}
           </SectionCard>
+          ) : null}
         </div>
+        ) : null}
       </div>
+      ) : null}
 
-      <div className="grid xl:grid-cols-[1.15fr,0.85fr] gap-5">
-        <SectionCard title="Recent Activity" subtitle="Support, submissions, and live updates">
+      {lowerSectionCount > 0 ? (
+      <div className={`grid gap-5 ${lowerSectionCount > 1 ? 'xl:grid-cols-[1.15fr,0.85fr]' : 'grid-cols-1'}`}>
+        {showRecentActivity ? (
+        <SectionCard title="Recent Activity" subtitle="Support, submissions, and live updates" onHide={() => hideWidget('recentActivity')}>
           {activityItems.length === 0 ? (
             <EmptyState icon="📬" title="No recent activity" description="Your recent support and notification history will appear here." />
           ) : (
@@ -484,10 +614,13 @@ export default function Dashboard() {
             </div>
           )}
         </SectionCard>
+        ) : null}
 
+        {showHelpdeskSnapshot ? (
         <SectionCard
           title="Helpdesk Snapshot"
           subtitle="Track support flow and urgent actions"
+          onHide={() => hideWidget('helpdeskSnapshot')}
           action={<Link to="/tickets" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-800">All Tickets <FiArrowRight size={14} /></Link>}
         >
           {(workspace.tickets || []).length === 0 ? (
@@ -512,7 +645,9 @@ export default function Dashboard() {
             </div>
           )}
         </SectionCard>
+        ) : null}
       </div>
+      ) : null}
     </div>
   );
 }

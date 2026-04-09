@@ -22,17 +22,6 @@ export default function LoginPage() {
     else setError(result.message);
   };
 
-  const demoLogin = async (email, password) => {
-    if (loading) return;
-    const result = await login(email, password);
-    if (result.success) {
-      toast.success('Logged in!');
-      navigate('/dashboard');
-    } else {
-      toast.error(result.message || 'Demo login failed — make sure the backend is running and seeded.');
-    }
-  };
-
   return (
     <div className="min-h-screen flex">
       {/* Left panel */}
@@ -123,7 +112,7 @@ export default function LoginPage() {
 
           <div className="mb-8">
             <h2 className="font-display text-3xl font-black text-gray-900">Welcome back</h2>
-            <p className="text-gray-500 text-sm mt-1">Sign in to your helpdesk account</p>
+            <p className="text-gray-500 text-sm mt-1">Sign in with your verified and approved university email account</p>
           </div>
 
           {error && <div className="mb-4"><Alert type="error" message={error} /></div>}
@@ -155,36 +144,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-5">
-            Don't have an account?{' '}
-        
-            <Link to="/register" className="text-blue-600 font-semibold hover:underline">Register here</Link> 
-            <p>
-            <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Forgot password?</Link></p>
-          </p>
-
-          {/* Demo accounts */}
-          <div className="mt-6 p-4 rounded-2xl border border-gray-100" style={{ background: '#f8faff' }}>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Quick Demo Access</p>
-            <div className="space-y-2">
-              {[
-                { label: 'Admin',   email: 'admin@sharda.ac.in',      pass: 'admin123',   color: 'from-violet-500 to-purple-600' },
-                { label: 'Staff',   email: 'it.support@sharda.ac.in', pass: 'staff123',   color: 'from-blue-500 to-cyan-500' },
-                { label: 'Student', email: 'student@sharda.ac.in',    pass: 'student123', color: 'from-emerald-500 to-teal-500' },
-              ].map((d) => (
-                <button key={d.label} type="button" onClick={() => !loading && demoLogin(d.email, d.pass)} disabled={loading}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white border border-transparent hover:border-gray-200 hover:shadow-sm transition-all text-left disabled:cursor-not-allowed disabled:opacity-60">
-                  <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${d.color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                    {d.label[0]}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-700">{d.label}</p>
-                    <p className="text-xs text-gray-400 font-mono">{d.email}</p>
-                  </div>
-                  <FiArrowRight size={13} className="ml-auto text-gray-300" />
-                </button>
-              ))}
-            </div>
+          <div className="mt-5 space-y-2 text-center">
+            <p className="text-sm text-gray-500">
+              Don&apos;t have an account?{' '}
+              <Link to="/register" className="text-blue-600 font-semibold hover:underline">Register here</Link>
+            </p>
+            <p className="text-sm">
+              <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Forgot password?</Link>
+            </p>
+            <p className="text-xs text-gray-400">
+              New accounts use email and password sign-in after admin approval. Google sign-in is not enabled.
+            </p>
           </div>
         </div>
       </div>

@@ -30,9 +30,26 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'faculty', 'staff', 'admin', 'agent'],
       default: 'student',
     },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'suspended'],
+      default: 'pending',
+      index: true,
+    },
     department: {
       type: String,
       trim: true,
+    },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+      index: true,
     },
     year: {
       type: String,
@@ -42,9 +59,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    sectionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Section',
+      default: null,
+      index: true,
+    },
     enrollmentId: {
       type: String,
       trim: true,
+    },
+    expiryDate: {
+      type: Date,
+      default: null,
+      index: true,
     },
     avatar: {
       type: String,

@@ -29,7 +29,7 @@ export default function NotificationBell() {
   }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative z-[70]" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
         className={`relative p-2.5 rounded-xl transition-colors ${
@@ -46,7 +46,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className={`absolute right-0 top-12 w-80 rounded-2xl z-50 animate-fade-in-up overflow-hidden ${
+        <div className={`absolute right-0 top-12 w-80 rounded-2xl z-[90] animate-fade-in-up overflow-hidden ${
           isDark
             ? 'bg-slate-950/95 border border-slate-700 shadow-2xl backdrop-blur-xl'
             : 'bg-white border border-gray-100 shadow-xl'

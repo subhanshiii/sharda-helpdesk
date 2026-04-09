@@ -1,5 +1,37 @@
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+const EmailVerification = require('../models/EmailVerification');
+const crypto = require('crypto');
+const { queueEmailVerificationEmail } = require('../queues/emailQueue');
 const { validationResult } = require('express-validator');
+
+const ALLOWED_SIGNUP_ROLES = ['student', 'faculty', 'staff'];
+
+const getAllowedDomains = () => (
+  process.env.ALLOWED_EMAIL_DOMAINS
+    ? process.env.ALLOWED_EMAIL_DOMAINS.split(',').map((domain) => domain.trim().toLowerCase()).filter(Boolean)
+    : []
+);
+
+const isAllowedEmailDomain = (email) => {
+  const allowedDomains = getAllowedDomains();
+  if (!allowedDomains.length) return true;
+  const domain = String(email).toLowerCase().split('@')[1] || '';
+  return allowedDomains.includes(domain);
+};
+
+const createEmailVerificationToken = async (user) => {
+  await EmailVerification.deleteMany({ user: user._id });
+  const token = crypto.randomBytes(32).toString('hex');
+  await EmailVerification.create({ user: user._id, token });
+
+  const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${token}`;
+  await queueEmailVerificationEmail({
+    toEmail: user.email,
+    userName: user.name,
+    verificationLink,
+  });
+};
 
 // ── Cookie options ─────────────────────────────────────
 // httpOnly = JS cannot access this cookie (prevents XSS token theft)
@@ -30,11 +62,16 @@ const sendTokenResponse = (user, statusCode, res) => {
     name:         user.name,
     email:        user.email,
     role:         user.role,
+    status:       user.status,
     department:   user.department,
+    departmentId: user.departmentId,
     year:         user.year,
     section:      user.section,
+    sectionId:    user.sectionId,
     enrollmentId: user.enrollmentId,
+    expiryDate:   user.expiryDate,
     avatar:       user.avatar,
+    emailVerified:user.emailVerified,
     createdAt:    user.createdAt,
   };
 
@@ -42,6 +79,32 @@ const sendTokenResponse = (user, statusCode, res) => {
     .status(statusCode)
     .cookie('token', token, getCookieOptions())
     .json({ success: true, token, user: userData });
+};
+
+const validateAccountForLogin = (user) => {
+  if (!user) {
+    return { ok: false, statusCode: 401, message: 'Invalid credentials' };
+  }
+
+  if (!user.isActive) {
+    return { ok: false, statusCode: 401, message: 'Account deactivated. Contact admin.' };
+  }
+
+  if (user.status !== 'approved') {
+    return {
+      ok: false,
+      statusCode: 403,
+      message: user.status === 'pending'
+        ? 'Your account is awaiting admin approval'
+        : 'Your account is not allowed to sign in',
+    };
+  }
+
+  if (user.expiryDate && new Date() >= user.expiryDate) {
+    return { ok: false, statusCode: 403, message: 'Your account access has expired' };
+  }
+
+  return { ok: true };
 };
 
 // @desc    Register user
@@ -54,19 +117,51 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: errors.array()[0].msg });
     }
 
-    const { name, email, password, department, year, section, enrollmentId } = req.body;
+    const { name, email, password, role, department, departmentId, year, section, sectionId, enrollmentId, expiryDate } = req.body;
+    const normalizedEmail = email.toLowerCase();
+    const requestedRole = ALLOWED_SIGNUP_ROLES.includes(role) ? role : 'student';
+
+    if (!isAllowedEmailDomain(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please register with your university email address.',
+      });
+    }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
     const user = await User.create({
-      name, email, password, role: 'student', department, year, section, enrollmentId,
+      name,
+      email: normalizedEmail,
+      password,
+      role: requestedRole,
+      status: 'pending',
+      department,
+      departmentId: departmentId || null,
+      year,
+      section,
+      sectionId: sectionId || null,
+      enrollmentId,
+      expiryDate: expiryDate || null,
     });
 
-    sendTokenResponse(user, 201, res);
+    await createEmailVerificationToken(user);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration submitted. Verify your email, then wait for admin approval.',
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        emailVerified: user.emailVerified,
+      },
+    });
   } catch (error) { next(error); }
 };
 
@@ -84,12 +179,7 @@ exports.login = async (req, res, next) => {
 
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
-      // Generic message — don't reveal if email exists
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-
-    if (!user.isActive) {
-      return res.status(401).json({ success: false, message: 'Account deactivated. Contact admin.' });
     }
 
     const isMatch = await user.matchPassword(password);
@@ -97,11 +187,48 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
+    const accountValidation = validateAccountForLogin(user);
+    if (!accountValidation.ok) {
+      return res.status(accountValidation.statusCode).json({ success: false, message: accountValidation.message });
+    }
+
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
     sendTokenResponse(user, 200, res);
   } catch (error) { next(error); }
+};
+
+exports.adminLogin = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+
+    const { email, password } = req.body;
+    const user = await User.findOne({ email: email.toLowerCase(), role: 'admin' }).select('+password');
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const accountValidation = validateAccountForLogin(user);
+    if (!accountValidation.ok) {
+      return res.status(accountValidation.statusCode).json({ success: false, message: accountValidation.message });
+    }
+
+    user.lastLogin = new Date();
+    await user.save({ validateBeforeSave: false });
+
+    sendTokenResponse(user, 200, res);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // @desc    Logout — clears httpOnly cookie
@@ -165,4 +292,113 @@ exports.changePassword = async (req, res, next) => {
 
     sendTokenResponse(user, 200, res);
   } catch (error) { next(error); }
+};
+
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const record = await EmailVerification.findOne({ token });
+
+    if (!record || record.expiresAt < new Date()) {
+      if (record) await record.deleteOne();
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification link' });
+    }
+
+    const user = await User.findById(record.user);
+    if (!user) {
+      await record.deleteOne();
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.emailVerified = true;
+    await user.save({ validateBeforeSave: false });
+    await EmailVerification.deleteMany({ user: user._id });
+
+    return res.status(200).json({ success: true, message: 'Email verified successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: String(email).toLowerCase() });
+    if (!user || user.emailVerified) {
+      return res.status(200).json({
+        success: true,
+        message: 'If verification is still required, a new link has been sent.',
+      });
+    }
+
+    await createEmailVerificationToken(user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'If verification is still required, a new link has been sent.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getPendingUsers = async (req, res, next) => {
+  try {
+    const users = await User.find({ status: 'pending' })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateApprovalStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['approved', 'rejected', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid approval status' });
+    }
+
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.status = status;
+    if (req.body.expiryDate !== undefined) {
+      user.expiryDate = req.body.expiryDate || null;
+    }
+    await user.save({ validateBeforeSave: false });
+
+    await Notification.create({
+      user: user._id,
+      type: 'approval',
+      title: status === 'approved' ? 'Account approved' : 'Account status updated',
+      message:
+        status === 'approved'
+          ? 'Your university account has been approved. You can now log in.'
+          : `Your account status is now ${status}.`,
+      link: '/login',
+      meta: { status },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        expiryDate: user.expiryDate,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };

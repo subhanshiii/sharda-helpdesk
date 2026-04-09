@@ -13,6 +13,7 @@ const LoginPage            = lazy(() => import('./pages/LoginPage'));
 const RegisterPage         = lazy(() => import('./pages/RegisterPage'));
 const ForgotPassword       = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword        = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmailPage      = lazy(() => import('./pages/VerifyEmailPage'));
 const Dashboard            = lazy(() => import('./pages/Dashboard'));
 const TicketList           = lazy(() => import('./pages/TicketList'));
 const CreateTicket         = lazy(() => import('./pages/CreateTicket'));
@@ -22,6 +23,8 @@ const AssignmentDetail     = lazy(() => import('./pages/AssignmentDetail'));
 const TimetablePage        = lazy(() => import('./pages/TimetablePage'));
 const AttendancePage       = lazy(() => import('./pages/AttendancePage'));
 const UsersPage            = lazy(() => import('./pages/UsersPage'));
+const AccountApprovalsPage = lazy(() => import('./pages/AccountApprovalsPage'));
+const AcademicStructurePage = lazy(() => import('./pages/AcademicStructurePage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
 const AnnouncementsPage    = lazy(() => import('./pages/AnnouncementsPage'));
 const OpportunitiesPage    = lazy(() => import('./pages/OpportunitiesPage'));
@@ -57,6 +60,7 @@ function AppRoutes() {
       <Route path="/register"        element={<PublicRoute><Suspense fallback={<FullPageSpinner />}><RegisterPage /></Suspense></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><Suspense fallback={<FullPageSpinner />}><ForgotPassword /></Suspense></PublicRoute>} />
       <Route path="/reset-password"  element={<Suspense fallback={<FullPageSpinner />}><ResetPassword /></Suspense>} />
+      <Route path="/verify-email"    element={<PublicRoute><Suspense fallback={<FullPageSpinner />}><VerifyEmailPage /></Suspense></PublicRoute>} />
 
       <Route element={<ProtectedRoute><Suspense fallback={<FullPageSpinner />}><Layout /></Suspense></ProtectedRoute>}>
         <Route path="/dashboard"         element={<Suspense fallback={<FullPageSpinner />}><Dashboard /></Suspense>} />
@@ -77,6 +81,8 @@ function AppRoutes() {
         <Route path="/academic-calendar" element={<Navigate to="/notice-board" replace />} />
         <Route path="/group-chat"        element={<Suspense fallback={<FullPageSpinner />}><GroupChatPage /></Suspense>} />
         <Route path="/users"             element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UsersPage /></Suspense></ProtectedRoute>} />
+        <Route path="/approvals"         element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><AccountApprovalsPage /></Suspense></ProtectedRoute>} />
+        <Route path="/academics"         element={<ProtectedRoute permission="canManageAcademics"><Suspense fallback={<FullPageSpinner />}><AcademicStructurePage /></Suspense></ProtectedRoute>} />
         <Route path="/permissions"       element={<ProtectedRoute permission="canManagePermissions"><Suspense fallback={<FullPageSpinner />}><PermissionsPage /></Suspense></ProtectedRoute>} />
       </Route>
 

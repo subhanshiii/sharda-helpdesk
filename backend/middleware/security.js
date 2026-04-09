@@ -18,16 +18,6 @@ exports.helmetConfig = helmet({
   crossOriginEmbedderPolicy: false, // needed for file uploads
 });
 
-// ── Rate limiting: general API ─────────────────────────
-// 100 requests per 15 minutes per IP
-exports.generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 // ── Rate limiting: auth routes (stricter) ──────────────
 // 10 login attempts per 15 minutes per IP
 exports.authLimiter = rateLimit({
@@ -53,9 +43,6 @@ exports.passwordResetLimiter = rateLimit({
 // Removes $ and . from user input to prevent NoSQL injection
 exports.mongoSanitize = mongoSanitize({
   replaceWith: '_',
-  onSanitize: ({ req, key }) => {
-    console.warn(`⚠️  Sanitized suspicious input from ${req.ip} in field: ${key}`);
-  },
 });
 
 // ── HTTP Parameter Pollution prevention ───────────────

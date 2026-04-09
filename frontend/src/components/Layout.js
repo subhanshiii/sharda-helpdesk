@@ -9,7 +9,7 @@ import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiChevronRight,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -58,6 +58,8 @@ export default function Layout() {
     '/timetable':     'Timetable',
     '/attendance':    'Attendance',
     '/users':         'User Management',
+    '/approvals':     'Account Approvals',
+    '/academics':     'Academic Structure',
     '/profile':       'My Profile',
     '/notice-board':  'Notice Board',
     '/announcements': 'Notice Board',
@@ -92,6 +94,8 @@ export default function Layout() {
 
   const adminNavItems = [
     { to: '/users', icon: FiUsers, label: 'User Management', visible: hasPermission('canManageUsers') },
+    { to: '/approvals', icon: FiUserCheck, label: 'Account Approvals', visible: hasPermission('canManageUsers') },
+    { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
     { to: '/permissions', icon: FiShield, label: 'Permissions', visible: hasPermission('canManagePermissions') },
   ].filter((item) => item.visible !== false);
 
@@ -189,8 +193,8 @@ export default function Layout() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 glass border-b border-blue-100/60 flex items-center justify-between px-5 flex-shrink-0 shadow-sm">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="relative z-40 h-16 glass border-b border-blue-100/60 flex items-center justify-between px-5 flex-shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
             <button className="md:hidden p-2 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
               onClick={() => setSidebarOpen(true)}>

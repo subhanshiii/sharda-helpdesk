@@ -60,13 +60,14 @@ const FileAttachment = memo(({ file, isOwn }) => {
         <img
           src={fileUrl}
           alt={file.originalName}
+          loading="lazy"
           className="w-full h-auto max-h-64 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
           onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}
           onError={e => { e.target.style.display = 'none'; }}
         />
         <div className="flex items-center justify-between gap-3 text-xs">
           <p className="opacity-70 truncate">{file.originalName}</p>
-          <a href={downloadUrl} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 ${isOwn ? 'text-white/80' : 'text-blue-600'}`}>
+          <a href={downloadUrl} download={file.originalName} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1 ${isOwn ? 'text-white/80' : 'text-blue-600'}`}>
             <FiDownload size={12} /> Download
           </a>
         </div>
@@ -75,7 +76,7 @@ const FileAttachment = memo(({ file, isOwn }) => {
   }
 
   return (
-    <a href={downloadUrl} target="_blank" rel="noreferrer"
+    <a href={downloadUrl} download={file.originalName} target="_blank" rel="noreferrer"
       className={`flex items-center gap-3 mt-2 p-3 rounded-xl border transition-colors ${
         isOwn
           ? 'bg-white/10 border-white/20 hover:bg-white/20'

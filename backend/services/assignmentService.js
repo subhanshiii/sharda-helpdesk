@@ -1,5 +1,8 @@
 const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
+const Enrollment = require('../models/Enrollment');
+const Section = require('../models/Section');
+const Subject = require('../models/Subject');
 const mongoose = require('mongoose');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 
@@ -28,6 +31,8 @@ const parseAssignedStudents = (value) => {
   return values.filter((item) => mongoose.Types.ObjectId.isValid(item));
 };
 
+const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: userId, status: 'active' }).lean();
+
 const ensureAssignmentModuleAccess = (user) => {
   if (!user) {
     const error = new Error('Not authorized');
@@ -48,6 +53,7 @@ const isStudentTargeted = (assignment, user) => {
   if (!user) return false;
   const userId = user.id?.toString?.() || user._id?.toString?.();
   if (assignment.assignedStudents?.some((id) => id.toString() === userId)) return true;
+  if (assignment.sectionId && user.sectionId && assignment.sectionId.toString() === user.sectionId.toString()) return true;
 
   const departments = assignment.targetAudience?.departments?.map(normalizeValue) || [];
   const years = assignment.targetAudience?.years?.map(normalizeValue) || [];
@@ -63,7 +69,9 @@ const isStudentTargeted = (assignment, user) => {
 const getAssignmentAccess = async (assignmentId, user) => {
   const assignment = await Assignment.findById(assignmentId)
     .populate('createdBy', 'name email role department')
-    .populate('assignedStudents', 'name email department year section');
+    .populate('assignedStudents', 'name email department year section')
+    .populate('sectionId', 'name')
+    .populate('subjectId', 'name code');
 
   if (!assignment) {
     const error = new Error('Assignment not found');
@@ -91,9 +99,11 @@ const listAssignments = async (user, { status, search, limit } = {}) => {
   const query = {};
 
   if (role === 'student') {
+    const enrollment = await getActiveEnrollment(user.id || user._id);
     query.isPublished = true;
     query.$or = [
       { assignedStudents: user.id || user._id },
+      ...(enrollment?.section ? [{ sectionId: enrollment.section }] : []),
       {
         $and: [
           {
@@ -138,6 +148,8 @@ const listAssignments = async (user, { status, search, limit } = {}) => {
 
   let cursor = Assignment.find(query)
     .populate('createdBy', 'name email role department')
+    .populate('sectionId', 'name')
+    .populate('subjectId', 'name code')
     .sort({ dueDate: 1, createdAt: -1 });
 
   if (limit) cursor = cursor.limit(parseInt(limit, 10));
@@ -218,6 +230,7 @@ const createAssignment = async (body, user, files) => {
     title: body.title,
     description: body.description,
     subject: body.subject || '',
+    subjectId: mongoose.Types.ObjectId.isValid(body.subjectId) ? body.subjectId : null,
     dueDate: body.dueDate,
     maxScore: body.maxScore ? Number(body.maxScore) : 100,
     allowLateSubmissions: body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true,
@@ -227,14 +240,36 @@ const createAssignment = async (body, user, files) => {
       years: parseValues(body.audienceYears),
       sections: parseValues(body.audienceSections),
     },
+    sectionId: mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null,
     assignedStudents: parseAssignedStudents(body.assignedStudentIds),
     attachments: serializeFiles(files),
     createdBy: user.id || user._id,
   });
 
+  if (assignment.sectionId) {
+    const section = await Section.findById(assignment.sectionId).populate('department');
+    if (section) {
+      assignment.targetAudience.departments = assignment.targetAudience.departments?.length
+        ? assignment.targetAudience.departments
+        : [section.department?.name].filter(Boolean);
+      assignment.targetAudience.sections = assignment.targetAudience.sections?.length
+        ? assignment.targetAudience.sections
+        : [section.name].filter(Boolean);
+    }
+  }
+
+  if (assignment.subjectId) {
+    const subject = await Subject.findById(assignment.subjectId);
+    if (subject) assignment.subject = subject.name;
+  }
+
+  await assignment.save();
+
   return Assignment.findById(assignment._id)
     .populate('createdBy', 'name email role department')
-    .populate('assignedStudents', 'name email department year section');
+    .populate('assignedStudents', 'name email department year section')
+    .populate('sectionId', 'name')
+    .populate('subjectId', 'name code');
 };
 
 const updateAssignment = async (assignmentId, body, user, files) => {
@@ -249,6 +284,7 @@ const updateAssignment = async (assignmentId, body, user, files) => {
   if (body.title !== undefined) assignment.title = body.title;
   if (body.description !== undefined) assignment.description = body.description;
   if (body.subject !== undefined) assignment.subject = body.subject;
+  if (body.subjectId !== undefined) assignment.subjectId = mongoose.Types.ObjectId.isValid(body.subjectId) ? body.subjectId : null;
   if (body.dueDate !== undefined) assignment.dueDate = body.dueDate;
   if (body.maxScore !== undefined) assignment.maxScore = Number(body.maxScore);
   if (body.allowLateSubmissions !== undefined) assignment.allowLateSubmissions = body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true;
@@ -258,13 +294,33 @@ const updateAssignment = async (assignmentId, body, user, files) => {
     years: parseValues(body.audienceYears),
     sections: parseValues(body.audienceSections),
   };
+  if (body.sectionId !== undefined) assignment.sectionId = mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null;
   assignment.assignedStudents = parseAssignedStudents(body.assignedStudentIds);
   if (files?.length) assignment.attachments = serializeFiles(files);
+
+  if (assignment.sectionId) {
+    const section = await Section.findById(assignment.sectionId).populate('department');
+    if (section) {
+      assignment.targetAudience.departments = assignment.targetAudience.departments?.length
+        ? assignment.targetAudience.departments
+        : [section.department?.name].filter(Boolean);
+      assignment.targetAudience.sections = assignment.targetAudience.sections?.length
+        ? assignment.targetAudience.sections
+        : [section.name].filter(Boolean);
+    }
+  }
+
+  if (assignment.subjectId) {
+    const subject = await Subject.findById(assignment.subjectId);
+    if (subject) assignment.subject = subject.name;
+  }
 
   await assignment.save();
   return Assignment.findById(assignment._id)
     .populate('createdBy', 'name email role department')
-    .populate('assignedStudents', 'name email department year section');
+    .populate('assignedStudents', 'name email department year section')
+    .populate('sectionId', 'name')
+    .populate('subjectId', 'name code');
 };
 
 const deleteAssignment = async (assignmentId, user) => {

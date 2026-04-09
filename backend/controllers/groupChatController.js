@@ -262,6 +262,8 @@ exports.searchUsers = async (req, res, next) => {
         { enrollmentId: { $regex: q, $options: 'i' } },
       ],
       isActive: true,
+      status: 'approved',
+      emailVerified: true,
     };
     if (role) query.role = role;
 

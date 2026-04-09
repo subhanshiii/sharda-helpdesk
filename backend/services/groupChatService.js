@@ -7,7 +7,10 @@
 const Group   = require('../models/Group');
 const Message = require('../models/Message');
 const User    = require('../models/User');
+const Permission = require('../models/Permission');
 const logger  = require('../utils/logger');
+const { sanitizePermissions, DEFAULT_ROLE_PERMISSIONS } = require('../utils/permissionDefaults');
+const { normalizeRole } = require('../utils/roleHelpers');
 
 const GROUP_MEMBER_ROLES = ['student', 'faculty', 'staff', 'agent', 'admin'];
 
@@ -54,16 +57,14 @@ const canCreateGroup = async (userId) => {
     throw err;
   }
 
-  if (requester.role === 'admin') return requester;
+  const normalizedRole = normalizeRole(requester.role);
+  const permissionDoc = await Permission.getRolePermissions(normalizedRole);
+  const permissions = sanitizePermissions(
+    normalizedRole,
+    permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[normalizedRole]
+  );
 
-  const managedGroups = await Group.find({
-    'members.user': userId,
-    isActive: true,
-  }).select('members');
-
-  const managesAnyGroup = managedGroups.some((group) => isGroupManager(group, userId));
-
-  if (!managesAnyGroup) {
+  if (!permissions?.canManageGroups) {
     const err = new Error('Only system admins or existing group admins can create groups');
     err.statusCode = 403;
     throw err;
@@ -100,6 +101,26 @@ const canAccessGroup = async (groupId, userId) => {
   return { group, user, isMember };
 };
 
+const getAutoMembersForGroup = async ({ department, year, section, creatorId }) => {
+  if (!department || !year || !section) return [];
+
+  const users = await User.find({
+    department,
+    year,
+    section,
+    isActive: true,
+    status: 'approved',
+    emailVerified: true,
+  }).select('_id role');
+
+  return users
+    .filter((user) => user._id.toString() !== creatorId.toString())
+    .map((user) => ({
+      user: user._id,
+      role: GROUP_MEMBER_ROLES.includes(user.role) ? user.role : 'student',
+    }));
+};
+
 // ── GROUP OPERATIONS ───────────────────────────────────
 
 /**
@@ -134,6 +155,18 @@ const createGroup = async ({ name, department, year, section, description, creat
     members: [{ user: creatorId, role: 'admin' }],
   });
 
+  const autoMembers = await getAutoMembersForGroup({
+    department: normalizedDepartment,
+    year: normalizedYear,
+    section: normalizedSection,
+    creatorId,
+  });
+
+  if (autoMembers.length) {
+    group.members.push(...autoMembers);
+    await group.save();
+  }
+
   // Send system message: "Group was created"
   await Message.create({
     group:         group._id,
@@ -142,11 +175,20 @@ const createGroup = async ({ name, department, year, section, description, creat
     systemMessage: `Group "${name}" was created`,
   });
 
+  if (autoMembers.length) {
+    await Message.create({
+      group: group._id,
+      sender: creatorId,
+      type: 'system',
+      systemMessage: `${autoMembers.length} matching users were automatically added from ${normalizedDepartment} Year ${normalizedYear} Section ${normalizedSection}`,
+    });
+  }
+
   const populated = await Group.findById(group._id)
     .populate('createdBy', 'name email role')
     .populate('members.user', 'name email role department');
 
-  logger.info('Group created', { groupId: group._id, name, creatorId });
+  logger.info('Group created', { groupId: group._id, name, creatorId, autoAddedMembers: autoMembers.length });
   return populated;
 };
 

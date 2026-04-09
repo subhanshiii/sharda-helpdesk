@@ -12,6 +12,7 @@
  */
 
 const faqData = require('../data/faq.json');
+const motivationQuotes = require('../data/motivationQuotes');
 
 // ── OpenAI client (lazy init) ──────────────────────────
 let openaiClient = null;
@@ -20,16 +21,22 @@ let todaysThoughtCache = {
   value: null,
 };
 
-const TODAY_THOUGHT_PROMPT = `You are a motivational guide for university students. Generate one original, thoughtful quote for today that relates to learning, perseverance, or academic growth. Return ONLY valid JSON, no extra text, no markdown:
-{ quote: string, author: string, theme: string }
-If the quote is your own original thought, set author to AI.`;
-
 const getCalendarDateKey = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: process.env.APP_TIMEZONE || process.env.TZ || 'Asia/Kolkata',
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
 }).format(new Date());
+
+const getDailyQuoteFromBank = (dateKey) => {
+  const numericSeed = Number(String(dateKey).replace(/-/g, '')) || Date.now();
+  const quote = motivationQuotes[numericSeed % motivationQuotes.length] || motivationQuotes[0];
+  return {
+    quote: quote.quote,
+    author: '',
+    theme: '',
+  };
+};
 
 const getOpenAI = () => {
   if (openaiClient) return openaiClient;
@@ -489,49 +496,9 @@ const generateTodaysThought = async () => {
   if (todaysThoughtCache.dateKey === dateKey && todaysThoughtCache.value) {
     return todaysThoughtCache.value;
   }
-
-  const openai = getOpenAI();
-  if (!openai) {
-    const fallback = {
-      quote: 'Learning compounds quietly. The effort you invest today becomes the confidence you carry tomorrow.',
-      author: 'AI',
-      theme: 'Growth',
-    };
-    todaysThoughtCache = { dateKey, value: fallback };
-    return fallback;
-  }
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: TODAY_THOUGHT_PROMPT }],
-      temperature: 0.9,
-      max_tokens: 120,
-      response_format: { type: 'json_object' },
-    });
-
-    const raw = response.choices[0]?.message?.content?.trim();
-    const parsed = JSON.parse(raw || '{}');
-    const quote = String(parsed.quote || '').trim();
-    const author = String(parsed.author || '').trim() || 'AI';
-    const theme = String(parsed.theme || '').trim() || 'Growth';
-
-    if (!quote) {
-      throw new Error('Invalid motivation payload');
-    }
-
-    const result = { quote, author, theme };
-    todaysThoughtCache = { dateKey, value: result };
-    return result;
-  } catch {
-    const fallback = {
-      quote: 'Progress in learning is rarely loud. Keep showing up, and one day the hard things will feel natural.',
-      author: 'AI',
-      theme: 'Perseverance',
-    };
-    todaysThoughtCache = { dateKey, value: fallback };
-    return fallback;
-  }
+  const result = getDailyQuoteFromBank(dateKey);
+  todaysThoughtCache = { dateKey, value: result };
+  return result;
 };
 
 module.exports = {
