@@ -19,6 +19,54 @@ const { invalidateStatsCache } = require('./statsService');
 const logger = require('../utils/logger');
 const { isSupportRole, getAssignableRoles } = require('../utils/roleHelpers');
 
+const CATEGORY_ROUTING = {
+  'IT Support': 'IT',
+  Administration: 'Administration',
+  Hostel: 'Hostel',
+  Library: 'Library',
+  Finance: 'Accounts',
+  Academic: 'Academic',
+  Infrastructure: 'Maintenance',
+  Other: 'Student Services',
+};
+
+const pickBestAssignee = async (category) => {
+  const routingDepartment = CATEGORY_ROUTING[category] || 'Student Services';
+  const roleQuery = { role: { $in: getAssignableRoles() }, isActive: true };
+
+  const candidates = await User.find({
+    ...roleQuery,
+    $or: [
+      { department: routingDepartment },
+      { department: category },
+    ],
+  }).select('_id name email role department');
+
+  const fallbackCandidates = candidates.length
+    ? candidates
+    : await User.find(roleQuery).select('_id name email role department');
+
+  if (!fallbackCandidates.length) {
+    return { assignee: null, routingDepartment };
+  }
+
+  const loads = await Promise.all(
+    fallbackCandidates.map(async (candidate) => ({
+      user: candidate,
+      openTickets: await Ticket.countDocuments({
+        assignedTo: candidate._id,
+        status: { $in: ['Open', 'In Progress'] },
+      }),
+    }))
+  );
+
+  loads.sort((a, b) => a.openTickets - b.openTickets);
+  return {
+    assignee: loads[0]?.user || null,
+    routingDepartment,
+  };
+};
+
 // ── Query builder ──────────────────────────────────────
 const buildTicketQuery = (user, filters = {}) => {
   let query = {};
@@ -108,6 +156,7 @@ const getTicketById = async (ticketId, user) => {
 // ── Create ticket ──────────────────────────────────────
 const createTicket = async (data, user, files, io, frontendUrl) => {
   const { title, description, category, priority, tags } = data;
+  const { assignee, routingDepartment } = await pickBestAssignee(category);
 
   const attachments = (files || []).map(file => ({
     filename:     file.filename,
@@ -121,6 +170,9 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
     title, description, category,
     priority: priority || 'Medium',
     user:     user.id,
+    assignedTo: assignee?._id || null,
+    routingDepartment,
+    status: assignee ? 'In Progress' : 'Open',
     attachments,
     tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim())) : [],
   });
@@ -132,7 +184,7 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
   logger.info('Ticket created', {
     ticketId: ticket.ticketId,
     userId:   user.id,
-    category, priority,
+    category, priority, routingDepartment, assignedTo: assignee?._id || null,
   });
 
   // Side effects — run after DB save, don't block response
@@ -141,6 +193,13 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
       ticket:  populated,
       message: `New ticket from ${user.name}: ${title}`,
     });
+    if (assignee?._id) {
+      emitToUser(io, assignee._id.toString(), 'ticket:assigned', {
+        ticketId: populated._id,
+        ticketTitle: populated.title,
+        message: `A new ${routingDepartment} ticket has been assigned to you.`,
+      });
+    }
   }
 
   // Queue confirmation email

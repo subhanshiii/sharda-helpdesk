@@ -2,7 +2,7 @@
  * Chat Controller
  * Uses real AI (OpenAI) with fallback to keyword matching
  */
-const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket } = require('../services/aiService');
+const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket, suggestPreTicketSupport } = require('../services/aiService');
 const { withCache, TTL, KEYS } = require('../config/cache');
 const faqData = require('../data/faq.json');
 
@@ -61,6 +61,20 @@ exports.categorize = async (req, res, next) => {
       },
     });
   } catch (error) { next(error); }
+};
+
+exports.preTicket = async (req, res, next) => {
+  try {
+    const { title, description } = req.body;
+    if (!title?.trim() || !description?.trim()) {
+      return res.status(400).json({ success: false, message: 'Title and description required' });
+    }
+
+    const data = await suggestPreTicketSupport(title.trim(), description.trim());
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // @desc    Summarize a ticket for support staff

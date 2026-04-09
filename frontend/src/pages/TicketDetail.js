@@ -388,6 +388,7 @@ export default function TicketDetail() {
             <InfoRow label="Status"   value={<StatusBadge   status={ticket.status}/>}/>
             <InfoRow label="Priority" value={<PriorityBadge priority={ticket.priority}/>}/>
             <InfoRow label="Category" value={<CategoryBadge category={ticket.category}/>}/>
+            {ticket.routingDepartment ? <InfoRow label="Routed to" value={<span className="text-sm font-medium text-gray-700">{ticket.routingDepartment}</span>} /> : null}
             <div className="pt-2 border-t border-gray-50 space-y-3">
               <InfoRow label="Raised by" value={
                 <div className="flex items-center gap-2">

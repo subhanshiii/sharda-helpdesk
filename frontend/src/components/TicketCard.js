@@ -35,6 +35,9 @@ const TicketCard = memo(function TicketCard({ ticket }) {
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
         <CategoryBadge category={ticket.category} />
         <PriorityBadge priority={ticket.priority} />
+        {ticket.routingDepartment ? (
+          <span className="badge bg-slate-100 text-slate-700 border border-slate-200">{ticket.routingDepartment}</span>
+        ) : null}
       </div>
       <div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t border-gray-50">
         <span className="flex items-center gap-1.5">

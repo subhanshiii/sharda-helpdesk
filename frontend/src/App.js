@@ -19,6 +19,8 @@ const CreateTicket         = lazy(() => import('./pages/CreateTicket'));
 const TicketDetail         = lazy(() => import('./pages/TicketDetail'));
 const AssignmentsPage      = lazy(() => import('./pages/AssignmentsPage'));
 const AssignmentDetail     = lazy(() => import('./pages/AssignmentDetail'));
+const TimetablePage        = lazy(() => import('./pages/TimetablePage'));
+const AttendancePage       = lazy(() => import('./pages/AttendancePage'));
 const UsersPage            = lazy(() => import('./pages/UsersPage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
 const AnnouncementsPage    = lazy(() => import('./pages/AnnouncementsPage'));
@@ -63,6 +65,8 @@ function AppRoutes() {
         <Route path="/tickets/:id"       element={<Suspense fallback={<FullPageSpinner />}><TicketDetail /></Suspense>} />
         <Route path="/assignments"       element={<Suspense fallback={<FullPageSpinner />}><AssignmentsPage /></Suspense>} />
         <Route path="/assignments/:id"   element={<Suspense fallback={<FullPageSpinner />}><AssignmentDetail /></Suspense>} />
+        <Route path="/timetable"         element={<ProtectedRoute roles={['student', 'faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><TimetablePage /></Suspense></ProtectedRoute>} />
+        <Route path="/attendance"        element={<ProtectedRoute roles={['student', 'faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><AttendancePage /></Suspense></ProtectedRoute>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
         <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
         <Route path="/announcements"     element={<Navigate to="/notice-board" replace />} />

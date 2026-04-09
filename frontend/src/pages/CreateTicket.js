@@ -20,17 +20,29 @@ export default function CreateTicket() {
   const [aiLoading,  setAiLoading]  = useState(false);
   const [appliedAI,  setAppliedAI]  = useState(false);
 
-  // ── Real AI suggestion with debounce ──────────────────
-  // Calls OpenAI after user stops typing for 1.5 seconds
   const fetchAISuggestion = async (title, description) => {
     if (title.length < 10 || description.length < 20) return;
 
     setAiLoading(true);
     try {
-      const res = await API.post('/chat/categorize', { title, description });
-      const { suggestedCategory, suggestedPriority, source } = res.data.data;
+      const res = await API.post('/chat/pre-ticket', { title, description });
+      const {
+        suggestedCategory,
+        suggestedPriority,
+        source,
+        suggestions = [],
+        faqMatches = [],
+        shouldCreateTicket = true,
+      } = res.data.data;
 
-      setAiSuggestion({ category: suggestedCategory, priority: suggestedPriority, source });
+      setAiSuggestion({
+        category: suggestedCategory,
+        priority: suggestedPriority,
+        source,
+        suggestions,
+        faqMatches,
+        shouldCreateTicket,
+      });
     } catch {
       // Silently fail — don't distract user with AI errors
     } finally {
@@ -115,25 +127,54 @@ export default function CreateTicket() {
 
         {aiSuggestion && !appliedAI && (
           <div className="mb-4 animate-fade-in-up">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-              <div className="flex items-center gap-2">
-                <FiZap size={15} className="text-indigo-500" />
-                <div className="text-sm text-indigo-700">
-                  <strong>AI suggests:</strong> Category → <strong>{aiSuggestion.category}</strong>,
-                  Priority → <strong>{aiSuggestion.priority}</strong>
-                  <span className="text-xs text-indigo-400 ml-2">
-                    ({aiSuggestion.source === 'openai' ? '🤖 GPT' : '🔍 Smart detect'})
-                  </span>
+            <div className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <FiZap size={15} className="text-indigo-500 mt-0.5" />
+                  <div className="text-sm text-indigo-700">
+                    <strong>Smart help suggests:</strong> Category → <strong>{aiSuggestion.category}</strong>,
+                    Priority → <strong>{aiSuggestion.priority}</strong>
+                    <span className="text-xs text-indigo-400 ml-2">
+                      ({aiSuggestion.source === 'openai' ? 'AI guided' : 'Smart detect'})
+                    </span>
+                    <p className="mt-2 text-xs text-indigo-600">
+                      {aiSuggestion.shouldCreateTicket
+                        ? 'This looks like something the helpdesk should handle.'
+                        : 'You may be able to solve this directly using the suggestions below.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={applyAISuggestion} className="btn-primary py-1 px-3 text-xs">
+                    <FiCheck size={12} /> Apply
+                  </button>
+                  <button onClick={() => setAiSuggestion(null)} className="text-indigo-400 hover:text-indigo-600">
+                    <FiX size={14} />
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={applyAISuggestion} className="btn-primary py-1 px-3 text-xs">
-                  <FiCheck size={12} /> Apply
-                </button>
-                <button onClick={() => setAiSuggestion(null)} className="text-indigo-400 hover:text-indigo-600">
-                  <FiX size={14} />
-                </button>
-              </div>
+
+              {aiSuggestion.suggestions?.length > 0 && (
+                <div className="rounded-lg bg-white/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Try this first</p>
+                  <ul className="mt-2 space-y-1 text-sm text-indigo-700">
+                    {aiSuggestion.suggestions.map((item, index) => (
+                      <li key={`${item}-${index}`}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {aiSuggestion.faqMatches?.length > 0 && (
+                <div className="grid gap-2 md:grid-cols-2">
+                  {aiSuggestion.faqMatches.map((faq, index) => (
+                    <div key={`${faq.question}-${index}`} className="rounded-lg border border-indigo-100 bg-white/85 p-3">
+                      <p className="text-xs font-semibold text-indigo-500">{faq.question}</p>
+                      <p className="mt-1 text-xs leading-5 text-gray-600 line-clamp-3">{faq.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -152,8 +193,8 @@ export default function CreateTicket() {
               placeholder="Describe your issue in detail — AI will automatically suggest category and priority as you type..." />
             <p className="text-xs text-gray-400 mt-1">
               {form.description.length < 20
-                ? `Type at least ${20 - form.description.length} more characters for AI suggestions`
-                : '✨ AI analysis active'}
+                ? `Type at least ${20 - form.description.length} more characters for AI help suggestions`
+                : '✨ Smart help suggestions active'}
             </p>
           </div>
 

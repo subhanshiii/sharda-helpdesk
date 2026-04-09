@@ -77,6 +77,11 @@ const ticketSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    routingDepartment: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     replies: [replySchema],
     attachments: [
       {

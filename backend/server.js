@@ -80,6 +80,7 @@ app.use(trackRequest);
 app.use('/api/auth',              require('./routes/authRoutes'));
 app.use('/api/tickets',           require('./routes/ticketRoutes'));
 app.use('/api/users',             require('./routes/userRoutes'));
+app.use('/api/academics',         require('./routes/academicRoutes'));
 app.use('/api/stats',             require('./routes/statsRoutes'));
 app.use('/api/dashboard',         require('./routes/dashboardRoutes'));
 app.use('/api/content',           require('./routes/contentRoutes'));

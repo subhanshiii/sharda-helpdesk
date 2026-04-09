@@ -9,7 +9,7 @@ import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiChevronRight,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -55,6 +55,8 @@ export default function Layout() {
     '/tickets':       'Support Tickets',
     '/tickets/new':   'New Ticket',
     '/assignments':   'Assignments',
+    '/timetable':     'Timetable',
+    '/attendance':    'Attendance',
     '/users':         'User Management',
     '/profile':       'My Profile',
     '/notice-board':  'Notice Board',
@@ -79,6 +81,8 @@ export default function Layout() {
   const helpdeskNavItems = [
     { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Tickets' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
     { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
+    { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: ['student', 'faculty', 'admin'].includes(user?.role) },
+    { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: ['student', 'faculty', 'admin'].includes(user?.role) },
   ].filter((item) => item.visible !== false);
 
   const supportNavItems = [

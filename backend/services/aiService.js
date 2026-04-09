@@ -239,6 +239,86 @@ const summarizeTicket = async (ticket) => {
   }
 };
 
+const getRelevantFaqEntries = (title = '', description = '') => {
+  const text = `${title} ${description}`.toLowerCase();
+  const words = text.split(/\s+/).filter((word) => word.length > 3);
+
+  return faqData
+    .map((faq) => {
+      const score = words.reduce((count, word) => (
+        faq.question.toLowerCase().includes(word) || faq.answer.toLowerCase().includes(word)
+          ? count + 1
+          : count
+      ), 0);
+      return { ...faq, score };
+    })
+    .filter((faq) => faq.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ question, answer }) => ({ question, answer }));
+};
+
+const fallbackPreTicketSuggestion = async (title, description) => {
+  const [suggestedCategory, suggestedPriority] = await Promise.all([
+    categorizeTicket(title, description),
+    predictPriority(title, description),
+  ]);
+
+  const faqMatches = getRelevantFaqEntries(title, description);
+  const suggestions = faqMatches.map((item) => item.answer).slice(0, 3);
+  const shouldCreateTicket = !faqMatches.length || suggestedPriority === 'High' || suggestedPriority === 'Critical';
+
+  return {
+    suggestedCategory,
+    suggestedPriority,
+    shouldCreateTicket,
+    faqMatches,
+    suggestions,
+    source: 'fallback',
+  };
+};
+
+const suggestPreTicketSupport = async (title, description) => {
+  const openai = getOpenAI();
+  if (!openai) {
+    return fallbackPreTicketSuggestion(title, description);
+  }
+
+  try {
+    const faqMatches = getRelevantFaqEntries(title, description);
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an AI assistant that helps decide whether a university support ticket should be raised. Return only JSON with keys: suggestedCategory, suggestedPriority, shouldCreateTicket, suggestions (array of short strings).',
+        },
+        {
+          role: 'user',
+          content: `Title: ${title}
+Description: ${description}
+Relevant FAQs: ${JSON.stringify(faqMatches)}`,
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 180,
+      response_format: { type: 'json_object' },
+    });
+
+    const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+    return {
+      suggestedCategory: parsed.suggestedCategory || await categorizeTicket(title, description),
+      suggestedPriority: parsed.suggestedPriority || await predictPriority(title, description),
+      shouldCreateTicket: typeof parsed.shouldCreateTicket === 'boolean' ? parsed.shouldCreateTicket : true,
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 3) : [],
+      faqMatches,
+      source: 'openai',
+    };
+  } catch {
+    return fallbackPreTicketSuggestion(title, description);
+  }
+};
+
 // ── Keyword-based fallback categorizer ────────────────
 const keywordCategorize = (title, description) => {
   const text = `${title} ${description}`.toLowerCase();
@@ -459,6 +539,7 @@ module.exports = {
   categorizeTicket,
   predictPriority,
   summarizeTicket,
+  suggestPreTicketSupport,
   generateDashboardInsight,
   generateTodaysThought,
 };

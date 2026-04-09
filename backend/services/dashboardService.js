@@ -2,6 +2,8 @@ const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
 const Ticket = require('../models/Ticket');
 const DashboardPreference = require('../models/DashboardPreference');
+const TimetableEntry = require('../models/TimetableEntry');
+const AttendanceSession = require('../models/AttendanceSession');
 const { listAssignments } = require('./assignmentService');
 const { listContent } = require('./contentService');
 const { getStats } = require('./statsService');
@@ -85,6 +87,83 @@ const getRecentSubmissions = async (user) => {
   return [];
 };
 
+const getTimetableEntries = async (user) => {
+  const role = user.role;
+  const query = { isActive: true };
+
+  if (role === 'student') {
+    query.department = user.department;
+    query.year = user.year;
+    query.section = user.section;
+  } else if (role === 'faculty') {
+    query.$or = [{ faculty: user.id }, { department: user.department }];
+  }
+
+  return TimetableEntry.find(query)
+    .populate('faculty', 'name email role')
+    .sort({ dayOfWeek: 1, startTime: 1 })
+    .limit(10)
+    .lean();
+};
+
+const getAttendanceSummary = async (user) => {
+  const role = user.role;
+  const query = {};
+
+  if (role === 'student') {
+    query.department = user.department;
+    query.year = user.year;
+    query.section = user.section;
+  } else if (role === 'faculty') {
+    query.$or = [{ faculty: user.id }, { department: user.department }];
+  }
+
+  const sessions = await AttendanceSession.find(query)
+    .populate('records.student', '_id')
+    .sort({ date: -1 })
+    .limit(12)
+    .lean();
+
+  if (role === 'student') {
+    let attended = 0;
+    let total = 0;
+    sessions.forEach((session) => {
+      const record = session.records.find((entry) => entry.student?._id?.toString() === user.id);
+      if (record) {
+        total += 1;
+        if (['present', 'late'].includes(record.status)) attended += 1;
+      }
+    });
+
+    return {
+      totalSessions: total,
+      attendedSessions: attended,
+      attendanceRate: total ? Math.round((attended / total) * 100) : 0,
+      recentSessions: sessions.slice(0, 5).map((session) => ({
+        _id: session._id,
+        title: session.title,
+        subject: session.subject,
+        date: session.date,
+        myRecord: session.records.find((entry) => entry.student?._id?.toString() === user.id) || null,
+      })),
+    };
+  }
+
+  const totalRecords = sessions.reduce((sum, session) => sum + (session.records?.length || 0), 0);
+  return {
+    totalSessions: sessions.length,
+    attendedSessions: totalRecords,
+    attendanceRate: sessions.length ? Math.round(totalRecords / sessions.length) : 0,
+    recentSessions: sessions.slice(0, 5).map((session) => ({
+      _id: session._id,
+      title: session.title,
+      subject: session.subject,
+      date: session.date,
+      recordCount: session.records?.length || 0,
+    })),
+  };
+};
+
 const buildInsightContext = ({ user, personalTasks, stats, notices, assignments }) => {
   const now = new Date();
   const pendingPersonalTasks = personalTasks.filter((task) => task.status !== 'done').length;
@@ -150,13 +229,15 @@ const serializePreferenceDoc = (preference) => ({
 const getDashboardWorkspace = async (user) => {
   const preference = await getDashboardPreferenceDoc(user.id);
 
-  const [statsResult, notices, calendar, tickets, assignments, recentSubmissions] = await Promise.all([
+  const [statsResult, notices, calendar, tickets, assignments, recentSubmissions, timetable, attendance] = await Promise.all([
     getStats(user),
     listContent({ user, view: 'feed', limit: 3 }),
     listContent({ user, view: 'calendar', limit: 4, upcomingOnly: true }),
     getRecentTickets(user),
     ['student', 'faculty', 'admin'].includes(user.role) ? listAssignments(user, { limit: 6 }) : [],
     getRecentSubmissions(user),
+    getTimetableEntries(user),
+    getAttendanceSummary(user),
   ]);
 
   const stats = statsResult.data;
@@ -186,6 +267,8 @@ const getDashboardWorkspace = async (user) => {
     calendar,
     tickets,
     assignments,
+    timetable,
+    attendance,
     recentSubmissions,
     ...serializePreferenceDoc(preference),
   };
