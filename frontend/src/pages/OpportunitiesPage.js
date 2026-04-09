@@ -174,6 +174,7 @@ export default function OpportunitiesPage() {
   const [showBookmarked, setShowBookmarked] = useState(false);
   const [activeType, setActiveType] = useState('');
   const [search, setSearch]       = useState('');
+  const [error, setError]         = useState('');
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
 
   // useOptimisticUpdate: bookmarks update instantly without waiting for server
@@ -183,20 +184,29 @@ export default function OpportunitiesPage() {
 
   const fetchOpps = useCallback(async (page = 1) => {
     setLoading(true);
+    setError('');
     try {
       if (showBookmarked) {
         const res = await API.get('/opportunities/bookmarked');
-        setOpportunities(res.data.data);
-        setPagination({ total: res.data.count, totalPages: 1, currentPage: 1 });
+        setOpportunities(Array.isArray(res.data?.data) ? res.data.data : []);
+        setPagination({ total: Number(res.data?.count) || 0, totalPages: 1, currentPage: 1 });
       } else {
         const params = new URLSearchParams({ page, limit: 12 });
         if (activeType) params.append('type',   activeType);
         if (search)     params.append('search', search);
         const res = await API.get(`/opportunities?${params}`);
-        setOpportunities(res.data.data);
-        setPagination({ total: res.data.total, totalPages: res.data.totalPages, currentPage: res.data.currentPage });
+        setOpportunities(Array.isArray(res.data?.data) ? res.data.data : []);
+        setPagination({
+          total: Number(res.data?.total) || 0,
+          totalPages: Number(res.data?.totalPages) || 1,
+          currentPage: Number(res.data?.currentPage) || 1,
+        });
       }
-    } catch { setOpportunities([]); }
+    } catch (requestError) {
+      setOpportunities([]);
+      setPagination({ total: 0, totalPages: 1, currentPage: 1 });
+      setError(requestError.response?.data?.message || 'Unable to load opportunities right now.');
+    }
     finally { setLoading(false); }
   }, [activeType, search, showBookmarked, setOpportunities]);
 
@@ -213,8 +223,8 @@ export default function OpportunitiesPage() {
       if (showBookmarked && currentlyBookmarked) {
         setOpportunities(prev => prev.filter(o => o._id !== id));
       }
-    } catch {
-      toast.error('Failed to update bookmark');
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to update bookmark');
     }
   }, [optimisticUpdate, setOpportunities, showBookmarked]);
 
@@ -224,7 +234,7 @@ export default function OpportunitiesPage() {
       await API.delete(`/opportunities/${id}`);
       setOpportunities(prev => prev.filter(o => o._id !== id));
       toast.success('Deleted');
-    } catch { toast.error('Delete failed'); }
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Delete failed'); }
   }, [setOpportunities]);
 
   const bookmarkedCount = opportunities.filter(o => o.isBookmarked).length;
@@ -238,6 +248,8 @@ export default function OpportunitiesPage() {
         subtitle={`${pagination.total} opportunities available`}
         action={canPost && <button onClick={() => setShowModal(true)} className="btn-primary"><FiPlus size={15}/> Post Opportunity</button>}
       />
+
+      {error ? <Alert type="error" message={error} /> : null}
 
       {/* Type filter tabs */}
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-5">

@@ -5,6 +5,14 @@ import toast from 'react-hot-toast';
 
 const NotificationContext = createContext();
 
+export const getNotificationLink = (notification) => {
+  if (notification.link) return notification.link;
+  if (notification.groupId) return `/group-chat?groupId=${notification.groupId}`;
+  if (notification.ticketId) return `/tickets/${notification.ticketId}`;
+  if (notification.assignmentId) return `/assignments/${notification.assignmentId}`;
+  return '/dashboard';
+};
+
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
@@ -24,19 +32,19 @@ export const NotificationProvider = ({ children }) => {
 
   useNotifications({
     onNewTicket: (data) => {
-      addNotification({ type: 'new_ticket', title: 'New Ticket', body: data.message, ticketId: data.ticket._id });
+      addNotification({ type: 'new_ticket', title: 'New Ticket', body: data.message, ticketId: data.ticket._id, link: `/tickets/${data.ticket._id}` });
       toast('🎫 ' + data.message, { duration: 4000 });
     },
     onAssigned: (data) => {
-      addNotification({ type: 'assigned', title: 'Ticket Assigned', body: data.message, ticketId: data.ticketId });
+      addNotification({ type: 'assigned', title: 'Ticket Assigned', body: data.message, ticketId: data.ticketId, link: `/tickets/${data.ticketId}` });
       toast.success('📋 ' + data.message);
     },
     onReply: (data) => {
-      addNotification({ type: 'reply', title: 'New Reply', body: data.message, ticketId: data.ticketId });
+      addNotification({ type: 'reply', title: 'New Reply', body: data.message, ticketId: data.ticketId, link: `/tickets/${data.ticketId}` });
       toast('💬 ' + data.message, { duration: 4000 });
     },
     onStatusChange: (data) => {
-      addNotification({ type: 'status', title: 'Ticket Updated', body: data.message, ticketId: data.ticketId });
+      addNotification({ type: 'status', title: 'Ticket Updated', body: data.message, ticketId: data.ticketId, link: `/tickets/${data.ticketId}` });
       toast('🔄 ' + data.message, { duration: 4000 });
     },
     onOnlineCount: (count) => setOnlineCount(count),
@@ -51,6 +59,7 @@ export const NotificationProvider = ({ children }) => {
           ? message.systemMessage
           : `${message.sender?.name || 'Someone'}: ${message.content || (message.file ? 'Sent an attachment' : 'New message')}`,
         groupId: message.group?._id || message.group,
+        link: `/group-chat?groupId=${message.group?._id || message.group}`,
       });
 
       toast(message.group?.name ? `New message in ${message.group.name}` : 'New group message', {

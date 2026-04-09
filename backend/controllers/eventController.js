@@ -6,7 +6,9 @@ const path  = require('path');
 // @access  Private
 exports.getEvents = async (req, res, next) => {
   try {
-    const { category, search, filter, page = 1, limit = 12 } = req.query;
+    const { category, search, filter } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 12, 1);
     let query = { isActive: true };
 
     if (category) query.category = category;
@@ -28,11 +30,11 @@ exports.getEvents = async (req, res, next) => {
       .populate('postedBy', 'name role')
       .sort({ date: 1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(limit);
 
     const data = events.map(e => ({
       ...e.toObject(),
-      isInterested:    e.interestedUsers.includes(req.user.id),
+      isInterested:    e.interestedUsers.some((id) => id.toString() === req.user.id),
       interestedCount: e.interestedUsers.length,
     }));
 
@@ -41,7 +43,7 @@ exports.getEvents = async (req, res, next) => {
       count: data.length,
       total,
       totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
+      currentPage: page,
       data,
     });
   } catch (error) { next(error); }
@@ -58,7 +60,7 @@ exports.getEvent = async (req, res, next) => {
       success: true,
       data: {
         ...event.toObject(),
-        isInterested:    event.interestedUsers.includes(req.user.id),
+        isInterested:    event.interestedUsers.some((id) => id.toString() === req.user.id),
         interestedCount: event.interestedUsers.length,
       },
     });
@@ -146,7 +148,7 @@ exports.toggleInterest = async (req, res, next) => {
     const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
-    const isInterested = event.interestedUsers.includes(req.user.id);
+    const isInterested = event.interestedUsers.some((id) => id.toString() === req.user.id);
     if (isInterested) {
       event.interestedUsers = event.interestedUsers.filter(id => id.toString() !== req.user.id);
     } else {

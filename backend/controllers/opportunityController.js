@@ -5,7 +5,9 @@ const Opportunity = require('../models/Opportunity');
 // @access  Private
 exports.getOpportunities = async (req, res, next) => {
   try {
-    const { type, search, page = 1, limit = 12 } = req.query;
+    const { type, search } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit, 10) || 12, 1);
     let query = { isActive: true };
 
     if (type) query.type = type;
@@ -23,12 +25,12 @@ exports.getOpportunities = async (req, res, next) => {
       .populate('postedBy', 'name role')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(limit);
 
     // Add isBookmarked field for current user
     const data = opportunities.map(opp => ({
       ...opp.toObject(),
-      isBookmarked: opp.bookmarks.includes(req.user.id),
+      isBookmarked: opp.bookmarks.some((id) => id.toString() === req.user.id),
       bookmarkCount: opp.bookmarks.length,
     }));
 
@@ -37,7 +39,7 @@ exports.getOpportunities = async (req, res, next) => {
       count: data.length,
       total,
       totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
+      currentPage: page,
       data,
     });
   } catch (error) { next(error); }
@@ -56,7 +58,7 @@ exports.getOpportunity = async (req, res, next) => {
       success: true,
       data: {
         ...opp.toObject(),
-        isBookmarked: opp.bookmarks.includes(req.user.id),
+        isBookmarked: opp.bookmarks.some((id) => id.toString() === req.user.id),
         bookmarkCount: opp.bookmarks.length,
       },
     });
@@ -126,7 +128,7 @@ exports.toggleBookmark = async (req, res, next) => {
     const opp = await Opportunity.findById(req.params.id);
     if (!opp) return res.status(404).json({ success: false, message: 'Not found' });
 
-    const isBookmarked = opp.bookmarks.includes(req.user.id);
+    const isBookmarked = opp.bookmarks.some((id) => id.toString() === req.user.id);
 
     if (isBookmarked) {
       opp.bookmarks = opp.bookmarks.filter(id => id.toString() !== req.user.id);

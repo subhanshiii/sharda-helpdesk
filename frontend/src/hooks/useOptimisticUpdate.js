@@ -25,11 +25,13 @@ export const useOptimisticUpdate = (initialData) => {
   const [error,   setError]   = useState(null);
 
   const optimisticUpdate = useCallback(async (updater, apiCall) => {
-    // Save current state for rollback
-    const previousData = data;
+    let previousData;
 
     // 1. Apply change optimistically — UI updates immediately
-    setData(updater(data));
+    setData((current) => {
+      previousData = current;
+      return updater(current);
+    });
     setPending(true);
     setError(null);
 
@@ -45,7 +47,7 @@ export const useOptimisticUpdate = (initialData) => {
       setPending(false);
       throw err;
     }
-  }, [data]);
+  }, []);
 
   const updateData = useCallback((updater) => {
     setData(prev => typeof updater === 'function' ? updater(prev) : updater);

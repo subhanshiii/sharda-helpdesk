@@ -1,377 +1,657 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import API from '../utils/api';
-import { FullPageSpinner, StatusBadge, PriorityBadge } from '../components/ui';
-import { formatRelative } from '../utils/helpers';
+import toast from 'react-hot-toast';
 import {
-  FiPlusCircle, FiArrowRight, FiCalendar, FiBriefcase,
-  FiMessageSquare, FiHelpCircle, FiBookmark, FiSpeaker,
-  FiAlertTriangle, FiInfo, FiCheckCircle, FiZap, FiList,
-  FiExternalLink, FiMapPin, FiClock,
+  FiArrowRight,
+  FiBookOpen,
+  FiCalendar,
+  FiList,
+  FiMessageCircle,
+  FiPlus,
+  FiPlusCircle,
+  FiSpeaker,
+  FiTrash2,
+  FiZap,
 } from 'react-icons/fi';
+import API from '../utils/api';
+import { EmptyState, FullPageSpinner } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
+import { getNotificationLink, useNotificationContext } from '../context/NotificationContext';
+import { formatRelative } from '../utils/helpers';
+import TodaysThought from '../components/dashboard/TodaysThought';
 
-// ── Greeting ──────────────────────────────────────────
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return { text: 'Good morning', emoji: '☀️' };
-  if (h < 17) return { text: 'Good afternoon', emoji: '🌤️' };
-  return { text: 'Good evening', emoji: '🌙' };
+const TASKS_STORAGE_PREFIX = 'sharda-dashboard-tasks';
+
+const createEmptyState = () => ({
+  stats: {},
+  notices: [],
+  calendar: [],
+  tickets: [],
+  assignments: [],
+});
+
+const readTasks = (userId) => {
+  if (!userId) return [];
+  try {
+    const raw = localStorage.getItem(`${TASKS_STORAGE_PREFIX}:${userId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 };
 
-// ── Widget wrapper ────────────────────────────────────
-const Widget = ({ title, icon: Icon, iconColor, action, children, className = '' }) => (
-  <div className={`card flex flex-col overflow-hidden ${className}`}>
-    <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
-      <div className="flex items-center gap-2">
-        <Icon size={15} className={iconColor || 'text-blue-500'} />
-        <h3 className="font-display font-bold text-gray-900 text-sm">{title}</h3>
-      </div>
-      {action && (
-        <Link to={action.link} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium">
-          {action.label} <FiArrowRight size={11} />
-        </Link>
-      )}
-    </div>
-    <div className="flex-1">{children}</div>
+const writeTasks = (userId, tasks) => {
+  if (!userId) return;
+  localStorage.setItem(`${TASKS_STORAGE_PREFIX}:${userId}`, JSON.stringify(tasks));
+};
+
+const getGreeting = (name) => {
+  const hour = new Date().getHours();
+  if (hour < 12) return `Good morning, ${name}`;
+  if (hour < 17) return `Good afternoon, ${name}`;
+  return `Good evening, ${name}`;
+};
+
+const getTicketTone = (ticket) => {
+  if (!ticket) return { label: 'Open', tone: 'bg-slate-100 text-slate-700' };
+  const priority = String(ticket.priority || '').toLowerCase();
+  const status = String(ticket.status || '').toLowerCase();
+  const createdAt = ticket.createdAt ? new Date(ticket.createdAt) : null;
+  const ageHours = createdAt ? (Date.now() - createdAt.getTime()) / (1000 * 60 * 60) : 0;
+
+  if (['resolved', 'closed'].includes(status)) return { label: 'Resolved', tone: 'bg-emerald-50 text-emerald-700' };
+  if (priority === 'critical' || priority === 'high') return { label: 'Priority', tone: 'bg-red-50 text-red-700' };
+  if (ageHours >= 48) return { label: 'Aging', tone: 'bg-amber-50 text-amber-700' };
+  return { label: 'Active', tone: 'bg-blue-50 text-blue-700' };
+};
+
+const getAssignmentTone = (assignment, canManageAssignments) => {
+  if (!assignment?.dueDate) return { label: 'Open', tone: 'bg-slate-100 text-slate-700' };
+  const dueDate = new Date(assignment.dueDate);
+  const now = new Date();
+  const done = canManageAssignments
+    ? (assignment.gradedCount || 0) >= (assignment.submissionCount || 0) && (assignment.submissionCount || 0) > 0
+    : Boolean(assignment.mySubmission);
+
+  if (done) return { label: 'Complete', tone: 'bg-emerald-50 text-emerald-700' };
+  if (dueDate < now) return { label: 'Overdue', tone: 'bg-red-50 text-red-700' };
+  if (dueDate.toDateString() === now.toDateString()) return { label: 'Due today', tone: 'bg-amber-50 text-amber-700' };
+  if (dueDate.getTime() - now.getTime() <= 72 * 60 * 60 * 1000) return { label: 'Due soon', tone: 'bg-violet-50 text-violet-700' };
+  return { label: 'Upcoming', tone: 'bg-blue-50 text-blue-700' };
+};
+
+const buildInsight = ({ role, tasks, tickets, notices, assignments, unreadCount, canManageAssignments }) => {
+  const pendingTasks = tasks.filter((task) => task.status !== 'done').length;
+  const overdueAssignments = assignments.filter((assignment) => getAssignmentTone(assignment, canManageAssignments).label === 'Overdue').length;
+  const dueTodayAssignments = assignments.filter((assignment) => getAssignmentTone(assignment, canManageAssignments).label === 'Due today').length;
+  const priorityTickets = tickets.filter((ticket) => getTicketTone(ticket).label === 'Priority').length;
+  const activeTickets = tickets.filter((ticket) => !['resolved', 'closed'].includes(String(ticket.status || '').toLowerCase())).length;
+
+  if (role === 'staff') {
+    if (priorityTickets > 0) {
+      return `${priorityTickets} high-priority ticket${priorityTickets > 1 ? 's need' : ' needs'} attention. Clearing urgent support work first will steady the queue.`;
+    }
+    if (activeTickets > 0) {
+      return `${activeTickets} ticket${activeTickets > 1 ? 's are' : ' is'} still active. A quick follow-up can keep response times healthy.`;
+    }
+  }
+
+  if (role === 'faculty') {
+    if (overdueAssignments > 0) {
+      return `${overdueAssignments} assignment${overdueAssignments > 1 ? 's are' : ' is'} past due. Reviewing those first will keep your course flow smooth.`;
+    }
+    if (dueTodayAssignments > 0) {
+      return `${dueTodayAssignments} assignment${dueTodayAssignments > 1 ? 's are' : ' is'} due today. A timely check-in will help students stay aligned.`;
+    }
+  }
+
+  if (role === 'admin') {
+    if (priorityTickets > 0) {
+      return `${priorityTickets} urgent support case${priorityTickets > 1 ? 's are' : ' is'} open. Reviewing them first will keep campus operations moving.`;
+    }
+    if (freshNoticeCount(notices) > 0) {
+      return `${freshNoticeCount(notices)} recent notice${freshNoticeCount(notices) > 1 ? 's are' : ' is'} live. A quick scan helps you keep communications current.`;
+    }
+  }
+
+  if (overdueAssignments > 0) {
+    return `${overdueAssignments} assignment${overdueAssignments > 1 ? 's are' : ' is'} overdue. Start there before the rest of the board fills up.`;
+  }
+  if (dueTodayAssignments > 0) {
+    return `${dueTodayAssignments} assignment${dueTodayAssignments > 1 ? 's are' : ' is'} due today. Finishing them early will keep the rest of your workspace lighter.`;
+  }
+  if (priorityTickets > 0) {
+    return `${priorityTickets} support ticket${priorityTickets > 1 ? 's need' : ' needs'} fast attention. A quick reply now can prevent delays later.`;
+  }
+  if (pendingTasks > 0) {
+    return `You have ${pendingTasks} personal task${pendingTasks > 1 ? 's' : ''} waiting. Knock out one small item to build momentum.`;
+  }
+  if (unreadCount > 0) {
+    return `${unreadCount} update${unreadCount > 1 ? 's are' : ' is'} unread. Review notices and notifications before starting deep work.`;
+  }
+  if (notices.length > 0) {
+    return `Fresh notices are available. Scan the top updates first so your day stays aligned with what changed.`;
+  }
+  return 'Everything is under control. Use this workspace to stay ahead instead of reacting late.';
+};
+
+const freshNoticeCount = (notices) => notices.length;
+
+const getSummaryMeta = (role) => {
+  if (role === 'faculty') {
+    return {
+      eyebrow: 'Teaching Summary',
+      description: 'A quick read on coursework, notices, and student-facing activity.',
+    };
+  }
+
+  if (role === 'staff') {
+    return {
+      eyebrow: 'Support Summary',
+      description: 'A queue-first snapshot of tickets, updates, and operational work.',
+    };
+  }
+
+  if (role === 'admin') {
+    return {
+      eyebrow: 'Operations Summary',
+      description: 'A top-level pulse on campus updates, assignments, and support load.',
+    };
+  }
+
+  return {
+    eyebrow: 'Student Summary',
+    description: 'A quick read on your tasks, deadlines, support, and campus updates.',
+  };
+};
+
+const MetricCard = ({ label, value, tone }) => (
+  <div className={`rounded-2xl border px-4 py-3 ${tone}`}>
+    <p className="text-[11px] uppercase tracking-[0.18em] font-semibold opacity-70">{label}</p>
+    <p className="font-display text-2xl font-black mt-1">{value}</p>
   </div>
 );
 
-const Empty = ({ icon, text }) => (
-  <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-    <div className="text-3xl mb-2">{icon}</div>
-    <p className="text-xs text-gray-400">{text}</p>
-  </div>
-);
-
-// ── Quick links ───────────────────────────────────────
-const QUICK_LINKS = [
-  { label: 'New Ticket',    icon: '🎫', link: '/tickets/new',   bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-100'   },
-  { label: 'AI Assistant',  icon: '🤖', link: '/ai-assistant',  bg: 'bg-cyan-50',   text: 'text-cyan-700',   border: 'border-cyan-100'   },
-  { label: 'FAQ',           icon: '❓', link: '/faq',           bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
-  { label: 'Notice Board', icon: '📢', link: '/notice-board', bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-100'  },
-  { label: 'Campus Events', icon: '🎉', link: '/events',        bg: 'bg-pink-50',   text: 'text-pink-700',   border: 'border-pink-100'   },
-  { label: 'Calendar',      icon: '📅', link: '/notice-board?view=calendar', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-100'  },
-];
-
-// ── Announcement item ─────────────────────────────────
-const ANN_CONFIG = {
-  urgent:  { icon: FiZap,           color: 'text-red-500',    bg: 'bg-red-50'    },
-  warning: { icon: FiAlertTriangle, color: 'text-amber-500',  bg: 'bg-amber-50'  },
-  info:    { icon: FiInfo,          color: 'text-blue-500',   bg: 'bg-blue-50'   },
-  success: { icon: FiCheckCircle,   color: 'text-green-500',  bg: 'bg-green-50'  },
-};
-
-const AnnouncementItem = ({ a }) => {
-  const cfg = ANN_CONFIG[a.type] || ANN_CONFIG.info;
-  const Icon = cfg.icon;
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${cfg.bg}`}>
-        <Icon size={13} className={cfg.color} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
-        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{a.description || a.message}</p>
-        <p className="text-xs text-gray-400 mt-1">{formatRelative(a.createdAt)}</p>
-      </div>
-    </div>
-  );
-};
-
-// ── Event item ────────────────────────────────────────
-const CAT_EMOJI = { Technical:'💻', Cultural:'🎭', Sports:'⚽', Academic:'🎓', Workshop:'🔧', Seminar:'🎤', Other:'📌' };
-
-const EventItem = ({ event }) => {
-  const days  = Math.ceil((new Date(event.date) - new Date()) / (1000*60*60*24));
-  const badge = days === 0 ? { label:'Today!', cls:'bg-red-100 text-red-700' }
-              : days === 1 ? { label:'Tomorrow', cls:'bg-orange-100 text-orange-700' }
-              : days <= 7  ? { label:`${days}d`, cls:'bg-blue-100 text-blue-700' }
-              : { label: new Date(event.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}), cls:'bg-gray-100 text-gray-600' };
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-      <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">
-        {CAT_EMOJI[event.category] || '📌'}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{event.title}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {event.venue && <span className="text-xs text-gray-400 flex items-center gap-1"><FiMapPin size={9}/>{event.venue}</span>}
-        </div>
-      </div>
-      <span className={`badge text-xs flex-shrink-0 ${badge.cls}`}>{badge.label}</span>
-    </div>
-  );
-};
-
-// ── Opportunity item ──────────────────────────────────
-const OPP_EMOJI  = { Internship:'💼', Hackathon:'💻', Competition:'🏆', Workshop:'🔧', Job:'👔', Scholarship:'🎓' };
-const OPP_COLORS = {
-  Internship:'bg-blue-50 text-blue-700', Hackathon:'bg-violet-50 text-violet-700',
-  Competition:'bg-orange-50 text-orange-700', Workshop:'bg-teal-50 text-teal-700',
-  Job:'bg-pink-50 text-pink-700', Scholarship:'bg-yellow-50 text-yellow-700',
-};
-
-const OpportunityItem = ({ opp }) => (
-  <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-xl flex-shrink-0">
-      {OPP_EMOJI[opp.type] || '💼'}
-    </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-semibold text-gray-800 truncate">{opp.title}</p>
-      <p className="text-xs text-gray-400">{opp.company || opp.type}</p>
-    </div>
-    <div className="flex items-center gap-2 flex-shrink-0">
-      <span className={`badge text-xs ${OPP_COLORS[opp.type] || 'bg-gray-100 text-gray-600'}`}>{opp.type}</span>
-      {opp.externalLink && (
-        <a href={opp.externalLink} target="_blank" rel="noreferrer"
-          className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
-          <FiExternalLink size={13}/>
-        </a>
-      )}
-    </div>
-  </div>
-);
-
-// ── Ticket item ───────────────────────────────────────
-const TicketItem = ({ ticket }) => (
-  <Link to={`/tickets/${ticket._id}`}
-    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 mb-0.5">
-        <span className="text-xs font-mono text-gray-400">{ticket.ticketId}</span>
-      </div>
-      <p className="text-sm font-semibold text-gray-800 truncate">{ticket.title}</p>
-      <p className="text-xs text-gray-400">{formatRelative(ticket.createdAt)}</p>
-    </div>
-    <div className="flex flex-col items-end gap-1">
-      <StatusBadge status={ticket.status} />
-      <PriorityBadge priority={ticket.priority} />
-    </div>
+const QuickLink = ({ to, icon: Icon, label }) => (
+  <Link to={to} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+    <Icon size={15} />
+    <span>{label}</span>
   </Link>
 );
 
-// ── Academic Calendar item ────────────────────────────
-const CAL_CONFIG = {
-  Exam:         { emoji:'📝', bg:'bg-red-50',    text:'text-red-700'    },
-  Holiday:      { emoji:'🏖️', bg:'bg-green-50',  text:'text-green-700'  },
-  Deadline:     { emoji:'⏰', bg:'bg-orange-50', text:'text-orange-700' },
-  Result:       { emoji:'📊', bg:'bg-blue-50',   text:'text-blue-700'   },
-  Registration: { emoji:'📋', bg:'bg-violet-50', text:'text-violet-700' },
-  Event:        { emoji:'🎯', bg:'bg-pink-50',   text:'text-pink-700'   },
-  Other:        { emoji:'📌', bg:'bg-gray-50',   text:'text-gray-700'   },
-};
-
-const CalendarItem = ({ item }) => {
-  const cfg  = CAL_CONFIG[item.type] || CAL_CONFIG.Other;
-  const date = new Date(item.date);
-  const days = Math.ceil((date - new Date()) / (1000*60*60*24));
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
-      <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${cfg.bg}`}>
-        <span className="text-base leading-none">{cfg.emoji}</span>
-        <span className={`text-xs font-bold leading-none mt-0.5 ${cfg.text}`}>
-          {date.toLocaleDateString('en-IN',{day:'numeric',month:'short'}).split(' ')[0]}
-        </span>
+const Panel = ({ title, eyebrow, action, children }) => (
+  <section className="card overflow-hidden">
+    <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3">
+      <div>
+        {eyebrow ? <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400 font-semibold">{eyebrow}</p> : null}
+        <h2 className="font-display text-base font-bold text-gray-900">{title}</h2>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{item.title}</p>
-        <p className="text-xs text-gray-400">
-          {date.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
-        </p>
-      </div>
-      <span className={`badge text-xs flex-shrink-0 ${
-        days <= 3 ? 'bg-red-100 text-red-700' :
-        days <= 7 ? 'bg-orange-100 text-orange-700' :
-        `${cfg.bg} ${cfg.text}`
-      }`}>
-        {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`}
-      </span>
+      {action}
     </div>
-  );
-};
+    <div className="p-4">{children}</div>
+  </section>
+);
 
-// ── Main Dashboard ────────────────────────────────────
+const TaskColumn = ({ title, hint, tasks, accent, emptyText, onComplete, onReopen, onDelete, allowDelete }) => (
+  <div className={`rounded-3xl border ${accent}`}>
+    <div className="px-4 py-3.5 border-b border-inherit flex items-center justify-between gap-3">
+      <div>
+        <p className="text-xs uppercase tracking-[0.16em] text-gray-400 font-semibold">{title}</p>
+        <p className="text-sm text-gray-500 mt-1">{hint}</p>
+      </div>
+      <span className="badge bg-white/80 text-gray-700">{tasks.length}</span>
+    </div>
+    <div className="p-4 space-y-3 min-h-[230px]">
+      {tasks.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-sm text-gray-400 text-center">
+          {emptyText}
+        </div>
+      ) : (
+        tasks.map((task) => (
+          <div key={task.id} className="rounded-2xl border border-white/70 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">{task.title}</p>
+                {task.meta ? <p className="text-sm text-gray-500 mt-1">{task.meta}</p> : null}
+              </div>
+              {allowDelete && task.kind === 'personal' ? (
+                <button onClick={() => onDelete(task.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                  <FiTrash2 size={15} />
+                </button>
+              ) : null}
+            </div>
+            {task.description ? <p className="text-sm text-gray-600 mt-3 leading-6">{task.description}</p> : null}
+            <div className="flex items-center justify-between gap-3 mt-4">
+              <span className={`badge ${task.kind === 'assigned' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                {task.kind === 'assigned' ? 'Assigned' : 'Personal'}
+              </span>
+              {task.status === 'done' ? (
+                <button onClick={() => onReopen(task)} className="text-xs font-semibold text-amber-600 hover:text-amber-700">Move back</button>
+              ) : (
+                <button onClick={() => onComplete(task)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">Mark complete</button>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+);
+
 export default function Dashboard() {
   const { user } = useAuth();
-  const [data,    setData]    = useState(null);
+  const { hasPermission } = usePermissions();
+  const { notifications, unreadCount } = useNotificationContext();
   const [loading, setLoading] = useState(true);
-  const { text: greetText, emoji: greetEmoji } = getGreeting();
+  const [data, setData] = useState(createEmptyState());
+  const [tasks, setTasks] = useState([]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskNote, setNewTaskNote] = useState('');
+
+  const canSeeAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
+    || hasPermission('canManageAssignments')
+    || hasPermission('canSubmitAssignments');
+  const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
 
   useEffect(() => {
-    Promise.all([
-      API.get('/stats'),
-      API.get('/content?view=feed&limit=5'),
-      API.get('/events?filter=upcoming&limit=5'),
-      API.get('/opportunities?limit=5'),
-      API.get('/opportunities/bookmarked'),
-      API.get('/content?view=calendar&limit=5&upcoming=1'),
-    ]).then(([stats, ann, events, opps, bookmarked, calendar]) => {
+    setTasks(readTasks(user?._id));
+  }, [user?._id]);
+
+  useEffect(() => {
+    writeTasks(user?._id, tasks);
+  }, [tasks, user?._id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      const results = await Promise.allSettled([
+        API.get('/stats'),
+        API.get('/content?view=feed&limit=4'),
+        API.get('/academic-calendar?limit=4'),
+        API.get('/tickets?limit=4'),
+        canSeeAssignments ? API.get('/assignments?limit=6') : Promise.resolve({ data: { data: [] } }),
+      ]);
+
+      if (cancelled) return;
+
+      const pick = (result, fallback) => (result.status === 'fulfilled' ? result.value.data.data || fallback : fallback);
+      const [statsRes, noticesRes, calendarRes, ticketsRes, assignmentsRes] = results;
+      const coreFailures = [statsRes, noticesRes, ticketsRes].filter((result) => result.status === 'rejected').length;
+
       setData({
-        stats:       stats.data.data,
-        announcements: ann.data.data || [],
-        events:      events.data.data || [],
-        opportunities: opps.data.data || [],
-        bookmarked:  bookmarked.data.data || [],
-        calendar:    calendar.data.data || [],
+        stats: pick(statsRes, {}),
+        notices: pick(noticesRes, []),
+        calendar: pick(calendarRes, []),
+        tickets: pick(ticketsRes, []),
+        assignments: pick(assignmentsRes, []),
       });
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+
+      if (coreFailures === 3) {
+        toast.error('Dashboard data is temporarily unavailable. Please refresh in a moment.');
+      }
+      setLoading(false);
+    };
+
+    loadDashboard();
+    return () => { cancelled = true; };
+  }, [canSeeAssignments]);
+
+  const boardTasks = useMemo(() => {
+    const assignedTasks = (data.assignments || []).map((assignment) => {
+      const done = canManageAssignments
+        ? (assignment.gradedCount || 0) >= (assignment.submissionCount || 0) && (assignment.submissionCount || 0) > 0
+        : Boolean(assignment.mySubmission);
+
+      return {
+        id: `assigned-${assignment._id}`,
+        kind: 'assigned',
+        status: done ? 'done' : 'assigned',
+        title: assignment.title,
+        description: assignment.subject || '',
+        meta: canManageAssignments
+          ? `${assignment.submissionCount || 0} submissions · due ${formatRelative(assignment.dueDate)}`
+          : `${assignment.subject || 'General'} · due ${formatRelative(assignment.dueDate)}`,
+      };
+    });
+
+    const personalTasks = tasks.map((task) => ({
+      ...task,
+      kind: 'personal',
+      meta: task.note || 'Personal task',
+    }));
+
+    return {
+      assigned: assignedTasks.filter((task) => task.status === 'assigned'),
+      todo: personalTasks.filter((task) => task.status === 'todo'),
+      completed: [
+        ...assignedTasks.filter((task) => task.status === 'done'),
+        ...personalTasks.filter((task) => task.status === 'done'),
+      ],
+    };
+  }, [canManageAssignments, data.assignments, tasks]);
+
+  const summary = useMemo(() => ({
+    pendingTasks: boardTasks.todo.length + boardTasks.assigned.length,
+    activeTickets: data.stats?.openTickets || 0,
+    newNotices: data.notices.length,
+    unreadUpdates: unreadCount,
+  }), [boardTasks, data.stats, data.notices.length, unreadCount]);
+
+  const insight = useMemo(() => buildInsight({
+    role: user?.role,
+    tasks,
+    tickets: data.tickets,
+    notices: data.notices,
+    assignments: data.assignments,
+    unreadCount,
+    canManageAssignments,
+  }), [user?.role, tasks, data.tickets, data.notices, data.assignments, unreadCount, canManageAssignments]);
+
+  const summaryMeta = useMemo(() => getSummaryMeta(user?.role), [user?.role]);
+
+  const activityItems = useMemo(() => {
+    const ticketItems = data.tickets.map((ticket) => ({
+      id: `ticket-${ticket._id}`,
+      title: ticket.title,
+      meta: `${ticket.ticketId} · ${formatRelative(ticket.createdAt)}`,
+      createdAt: ticket.createdAt,
+      link: `/tickets/${ticket._id}`,
+      badge: <span className={`badge ${getTicketTone(ticket).tone}`}>{getTicketTone(ticket).label}</span>,
+      icon: <FiList size={16} />,
+    }));
+
+    const notificationItems = notifications.slice(0, 4).map((notification) => ({
+      id: `notification-${notification.id}`,
+      title: notification.title,
+      meta: `${notification.body} · ${formatRelative(notification.timestamp)}`,
+      createdAt: notification.timestamp,
+      link: getNotificationLink(notification),
+      badge: !notification.read ? <span className="badge bg-blue-50 text-blue-700">New</span> : <span className="badge bg-slate-100 text-slate-600">Seen</span>,
+      icon: <FiZap size={16} />,
+    }));
+
+    return [...ticketItems, ...notificationItems]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 6);
+  }, [data.tickets, notifications]);
+
+  const addTask = (event) => {
+    event.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    setTasks((prev) => [
+      {
+        id: `local-${Date.now()}`,
+        title: newTaskTitle.trim(),
+        note: newTaskNote.trim(),
+        status: 'todo',
+      },
+      ...prev,
+    ]);
+    setNewTaskTitle('');
+    setNewTaskNote('');
+  };
+
+  const updateTaskStatus = (taskId, status) => {
+    setTasks((prev) => prev.map((task) => (task.id === taskId ? { ...task, status } : task)));
+  };
+
+  const removeTask = (taskId) => {
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+  };
 
   if (loading) return <FullPageSpinner />;
 
-  const myTickets = data?.stats?.recentTickets || [];
-
   return (
     <div className="space-y-5">
+      <TodaysThought />
 
-      {/* ── Welcome header ── */}
-      <div className="rounded-2xl p-5 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg,#0c1654 0%,#1e3a8a 50%,#1e40af 100%)' }}>
-        <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/5 -translate-y-24 translate-x-24" />
-        <div className="absolute bottom-0 right-1/4 w-32 h-32 rounded-full bg-white/5 translate-y-16" />
-        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <p className="text-blue-300 text-sm font-medium">{greetText} {greetEmoji}</p>
-            <h1 className="font-display text-2xl font-black text-white mt-0.5">{user?.name}</h1>
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              {[
-                { label: `${data?.stats?.openTickets || 0} Open Tickets`,    color: 'bg-blue-500/20 text-blue-200'  },
-                { label: `${data?.events?.length || 0} Upcoming Events`,     color: 'bg-pink-500/20 text-pink-200'  },
-                { label: `${data?.bookmarked?.length || 0} Saved Opps`,      color: 'bg-green-500/20 text-green-200'},
-              ].map(b => (
-                <span key={b.label} className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${b.color}`}>{b.label}</span>
-              ))}
+      <section className="rounded-3xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 px-4 py-3.5 flex items-start gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-white text-blue-700 shadow-sm flex items-center justify-center flex-shrink-0">
+          <FiZap size={18} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-blue-500 font-semibold">{summaryMeta.eyebrow}</p>
+          <p className="text-sm sm:text-[15px] text-gray-700 leading-7 mt-1">{insight}</p>
+          <p className="text-xs text-gray-500 mt-2">{summaryMeta.description}</p>
+        </div>
+      </section>
+
+      <section className="card p-4 sm:p-5">
+        <div className="grid xl:grid-cols-[1.2fr,0.8fr] gap-4 items-start">
+          <div className="space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+              <div>
+                <p className="text-sm text-gray-500">{getGreeting(user?.name || 'there')}</p>
+                <h1 className="font-display text-2xl font-bold text-gray-900">Workspace</h1>
+                <p className="text-sm text-gray-500 mt-1">A fast, reliable control center for tasks, support, and campus updates.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canSeeAssignments ? <QuickLink to="/assignments" icon={FiBookOpen} label={canManageAssignments ? 'Assignments' : 'My Work'} /> : null}
+                <QuickLink to="/tickets/new" icon={FiPlusCircle} label="Create Ticket" />
+                <QuickLink to="/group-chat" icon={FiMessageCircle} label="Open Chat" />
+                <QuickLink to="/notice-board" icon={FiSpeaker} label="Notice Board" />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <MetricCard label="Pending Tasks" value={summary.pendingTasks} tone="border-blue-100 bg-blue-50/70 text-blue-900" />
+              <MetricCard label="Active Tickets" value={summary.activeTickets} tone="border-amber-100 bg-amber-50/70 text-amber-900" />
+              <MetricCard label="New Notices" value={summary.newNotices} tone="border-emerald-100 bg-emerald-50/70 text-emerald-900" />
+              <MetricCard label="Unread Updates" value={summary.unreadUpdates} tone="border-violet-100 bg-violet-50/70 text-violet-900" />
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Link to="/tickets/new"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-blue-900 hover:-translate-y-0.5 transition-all shadow-lg"
-              style={{ background:'linear-gradient(135deg,#fcd34d,#f97316)' }}>
-              <FiPlusCircle size={15}/> New Ticket
-            </Link>
-            <Link to="/ai-assistant"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-white border border-white/20 hover:bg-white/10 transition-all">
-              🤖 Ask AI
-            </Link>
+
+          <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400 font-semibold">Workspace Health</p>
+                <p className="text-sm text-gray-600 mt-1">Your workload at a glance.</p>
+              </div>
+              <span className="badge bg-white text-slate-700 border border-slate-200">
+                {summary.pendingTasks === 0 && summary.activeTickets === 0 ? 'Clear' : 'In motion'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4 text-center">
+              <div className="rounded-2xl bg-white border border-gray-100 px-3 py-3">
+                <p className="text-xl font-black text-gray-900">{boardTasks.completed.length}</p>
+                <p className="text-xs text-gray-500 mt-1">Completed</p>
+              </div>
+              <div className="rounded-2xl bg-white border border-gray-100 px-3 py-3">
+                <p className="text-xl font-black text-gray-900">{data.assignments.length}</p>
+                <p className="text-xs text-gray-500 mt-1">Coursework</p>
+              </div>
+              <div className="rounded-2xl bg-white border border-gray-100 px-3 py-3">
+                <p className="text-xl font-black text-gray-900">{data.calendar.length}</p>
+                <p className="text-xs text-gray-500 mt-1">Upcoming</p>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-1"
-          style={{ background:'linear-gradient(90deg,#f59e0b,#ec4899,#06b6d4,#10b981)' }} />
-      </div>
+      </section>
 
-      {/* ── Quick links ── */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {QUICK_LINKS.map(ql => (
-          <Link key={ql.label} to={ql.link}
-            className={`card flex flex-col items-center gap-2 p-3.5 text-center hover:-translate-y-1 hover:shadow-card-hover transition-all duration-200 border ${ql.border}`}>
-            <span className="text-2xl">{ql.icon}</span>
-            <span className={`text-xs font-bold ${ql.text}`}>{ql.label}</span>
-          </Link>
-        ))}
-      </div>
+      <div className="grid xl:grid-cols-[1.4fr,1fr] gap-5">
+        <Panel
+          title="Focus Board"
+          eyebrow="Productivity"
+          action={<span className="text-xs font-semibold text-gray-500">Assigned work + personal todo</span>}
+        >
+          <div className="grid lg:grid-cols-[1.05fr,1fr,1fr] gap-4">
+            <div className="space-y-4">
+              <form onSubmit={addTask} className="rounded-3xl border border-gray-100 bg-slate-50 p-4 space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400 font-semibold">Add Personal Task</p>
+                  <h3 className="font-semibold text-gray-900 mt-1">Keep small commitments visible</h3>
+                </div>
+                <input className="input" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Prepare project review notes" />
+                <textarea className="input resize-none" rows={3} value={newTaskNote} onChange={(e) => setNewTaskNote(e.target.value)} placeholder="Optional note or context..." />
+                <button type="submit" className="btn-primary w-full justify-center">
+                  <FiPlus size={14} /> Add Task
+                </button>
+              </form>
 
-      {/* ── Main widget grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-
-        {/* Notice Board */}
-        <Widget title="Notice Board" icon={FiSpeaker} iconColor="text-amber-500"
-          action={{ label:'Open Board', link:'/notice-board' }}>
-          {data?.announcements?.length > 0
-            ? data.announcements.map(a => <AnnouncementItem key={a._id} a={a} />)
-            : <Empty icon="📢" text="No notices yet" />
-          }
-        </Widget>
-
-        {/* Upcoming events */}
-        <Widget title="Upcoming Events" icon={FiCalendar} iconColor="text-pink-500"
-          action={{ label:'View all', link:'/events' }}>
-          {data?.events?.length > 0
-            ? data.events.map(e => <EventItem key={e._id} event={e} />)
-            : <Empty icon="🎉" text="No upcoming events" />
-          }
-        </Widget>
-
-        {/* Academic calendar */}
-        <Widget title="Academic Calendar" icon={FiClock} iconColor="text-red-500"
-          action={{ label:'Open Calendar', link:'/notice-board?view=calendar' }}>
-          {data?.calendar?.length > 0
-            ? data.calendar.slice(0,5).map(c => <CalendarItem key={c._id} item={c} />)
-            : (
-              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                <div className="text-3xl mb-2">📅</div>
-                <p className="text-xs text-gray-400 mb-3">No upcoming dates</p>
-                {user?.role === 'admin' && (
-                  <Link to="/notice-board?view=calendar" className="text-xs text-blue-600 hover:underline">+ Add dates</Link>
-                )}
+              <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-emerald-500 font-semibold">Momentum</p>
+                <p className="font-semibold text-emerald-900 mt-2">
+                  {boardTasks.completed.length > 0
+                    ? `${boardTasks.completed.length} item${boardTasks.completed.length > 1 ? 's are' : ' is'} already complete. Keep the streak going.`
+                    : 'Nothing completed yet today. Finishing one small task will make the rest of the board feel lighter.'}
+                </p>
               </div>
-            )
-          }
-        </Widget>
+            </div>
 
-        {/* My tickets */}
-        <Widget title="My Active Tickets" icon={FiList} iconColor="text-blue-500"
-          action={{ label:'View all', link:'/tickets' }}>
-          {myTickets.length > 0
-            ? myTickets.slice(0,4).map(t => <TicketItem key={t._id} ticket={t} />)
-            : (
-              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                <div className="text-3xl mb-2">🎫</div>
-                <p className="text-xs text-gray-400 mb-3">No tickets yet</p>
-                <Link to="/tickets/new" className="btn-primary text-xs py-1.5 px-3">
-                  <FiPlusCircle size={12}/> Raise Ticket
-                </Link>
-              </div>
-            )
-          }
-        </Widget>
+            <TaskColumn
+              title="Assigned Tasks"
+              hint={canManageAssignments ? 'Coursework and submissions needing attention' : 'Work assigned to you'}
+              tasks={boardTasks.assigned}
+              accent="border-blue-200 bg-blue-50"
+              emptyText={canSeeAssignments ? 'No open assigned work right now.' : 'Assignments are not enabled for this role.'}
+              onComplete={() => {}}
+              onReopen={() => {}}
+              onDelete={() => {}}
+              allowDelete={false}
+            />
 
-        {/* New opportunities */}
-        <Widget title="Latest Opportunities" icon={FiBriefcase} iconColor="text-indigo-500"
-          action={{ label:'View all', link:'/opportunities' }}>
-          {data?.opportunities?.length > 0
-            ? data.opportunities.map(o => <OpportunityItem key={o._id} opp={o} />)
-            : <Empty icon="💼" text="No opportunities yet" />
-          }
-        </Widget>
-
-        {/* Bookmarked opportunities */}
-        <Widget title="My Saved Opportunities" icon={FiBookmark} iconColor="text-yellow-500"
-          action={{ label:'View saved', link:'/opportunities' }}>
-          {data?.bookmarked?.length > 0
-            ? data.bookmarked.slice(0,5).map(o => <OpportunityItem key={o._id} opp={o} />)
-            : (
-              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                <div className="text-3xl mb-2">🔖</div>
-                <p className="text-xs text-gray-400 mb-3">No saved opportunities</p>
-                <Link to="/opportunities" className="text-xs text-blue-600 hover:underline">Browse opportunities →</Link>
-              </div>
-            )
-          }
-        </Widget>
-
-      </div>
-
-      {/* ── Help banner ── */}
-      <div className="card p-5 flex flex-col sm:flex-row items-center justify-between gap-4"
-        style={{ background:'linear-gradient(135deg,#f0f9ff,#fdf4ff)' }}>
-        <div className="flex items-center gap-3">
-          <div className="text-3xl">🤖</div>
-          <div>
-            <p className="font-display font-bold text-gray-900">Need help? Ask the AI Assistant</p>
-            <p className="text-sm text-gray-500 mt-0.5">Get instant answers to common questions or raise a support ticket</p>
+            <div className="space-y-4">
+              <TaskColumn
+                title="Personal Todo"
+                hint="Saved locally for this account"
+                tasks={boardTasks.todo}
+                accent="border-slate-200 bg-slate-50"
+                emptyText="Add a task to build your own working list."
+                onComplete={(task) => updateTaskStatus(task.id, 'done')}
+                onReopen={(task) => updateTaskStatus(task.id, 'todo')}
+                onDelete={removeTask}
+                allowDelete
+              />
+              <TaskColumn
+                title="Completed"
+                hint="Finished personal or assigned work"
+                tasks={boardTasks.completed}
+                accent="border-emerald-200 bg-emerald-50"
+                emptyText="Completed items will collect here."
+                onComplete={() => {}}
+                onReopen={(task) => {
+                  if (task.kind === 'personal') updateTaskStatus(task.id, 'todo');
+                }}
+                onDelete={removeTask}
+                allowDelete
+              />
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2 flex-shrink-0">
-          <Link to="/ai-assistant" className="btn-primary text-sm">
-            <FiMessageSquare size={14}/> Ask AI
-          </Link>
-          <Link to="/faq" className="btn-secondary text-sm">
-            <FiHelpCircle size={14}/> Browse FAQ
-          </Link>
+        </Panel>
+
+        <div className="space-y-5">
+          <Panel title="Activity Panel" eyebrow="Awareness">
+            <div className="space-y-3">
+              {activityItems.length > 0 ? (
+                activityItems.map((item) => (
+                  <Link key={item.id} to={item.link} className="flex items-start gap-3 rounded-2xl border border-gray-100 px-3.5 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0">
+                      {item.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-gray-900 truncate">{item.title}</p>
+                        {item.badge}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1 truncate">{item.meta}</p>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <EmptyState icon="📬" title="No recent activity" description="Tickets and notifications will appear here once work starts moving." />
+              )}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Notice Highlights"
+            eyebrow="Updates"
+            action={<Link to="/notice-board" className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">Open board <FiArrowRight size={12} /></Link>}
+          >
+            <div className="space-y-3">
+              {data.notices.length > 0 ? (
+                data.notices.map((notice) => (
+                  <div key={notice._id} className="rounded-2xl border border-gray-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-gray-900 truncate">{notice.title}</p>
+                      <span className={`badge ${notice.priority === 'high' ? 'bg-red-50 text-red-700' : notice.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+                        {notice.priority}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notice.description}</p>
+                    <p className="text-xs text-gray-400 mt-2">{formatRelative(notice.createdAt)}</p>
+                  </div>
+                ))
+              ) : (
+                <EmptyState icon="📢" title="No notices yet" description="Important campus updates will show up here." />
+              )}
+            </div>
+          </Panel>
         </div>
       </div>
 
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Panel
+          title={canManageAssignments ? 'Coursework Pulse' : 'Assigned Work'}
+          eyebrow="Deadlines"
+          action={canSeeAssignments ? <Link to="/assignments" className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">Open assignments <FiArrowRight size={12} /></Link> : null}
+        >
+          {canSeeAssignments ? (
+            data.assignments.length > 0 ? (
+              <div className="space-y-3">
+                {data.assignments.slice(0, 4).map((assignment) => (
+                  <Link key={assignment._id} to={`/assignments/${assignment._id}`} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors">
+                    <div className="w-10 h-10 rounded-2xl bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
+                      <FiBookOpen size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{assignment.title}</p>
+                      <p className="text-sm text-gray-500 truncate">{assignment.subject || 'General'} · due {formatRelative(assignment.dueDate)}</p>
+                    </div>
+                    <span className={`badge ${getAssignmentTone(assignment, canManageAssignments).tone}`}>
+                      {getAssignmentTone(assignment, canManageAssignments).label}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon="📘" title="No assignment pressure right now" description="Relevant coursework will appear here as soon as it is published." />
+            )
+          ) : (
+            <EmptyState icon="📘" title="Assignments not enabled" description="This role does not currently have assignment access." />
+          )}
+        </Panel>
+
+        <Panel
+          title="Upcoming Calendar"
+          eyebrow="Deadlines"
+          action={<Link to="/academic-calendar" className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">Open calendar <FiArrowRight size={12} /></Link>}
+        >
+          {data.calendar.length > 0 ? (
+            <div className="space-y-3">
+              {data.calendar.map((item) => (
+                <div key={item._id} className="flex items-center gap-3 rounded-2xl border border-gray-100 px-4 py-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+                    <FiCalendar size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{item.title}</p>
+                    <p className="text-sm text-gray-500">{formatRelative(item.date)}</p>
+                  </div>
+                  <span className="badge bg-rose-50 text-rose-700">{item.type}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon="📅" title="No upcoming academic dates" description="Important exams, holidays, and deadlines will appear here." />
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

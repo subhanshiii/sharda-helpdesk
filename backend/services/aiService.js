@@ -15,6 +15,21 @@ const faqData = require('../data/faq.json');
 
 // ── OpenAI client (lazy init) ──────────────────────────
 let openaiClient = null;
+let todaysThoughtCache = {
+  dateKey: null,
+  value: null,
+};
+
+const TODAY_THOUGHT_PROMPT = `You are a motivational guide for university students. Generate one original, thoughtful quote for today that relates to learning, perseverance, or academic growth. Return ONLY valid JSON, no extra text, no markdown:
+{ quote: string, author: string, theme: string }
+If the quote is your own original thought, set author to AI.`;
+
+const getCalendarDateKey = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: process.env.APP_TIMEZONE || process.env.TZ || 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date());
 
 const getOpenAI = () => {
   if (openaiClient) return openaiClient;
@@ -306,4 +321,144 @@ const getRelatedQuestions = (message) => {
     .slice(0, 3);
 };
 
-module.exports = { chatWithAI, categorizeTicket, predictPriority, summarizeTicket };
+const fallbackDashboardInsight = (context) => {
+  const { pendingPersonalTasks, openTickets, freshNotices, overdueAssignments, dueTodayAssignments } = context.counts;
+
+  if (overdueAssignments > 0) {
+    return {
+      message: `You have ${overdueAssignments} overdue assignment${overdueAssignments > 1 ? 's' : ''}. Clear the oldest one first to stop work from piling up.`,
+      source: 'fallback',
+    };
+  }
+
+  if (dueTodayAssignments > 0) {
+    return {
+      message: `${dueTodayAssignments} assignment${dueTodayAssignments > 1 ? 's are' : ' is'} due today. Finishing them early will make the rest of the day easier.`,
+      source: 'fallback',
+    };
+  }
+
+  if (pendingPersonalTasks > 0) {
+    return {
+      message: `You have ${pendingPersonalTasks} personal task${pendingPersonalTasks > 1 ? 's' : ''} still open. Completing one quick task now will build momentum.`,
+      source: 'fallback',
+    };
+  }
+
+  if (openTickets > 0) {
+    return {
+      message: `${openTickets} support ticket${openTickets > 1 ? 's are' : ' is'} still active. A short follow-up can keep the queue moving.`,
+      source: 'fallback',
+    };
+  }
+
+  if (freshNotices > 0) {
+    return {
+      message: `There ${freshNotices > 1 ? 'are' : 'is'} ${freshNotices} fresh notice${freshNotices > 1 ? 's' : ''} waiting. Review them before you dive into the rest of the day.`,
+      source: 'fallback',
+    };
+  }
+
+  return {
+    message: 'Everything looks under control today. Use the board to close one small task and keep your momentum steady.',
+    source: 'fallback',
+  };
+};
+
+const generateDashboardInsight = async (context) => {
+  const openai = getOpenAI();
+
+  if (!openai) {
+    return fallbackDashboardInsight(context);
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You write one short daily dashboard coaching message for a university workspace. Be practical, encouraging, and specific. Keep it under 28 words. No markdown.',
+        },
+        {
+          role: 'user',
+          content: `User role: ${context.role}
+User name: ${context.userName}
+Pending personal tasks: ${context.counts.pendingPersonalTasks}
+Open tickets: ${context.counts.openTickets}
+Fresh notices: ${context.counts.freshNotices}
+Overdue assignments: ${context.counts.overdueAssignments}
+Assignments due today: ${context.counts.dueTodayAssignments}`,
+        },
+      ],
+      max_tokens: 60,
+      temperature: 0.7,
+    });
+
+    const message = response.choices[0]?.message?.content?.trim();
+    if (!message) return fallbackDashboardInsight(context);
+
+    return { message, source: 'openai' };
+  } catch {
+    return fallbackDashboardInsight(context);
+  }
+};
+
+const generateTodaysThought = async () => {
+  const dateKey = getCalendarDateKey();
+  if (todaysThoughtCache.dateKey === dateKey && todaysThoughtCache.value) {
+    return todaysThoughtCache.value;
+  }
+
+  const openai = getOpenAI();
+  if (!openai) {
+    const fallback = {
+      quote: 'Learning compounds quietly. The effort you invest today becomes the confidence you carry tomorrow.',
+      author: 'AI',
+      theme: 'Growth',
+    };
+    todaysThoughtCache = { dateKey, value: fallback };
+    return fallback;
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: TODAY_THOUGHT_PROMPT }],
+      temperature: 0.9,
+      max_tokens: 120,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = response.choices[0]?.message?.content?.trim();
+    const parsed = JSON.parse(raw || '{}');
+    const quote = String(parsed.quote || '').trim();
+    const author = String(parsed.author || '').trim() || 'AI';
+    const theme = String(parsed.theme || '').trim() || 'Growth';
+
+    if (!quote) {
+      throw new Error('Invalid motivation payload');
+    }
+
+    const result = { quote, author, theme };
+    todaysThoughtCache = { dateKey, value: result };
+    return result;
+  } catch {
+    const fallback = {
+      quote: 'Progress in learning is rarely loud. Keep showing up, and one day the hard things will feel natural.',
+      author: 'AI',
+      theme: 'Perseverance',
+    };
+    todaysThoughtCache = { dateKey, value: fallback };
+    return fallback;
+  }
+};
+
+module.exports = {
+  chatWithAI,
+  categorizeTicket,
+  predictPriority,
+  summarizeTicket,
+  generateDashboardInsight,
+  generateTodaysThought,
+};

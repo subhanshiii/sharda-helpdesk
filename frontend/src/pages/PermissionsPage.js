@@ -16,6 +16,8 @@ const PERMISSION_LABELS = {
   canSendFiles: 'Files',
   canCreateTickets: 'Create Tickets',
   canHandleTickets: 'Handle Tickets',
+  canSubmitAssignments: 'Submit Work',
+  canManageAssignments: 'Manage Work',
   canManageUsers: 'Users',
   canManageGroups: 'Groups',
   canPostNotice: 'Notice Board',

@@ -9,6 +9,8 @@ const emptyPermissions = {
   canSendFiles: false,
   canCreateTickets: false,
   canHandleTickets: false,
+  canSubmitAssignments: false,
+  canManageAssignments: false,
   canManageUsers: false,
   canManageGroups: false,
   canPostNotice: false,

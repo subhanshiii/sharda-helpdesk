@@ -327,6 +327,7 @@ export default function EventsPage() {
   const [events,     setEvents]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [showModal,  setShowModal]  = useState(false);
+  const [error,      setError]      = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const [activeFilter,   setActiveFilter]   = useState('upcoming');
   const [search,     setSearch]     = useState('');
@@ -336,15 +337,24 @@ export default function EventsPage() {
 
   const fetchEvents = useCallback(async (page = 1) => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams({ page, limit: 12 });
       if (activeCategory) params.append('category', activeCategory);
       if (activeFilter)   params.append('filter', activeFilter);
       if (search)         params.append('search', search);
       const res = await API.get(`/events?${params}`);
-      setEvents(res.data.data);
-      setPagination({ total: res.data.total, totalPages: res.data.totalPages, currentPage: res.data.currentPage });
-    } catch { setEvents([]); }
+      setEvents(Array.isArray(res.data?.data) ? res.data.data : []);
+      setPagination({
+        total: Number(res.data?.total) || 0,
+        totalPages: Number(res.data?.totalPages) || 1,
+        currentPage: Number(res.data?.currentPage) || 1,
+      });
+    } catch (requestError) {
+      setEvents([]);
+      setPagination({ total: 0, totalPages: 1, currentPage: 1 });
+      setError(requestError.response?.data?.message || 'Unable to load events right now.');
+    }
     finally { setLoading(false); }
   }, [activeCategory, activeFilter, search]);
 
@@ -358,7 +368,7 @@ export default function EventsPage() {
         ? { ...e, isInterested: res.data.isInterested, interestedCount: res.data.interestedCount }
         : e
       ));
-    } catch { toast.error('Failed'); }
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Failed to update interest'); }
   };
 
   const handleDelete = async (id) => {
@@ -367,7 +377,7 @@ export default function EventsPage() {
       await API.delete(`/events/${id}`);
       toast.success('Event deleted');
       setEvents(prev => prev.filter(e => e._id !== id));
-    } catch { toast.error('Delete failed'); }
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Delete failed'); }
   };
 
   return (
@@ -390,6 +400,8 @@ export default function EventsPage() {
           )
         }
       />
+
+      {error ? <Alert type="error" message={error} /> : null}
 
       {/* Filter tabs */}
       <div className="flex items-center gap-2 mb-4">

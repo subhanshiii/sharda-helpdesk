@@ -54,8 +54,6 @@ const mapLegacyAnnouncement = (announcement) => ({
   expiresAt: announcement.expiresAt || null,
   status: announcement.isActive === false ? 'archived' : 'published',
   createdBy: announcement.postedBy,
-  createdAt: announcement.createdAt,
-  updatedAt: announcement.updatedAt,
   source: {
     legacyModel: 'Announcement',
     legacyId: String(announcement._id),
@@ -75,8 +73,6 @@ const mapLegacyCalendar = (event) => ({
   publishAt: event.createdAt,
   status: 'published',
   createdBy: event.postedBy,
-  createdAt: event.createdAt,
-  updatedAt: event.updatedAt,
   source: {
     legacyModel: 'AcademicCalendar',
     legacyId: String(event._id),
@@ -107,6 +103,7 @@ const ensureLegacyContentSynced = async () => {
             $setOnInsert: mapLegacyAnnouncement(announcement),
           },
           upsert: true,
+          timestamps: false,
         },
       })),
       ...calendarEvents.map((event) => ({
@@ -119,6 +116,7 @@ const ensureLegacyContentSynced = async () => {
             $setOnInsert: mapLegacyCalendar(event),
           },
           upsert: true,
+          timestamps: false,
         },
       })),
     ];
@@ -137,7 +135,7 @@ const ensureLegacyContentSynced = async () => {
   }
 };
 
-const buildQuery = ({ user, view = 'feed', contentType, category, priority, search, month, limit, upcomingOnly }) => {
+const buildQuery = ({ user, view = 'feed', contentType, category, priority, type, search, month, limit, upcomingOnly }) => {
   const query = {
     status: 'published',
     $or: [
@@ -156,6 +154,7 @@ const buildQuery = ({ user, view = 'feed', contentType, category, priority, sear
 
   if (category && category !== 'all') query.category = category;
   if (priority && priority !== 'all') query.priority = priority;
+  if (type && type !== 'all') query.type = type;
 
   if (search) {
     query.$and = [
@@ -212,9 +211,9 @@ const sortContent = (items, view) => {
   });
 };
 
-const listContent = async ({ user, view, contentType, category, priority, search, month, limit, upcomingOnly }) => {
+const listContent = async ({ user, view, contentType, category, priority, type, search, month, limit, upcomingOnly }) => {
   await ensureLegacyContentSynced();
-  const { query, limit: parsedLimit } = buildQuery({ user, view, contentType, category, priority, search, month, limit, upcomingOnly });
+  const { query, limit: parsedLimit } = buildQuery({ user, view, contentType, category, priority, type, search, month, limit, upcomingOnly });
 
   let cursor = Content.find(query).populate('createdBy', 'name role department year section');
   if (view === 'calendar') {
@@ -288,6 +287,7 @@ const updateContent = async ({ contentId, body, files, requesterId, requesterRol
   if (body.startsAt !== undefined || body.date !== undefined) document.startsAt = body.startsAt || body.date || null;
   if (body.endsAt !== undefined || body.endDate !== undefined) document.endsAt = body.endsAt || body.endDate || null;
   if (body.contentType !== undefined) document.contentType = body.contentType;
+  if (body.publishAt !== undefined) document.publishAt = body.publishAt || document.publishAt;
   document.targetAudience = {
     roles: parseAudienceValues(body.audienceRoles),
     departments: parseAudienceValues(body.audienceDepartments),

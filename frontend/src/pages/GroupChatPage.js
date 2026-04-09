@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
@@ -11,6 +12,7 @@ import { FiMessageSquare, FiUsers, FiMenu } from 'react-icons/fi';
 export default function GroupChatPage() {
   const { user }                = useAuth();
   const socket                  = useSocket();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [groups, setGroups]     = useState([]);
   const [activeGroup, setActiveGroup] = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -30,6 +32,7 @@ export default function GroupChatPage() {
     (member) => member.user?._id === user?._id
   )?.role;
   const canManageGroup = isAdmin || activeGroupRole === 'admin';
+  const requestedGroupId = searchParams.get('groupId');
 
   // ── Fetch user's groups ────────────────────────────────
   const fetchGroups = useCallback(async () => {
@@ -46,6 +49,22 @@ export default function GroupChatPage() {
   }, [isAdmin, activeGroup]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
+
+  useEffect(() => {
+    if (!requestedGroupId || groups.length === 0) return;
+
+    const matchedGroup = groups.find((group) => group._id === requestedGroupId);
+    if (!matchedGroup) return;
+
+    setActiveGroup((prev) => (prev?._id === matchedGroup._id ? prev : matchedGroup));
+    setGroups((prev) => prev.map((group) => (
+      group._id === matchedGroup._id ? { ...group, unreadCount: 0 } : group
+    )));
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('groupId');
+    setSearchParams(nextParams, { replace: true });
+  }, [groups, requestedGroupId, searchParams, setSearchParams]);
 
   // ── Socket: listen for new groups + group updates ─────
   useEffect(() => {

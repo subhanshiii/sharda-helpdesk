@@ -8,6 +8,7 @@ exports.getContent = async (req, res, next) => {
       contentType: req.query.contentType,
       category: req.query.category,
       priority: req.query.priority,
+      type: req.query.type,
       search: req.query.search,
       month: req.query.month,
       limit: req.query.limit,

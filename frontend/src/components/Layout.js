@@ -7,9 +7,9 @@ import { getInitials, getRoleColor, getRoleLabel } from '../utils/helpers';
 import { useTheme } from '../context/ThemeContext';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
-  FiHome, FiList, FiPlusCircle, FiUsers, FiUser,
+  FiHome, FiList, FiUsers, FiUser,
   FiLogOut, FiMenu, FiX, FiChevronRight,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -46,11 +46,15 @@ export default function Layout() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const closeSidebar = () => setSidebarOpen(false);
+  const canAccessAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
+    || hasPermission('canManageAssignments')
+    || hasPermission('canSubmitAssignments');
 
   const pageTitles = {
     '/dashboard':     'Dashboard',
     '/tickets':       'Support Tickets',
     '/tickets/new':   'New Ticket',
+    '/assignments':   'Assignments',
     '/users':         'User Management',
     '/profile':       'My Profile',
     '/notice-board':  'Notice Board',
@@ -60,7 +64,11 @@ export default function Layout() {
     '/group-chat':    'Group Chat',
     '/permissions':   'Permissions',
   };
-  const pageTitle = pageTitles[location.pathname] || 'Sharda Platform';
+  const pageTitle = (() => {
+    if (location.pathname.startsWith('/tickets/')) return 'Ticket Details';
+    if (location.pathname.startsWith('/assignments/')) return 'Assignment Details';
+    return pageTitles[location.pathname] || 'Sharda Platform';
+  })();
 
   const mainNavItems = [
     { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
@@ -69,8 +77,8 @@ export default function Layout() {
   ].filter((item) => item.visible !== false);
 
   const helpdeskNavItems = [
-    { to: '/tickets', icon: FiList, label: 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
-    { to: '/tickets/new', icon: FiPlusCircle, label: 'New Ticket', visible: hasPermission('canCreateTickets') },
+    { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Tickets' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
+    { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
   ].filter((item) => item.visible !== false);
 
   const supportNavItems = [

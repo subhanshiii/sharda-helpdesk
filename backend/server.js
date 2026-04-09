@@ -81,7 +81,9 @@ app.use('/api/auth',              require('./routes/authRoutes'));
 app.use('/api/tickets',           require('./routes/ticketRoutes'));
 app.use('/api/users',             require('./routes/userRoutes'));
 app.use('/api/stats',             require('./routes/statsRoutes'));
+app.use('/api/dashboard',         require('./routes/dashboardRoutes'));
 app.use('/api/content',           require('./routes/contentRoutes'));
+app.use('/api/assignments',       require('./routes/assignmentRoutes'));
 app.use('/api/announcements',     require('./routes/announcementRoutes'));
 app.use('/api/opportunities',     require('./routes/opportunityRoutes'));
 app.use('/api/events',            require('./routes/eventRoutes'));
@@ -90,6 +92,7 @@ app.use('/api/files',             require('./routes/fileRoutes'));
 app.use('/api/academic-calendar', require('./routes/academicCalendarRoutes'));
 app.use('/api/chat-groups',       require('./routes/groupChatRoutes'));  // ← NEW
 app.use('/api/permissions',       require('./routes/permissionRoutes'));
+app.use('/api/motivation',        require('./routes/motivationRoutes'));
 
 // Queue routes (optional)
 try { app.use('/api/queue', require('./routes/queueRoutes')); } catch {}

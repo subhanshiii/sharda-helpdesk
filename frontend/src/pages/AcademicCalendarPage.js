@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
 import { PageHeader, FullPageSpinner, EmptyState, Alert } from '../components/ui';
 import { FiPlus, FiTrash2, FiX, FiCalendar } from 'react-icons/fi';
@@ -90,17 +91,25 @@ function AddModal({ onClose, onSaved }) {
 
 export default function AcademicCalendarPage() {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [activeType, setActiveType] = useState('');
+  const [error, setError] = useState('');
+
+  const canManage = hasPermission('canPostNotice');
 
   const fetchEvents = async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await API.get('/academic-calendar/all');
-      setEvents(res.data.data);
-    } catch {} finally { setLoading(false); }
+      setEvents(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch (requestError) {
+      setEvents([]);
+      setError(requestError.response?.data?.message || 'Unable to load academic calendar right now.');
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchEvents(); }, []);
@@ -111,7 +120,7 @@ export default function AcademicCalendarPage() {
       await API.delete(`/academic-calendar/${id}`);
       toast.success('Removed');
       setEvents(prev => prev.filter(e => e._id !== id));
-    } catch { toast.error('Failed'); }
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Failed to remove date'); }
   };
 
   const filtered = activeType ? events.filter(e => e.type === activeType) : events;
@@ -125,7 +134,7 @@ export default function AcademicCalendarPage() {
       <PageHeader
         title="Academic Calendar"
         subtitle="Important dates, exams, and deadlines"
-        action={user?.role === 'admin' && (
+        action={canManage && (
           <button onClick={() => setShowModal(true)} className="btn-primary">
             <FiPlus size={15}/> Add Date
           </button>
@@ -151,10 +160,12 @@ export default function AcademicCalendarPage() {
         })}
       </div>
 
+      {error ? <Alert type="error" message={error} /> : null}
+
       {loading ? <FullPageSpinner /> : events.length === 0 ? (
         <EmptyState icon="📅" title="No dates added yet"
-          description={user?.role === 'admin' ? 'Add important academic dates for students' : 'No academic dates have been added yet'}
-          action={user?.role === 'admin' && <button onClick={() => setShowModal(true)} className="btn-primary"><FiPlus size={15}/> Add First Date</button>}
+          description={canManage ? 'Add important academic dates for students' : 'No academic dates have been added yet'}
+          action={canManage && <button onClick={() => setShowModal(true)} className="btn-primary"><FiPlus size={15}/> Add First Date</button>}
         />
       ) : (
         <div className="space-y-6">
@@ -187,7 +198,7 @@ export default function AcademicCalendarPage() {
                         <span className={`badge text-xs ${days <= 3 ? 'bg-red-100 text-red-700' : days <= 7 ? 'bg-orange-100 text-orange-700' : `${cfg.bg} ${cfg.text}`}`}>
                           {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days} days`}
                         </span>
-                        {user?.role === 'admin' && (
+                        {canManage && (
                           <button onClick={() => handleDelete(item._id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                             <FiTrash2 size={13}/>
                           </button>
@@ -214,7 +225,7 @@ export default function AcademicCalendarPage() {
                         <p className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</p>
                       </div>
                       <span className={`badge text-xs ${cfg.bg} ${cfg.text}`}>{item.type}</span>
-                      {user?.role === 'admin' && (
+                      {canManage && (
                         <button onClick={() => handleDelete(item._id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                           <FiTrash2 size={13}/>
                         </button>

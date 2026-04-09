@@ -17,6 +17,8 @@ const Dashboard            = lazy(() => import('./pages/Dashboard'));
 const TicketList           = lazy(() => import('./pages/TicketList'));
 const CreateTicket         = lazy(() => import('./pages/CreateTicket'));
 const TicketDetail         = lazy(() => import('./pages/TicketDetail'));
+const AssignmentsPage      = lazy(() => import('./pages/AssignmentsPage'));
+const AssignmentDetail     = lazy(() => import('./pages/AssignmentDetail'));
 const UsersPage            = lazy(() => import('./pages/UsersPage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
 const AnnouncementsPage    = lazy(() => import('./pages/AnnouncementsPage'));
@@ -59,6 +61,8 @@ function AppRoutes() {
         <Route path="/tickets"           element={<Suspense fallback={<FullPageSpinner />}><TicketList /></Suspense>} />
         <Route path="/tickets/new"       element={<Suspense fallback={<FullPageSpinner />}><CreateTicket /></Suspense>} />
         <Route path="/tickets/:id"       element={<Suspense fallback={<FullPageSpinner />}><TicketDetail /></Suspense>} />
+        <Route path="/assignments"       element={<Suspense fallback={<FullPageSpinner />}><AssignmentsPage /></Suspense>} />
+        <Route path="/assignments/:id"   element={<Suspense fallback={<FullPageSpinner />}><AssignmentDetail /></Suspense>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
         <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
         <Route path="/announcements"     element={<Navigate to="/notice-board" replace />} />
@@ -66,7 +70,7 @@ function AppRoutes() {
         <Route path="/events"            element={<Suspense fallback={<FullPageSpinner />}><EventsPage /></Suspense>} />
         <Route path="/ai-assistant"      element={<Suspense fallback={<FullPageSpinner />}><AIAssistant /></Suspense>} />
         <Route path="/faq"               element={<Suspense fallback={<FullPageSpinner />}><FAQPage /></Suspense>} />
-        <Route path="/academic-calendar" element={<Navigate to="/notice-board?view=calendar" replace />} />
+        <Route path="/academic-calendar" element={<Navigate to="/notice-board" replace />} />
         <Route path="/group-chat"        element={<Suspense fallback={<FullPageSpinner />}><GroupChatPage /></Suspense>} />
         <Route path="/users"             element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UsersPage /></Suspense></ProtectedRoute>} />
         <Route path="/permissions"       element={<ProtectedRoute permission="canManagePermissions"><Suspense fallback={<FullPageSpinner />}><PermissionsPage /></Suspense></ProtectedRoute>} />

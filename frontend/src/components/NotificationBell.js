@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useNotificationContext } from '../context/NotificationContext';
+import { getNotificationLink, useNotificationContext } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { FiBell, FiX, FiCheck } from 'react-icons/fi';
 import { formatRelative } from '../utils/helpers';
@@ -79,7 +79,7 @@ export default function NotificationBell() {
                 return (
                   <Link
                     key={notif.id}
-                    to={notif.groupId ? '/group-chat' : notif.ticketId ? `/tickets/${notif.ticketId}` : '/tickets'}
+                    to={getNotificationLink(notif)}
                     onClick={() => { markRead(notif.id); setOpen(false); }}
                     className={`flex items-start gap-3 px-4 py-3 transition-colors last:border-0 ${
                       isDark
