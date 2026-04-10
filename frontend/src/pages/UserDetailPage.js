@@ -29,6 +29,8 @@ export default function UserDetailPage() {
   const [error, setError] = useState('');
   const [accountControl, setAccountControl] = useState({ status: 'pending', emailVerified: false, isActive: true, expiryDate: '' });
   const [savingAccess, setSavingAccess] = useState(false);
+  const [passwordControl, setPasswordControl] = useState({ password: '', confirmPassword: '' });
+  const [savingPassword, setSavingPassword] = useState(false);
   const { isSuperAdmin } = usePermissions();
 
   const loadUser = async () => {
@@ -159,6 +161,31 @@ export default function UserDetailPage() {
       toast.error(requestError.response?.data?.message || 'Failed to update account controls');
     } finally {
       setSavingAccess(false);
+    }
+  };
+
+  const handlePasswordOverride = async () => {
+    if (!passwordControl.password || !passwordControl.confirmPassword) {
+      toast.error('Enter and confirm the new password');
+      return;
+    }
+    if (passwordControl.password !== passwordControl.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await API.post(`/users/${systemId}/password`, {
+        password: passwordControl.password,
+      });
+      setPasswordControl({ password: '', confirmPassword: '' });
+      toast.success('Password updated');
+      await loadUser();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to update password');
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -314,55 +341,93 @@ export default function UserDetailPage() {
           </div>
 
           {isSuperAdmin ? (
-            <div className="card p-6">
-              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Account Controls</h3>
-              <p className="mt-1 text-sm text-gray-500 dark-text-muted">Super admin override for lifecycle, verification, and access state.</p>
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="label">Account Status</label>
-                  <select
-                    className="input"
-                    value={accountControl.status}
-                    onChange={(event) => setAccountControl((current) => ({ ...current, status: event.target.value }))}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
+            <>
+              <div className="card p-6">
+                <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Account Controls</h3>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Lifecycle, verification, and sign-in access for this identity.</p>
+                <div className="mt-5 grid gap-4">
+                  <div>
+                    <label className="label">Account Status</label>
+                    <select
+                      className="input"
+                      value={accountControl.status}
+                      onChange={(event) => setAccountControl((current) => ({ ...current, status: event.target.value }))}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="label">Verification</label>
+                      <select
+                        className="input"
+                        value={String(accountControl.emailVerified)}
+                        onChange={(event) => setAccountControl((current) => ({ ...current, emailVerified: event.target.value === 'true' }))}
+                      >
+                        <option value="false">Not Verified</option>
+                        <option value="true">Verified</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Access</label>
+                      <select
+                        className="input"
+                        value={String(accountControl.isActive)}
+                        onChange={(event) => setAccountControl((current) => ({ ...current, isActive: event.target.value === 'true' }))}
+                      >
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Expiry Date</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={accountControl.expiryDate}
+                      onChange={(event) => setAccountControl((current) => ({ ...current, expiryDate: event.target.value }))}
+                    />
+                  </div>
+                  <button type="button" onClick={handleAccessUpdate} disabled={savingAccess} className="btn-primary w-full justify-center">
+                    {savingAccess ? 'Saving…' : 'Update Account Controls'}
+                  </button>
                 </div>
-                <div>
-                  <label className="label">Expiry Date</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={accountControl.expiryDate}
-                    onChange={(event) => setAccountControl((current) => ({ ...current, expiryDate: event.target.value }))}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={accountControl.emailVerified}
-                    onChange={(event) => setAccountControl((current) => ({ ...current, emailVerified: event.target.checked }))}
-                    className="rounded"
-                  />
-                  Mark email as verified
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={accountControl.isActive}
-                    onChange={(event) => setAccountControl((current) => ({ ...current, isActive: event.target.checked }))}
-                    className="rounded"
-                  />
-                  Account active
-                </label>
-                <button type="button" onClick={handleAccessUpdate} disabled={savingAccess} className="btn-primary w-full justify-center">
-                  {savingAccess ? 'Saving…' : 'Update Account Controls'}
-                </button>
               </div>
-            </div>
+
+              <div className="card p-6">
+                <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Manual Password Assignment</h3>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Super-admin-only override for testing and controlled support access.</p>
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label className="label">New Password</label>
+                    <input
+                      type="password"
+                      className="input"
+                      value={passwordControl.password}
+                      onChange={(event) => setPasswordControl((current) => ({ ...current, password: event.target.value }))}
+                      placeholder="Minimum 6 characters"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Confirm Password</label>
+                    <input
+                      type="password"
+                      className="input"
+                      value={passwordControl.confirmPassword}
+                      onChange={(event) => setPasswordControl((current) => ({ ...current, confirmPassword: event.target.value }))}
+                      placeholder="Re-enter the password"
+                    />
+                  </div>
+                  <button type="button" onClick={handlePasswordOverride} disabled={savingPassword} className="btn-secondary w-full justify-center">
+                    {savingPassword ? 'Updating Password…' : 'Set Password Manually'}
+                  </button>
+                </div>
+              </div>
+            </>
           ) : null}
 
           <div className="card p-6">

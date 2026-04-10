@@ -452,6 +452,37 @@ exports.updateUser = async (req, res, next) => {
   }
 };
 
+exports.setUserPassword = async (req, res, next) => {
+  try {
+    if (!isSuperAdminRequest(req)) {
+      return res.status(403).json({ success: false, message: 'Only the super admin can set account passwords' });
+    }
+
+    const user = await findUserByIdentifier(req.params.id).select('+password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const password = String(req.body?.password || '');
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    user.password = password;
+    user.passwordNeedsSetup = false;
+    await user.save();
+    await invalidateUserCaches(String(user._id));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password updated successfully',
+      data: sanitizeUserDoc(user),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.deleteUser = async (req, res, next) => {
   try {
     if (normalizeRole(req.user.role) !== 'admin') {

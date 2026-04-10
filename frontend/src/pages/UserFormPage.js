@@ -33,9 +33,6 @@ export default function UserFormPage() {
   const [error, setError] = useState('');
   const [verificationLink, setVerificationLink] = useState('');
   const isStudent = form.role === 'student';
-  const isFaculty = form.role === 'faculty';
-  const isStaff = form.role === 'staff';
-  const isAdmin = form.role === 'admin';
   const { isSuperAdmin } = usePermissions();
 
   useEffect(() => {
@@ -76,7 +73,12 @@ export default function UserFormPage() {
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
     setForm((current) => {
-      const next = { ...current, [name]: type === 'checkbox' ? checked : value };
+      const normalizedValue = type === 'checkbox'
+        ? checked
+        : (name === 'emailVerified' || name === 'isActive')
+          ? value === 'true'
+          : value;
+      const next = { ...current, [name]: normalizedValue };
       if (name === 'role' && value !== 'student') {
         next.year = '';
         next.section = '';
@@ -167,16 +169,6 @@ export default function UserFormPage() {
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
-              <p className="text-sm font-semibold text-gray-900">Role mapping</p>
-              <p className="mt-1 text-sm text-gray-500">
-                {isStudent ? 'Students require academic placement fields so timetable, assignments, and attendance map correctly.' : null}
-                {isFaculty ? 'Faculty accounts should carry department data. Teaching assignments are linked separately through academic structure.' : null}
-                {isStaff ? 'Staff accounts can be provisioned with department ownership and lifecycle settings only.' : null}
-                {isAdmin ? 'Admin accounts get platform-wide access. The system admin remains the only super admin and is managed from environment bootstrap.' : null}
-              </p>
-            </div>
-
             <div className={`grid gap-5 ${isStudent ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
               <div>
                 <label className="label">Department</label>
@@ -202,36 +194,50 @@ export default function UserFormPage() {
               ) : null}
             </div>
 
-            <div className="grid gap-5 md:grid-cols-3">
-              <div>
-                <label className="label">Status</label>
-                <select name="status" value={form.status} onChange={handleChange} className="input">
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="suspended">Suspended</option>
-                </select>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-5 dark-surface-subtle">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-gray-900 dark-text-primary">Account State</h3>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Manage sign-in readiness and lifecycle for this identity.</p>
               </div>
-              <div>
-                <label className="label">Expiry Date</label>
-                <input name="expiryDate" type="date" value={form.expiryDate} onChange={handleChange} className="input" />
-                <p className="mt-1 text-xs text-gray-500">{isStudent ? 'Recommended for student lifecycle control.' : 'Optional for non-student operational accounts.'}</p>
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input name="isActive" type="checkbox" checked={form.isActive} onChange={handleChange} className="rounded" />
-                  Account active
-                </label>
+
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label className="label">Status</label>
+                  <select name="status" value={form.status} onChange={handleChange} className="input">
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Verification</label>
+                  <select name="emailVerified" value={String(form.emailVerified)} onChange={handleChange} className="input">
+                    <option value="false">Not Verified</option>
+                    <option value="true">Verified</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Access</label>
+                  <select name="isActive" value={String(form.isActive)} onChange={handleChange} className="input">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Expiry Date</label>
+                  <input name="expiryDate" type="date" value={form.expiryDate} onChange={handleChange} className="input" />
+                  <p className="mt-1 text-xs text-gray-500">{isStudent ? 'Recommended for student lifecycle control.' : 'Optional for non-student operational accounts.'}</p>
+                </div>
               </div>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input name="emailVerified" type="checkbox" checked={form.emailVerified} onChange={handleChange} className="rounded" />
-                Mark email as verified
-              </label>
-              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-                Super admin and admins can override lifecycle state here. A verified + approved + active account can sign in immediately.
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark-surface-subtle dark-text-muted">
+                Use the account state controls above to manage approval, verification, and access in one place.
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark-surface-subtle dark-text-muted">
+                {isEdit ? 'Changes apply immediately after save.' : 'Provisioning keeps identity and access data aligned from the start.'}
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const router = express.Router();
-const { getUsers, getUser, getUserBySystemId, createUser, importUsers, updateUser, deleteUser, uploadUserAvatar, getAgents, getIdentityAlerts } = require('../controllers/userController');
+const { getUsers, getUser, getUserBySystemId, createUser, importUsers, updateUser, setUserPassword, deleteUser, uploadUserAvatar, getAgents, getIdentityAlerts } = require('../controllers/userController');
 const { protect, permissionMiddleware } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const csvUpload = multer({
@@ -22,6 +22,7 @@ router.get('/staff', protect, permissionMiddleware('canHandleTickets'), getAgent
 router.get('/identity-alerts', protect, permissionMiddleware('canManageUsers'), getIdentityAlerts);
 router.get('/by-system-id/:systemId', protect, permissionMiddleware('canManageUsers'), getUserBySystemId);
 router.post('/import', protect, permissionMiddleware('canManageUsers'), csvUpload.single('file'), importUsers);
+router.post('/:id/password', protect, permissionMiddleware('canManageUsers'), setUserPassword);
 router.post('/:id/avatar', protect, permissionMiddleware('canManageUsers'), upload.single('profileImage'), uploadUserAvatar);
 
 router
