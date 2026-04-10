@@ -3,12 +3,13 @@ const { body } = require('express-validator');
 const router  = express.Router();
 
 const {
-  register, login, adminLogin, logout, getMe, updateProfile, changePassword, getPendingUsers, updateApprovalStatus, verifyEmail, resendVerification,
+  register, login, adminLogin, googleAuth, getGoogleClientConfig, logout, getMe, updateProfile, uploadProfileAvatar, changePassword, getPendingUsers, updateApprovalStatus, verifyEmail, resendVerification,
 } = require('../controllers/authController');
 const {
   forgotPassword, resetPassword, verifyResetToken,
 } = require('../controllers/passwordResetController');
 const { protect, permissionMiddleware }              = require('../middleware/auth');
+const upload = require('../middleware/upload');
 const { authLimiter, passwordResetLimiter } = require('../middleware/security');
 
 // Public routes
@@ -31,7 +32,11 @@ router.post('/login',
   login
 );
 
+router.post('/google', authLimiter, googleAuth);
+router.get('/google/config', getGoogleClientConfig);
+
 router.get('/verify-email/:token', verifyEmail);
+router.get('/verify-email', verifyEmail);
 router.post('/resend-verification',
   authLimiter,
   [body('email').isEmail().normalizeEmail().withMessage('Valid email is required')],
@@ -58,6 +63,7 @@ router.get('/verify-reset-token/:token', verifyResetToken);
 // Protected routes
 router.get('/me',                protect, getMe);
 router.put('/updateprofile',     protect, updateProfile);
+router.post('/avatar',           protect, upload.single('profileImage'), uploadProfileAvatar);
 router.put('/changepassword',    protect, changePassword);
 router.get('/pending-users',     protect, permissionMiddleware('canManageUsers'), getPendingUsers);
 router.patch('/approve/:userId', protect, permissionMiddleware('canManageUsers'), (req, res, next) => {

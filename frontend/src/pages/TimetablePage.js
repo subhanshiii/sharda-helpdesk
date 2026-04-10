@@ -10,6 +10,7 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 const defaultForm = {
   title: '',
   subject: '',
+  subjectCode: '',
   department: '',
   year: '',
   section: '',
@@ -19,6 +20,7 @@ const defaultForm = {
   room: '',
   notes: '',
   isActive: true,
+  faculty: '',
 };
 
 function TimetableModal({ item, user, onClose, onSaved }) {
@@ -31,6 +33,22 @@ function TimetableModal({ item, user, onClose, onSaved }) {
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [facultyOptions, setFacultyOptions] = useState([]);
+
+  useEffect(() => {
+    const loadFacultyOptions = async () => {
+      try {
+        const res = await API.get('/users?role=faculty&limit=100');
+        setFacultyOptions(Array.isArray(res.data?.data) ? res.data.data : []);
+      } catch (requestError) {
+        setFacultyOptions([]);
+      }
+    };
+
+    if (user?.role === 'admin') {
+      loadFacultyOptions();
+    }
+  }, [user?.role]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -72,16 +90,20 @@ function TimetableModal({ item, user, onClose, onSaved }) {
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           {error ? <Alert type="error" message={error} /> : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="label">Title</label>
               <input className="input" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Database Systems Lecture" />
             </div>
-            <div>
-              <label className="label">Subject</label>
-              <input className="input" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder="DBMS" />
-            </div>
+          <div>
+            <label className="label">Subject</label>
+            <input className="input" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder="DBMS" />
           </div>
+          <div>
+            <label className="label">Subject Code</label>
+            <input className="input" value={form.subjectCode || ''} onChange={(event) => setForm((current) => ({ ...current, subjectCode: event.target.value }))} placeholder="CSE201" />
+          </div>
+        </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <div>
@@ -125,6 +147,20 @@ function TimetableModal({ item, user, onClose, onSaved }) {
               <input className="input" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional context" />
             </div>
           </div>
+
+          {user?.role === 'admin' ? (
+            <div>
+              <label className="label">Assigned Faculty</label>
+              <select className="input" value={form.faculty || ''} onChange={(event) => setForm((current) => ({ ...current, faculty: event.target.value }))}>
+                <option value="">Select faculty</option>
+                {facultyOptions.map((faculty) => (
+                  <option key={faculty._id} value={faculty._id}>
+                    {faculty.name} {faculty.department ? `· ${faculty.department}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving...' : 'Save Slot'}</button>

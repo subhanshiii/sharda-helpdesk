@@ -109,6 +109,33 @@ export const getInitials = (name = '') => {
     .slice(0, 2);
 };
 
+export const getAvatarPresetUrl = (avatarChoice) => {
+  if (!avatarChoice) return '';
+  return avatarChoice.startsWith('/avatars/') ? avatarChoice : `/avatars/${avatarChoice}`;
+};
+
+export const getAvatarSource = (user = {}) => {
+  if (user?.profileImage) return getAssetUrl(user.profileImage);
+  if (user?.avatarChoice) return getAvatarPresetUrl(user.avatarChoice);
+  if (user?.avatar) return getAssetUrl(user.avatar);
+  return '';
+};
+
+export const getAvatarTone = (seed = '') => {
+  const palette = [
+    { bg: '#dbeafe', fg: '#1d4ed8' },
+    { bg: '#dcfce7', fg: '#15803d' },
+    { bg: '#fce7f3', fg: '#be185d' },
+    { bg: '#ede9fe', fg: '#6d28d9' },
+    { bg: '#fef3c7', fg: '#b45309' },
+    { bg: '#cffafe', fg: '#0f766e' },
+  ];
+  const hash = String(seed || '')
+    .split('')
+    .reduce((total, char) => total + char.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+};
+
 export const CATEGORIES = [
   'IT Support', 'Administration', 'Hostel', 'Library',
   'Finance', 'Academic', 'Infrastructure', 'Other',

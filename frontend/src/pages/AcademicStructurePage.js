@@ -2,14 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
+import { Alert, ConfirmDialog, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
 
 const RESOURCES = [
   { key: 'departments', label: 'Departments', fields: ['name', 'code'] },
   { key: 'programs', label: 'Programs', fields: ['name', 'code', 'department', 'durationYears'] },
+  { key: 'courses', label: 'Courses', fields: ['name', 'code', 'program', 'department'] },
   { key: 'years', label: 'Academic Years', fields: ['program', 'yearNumber', 'label'] },
-  { key: 'sections', label: 'Sections', fields: ['program', 'academicYear', 'department', 'name', 'capacity'] },
-  { key: 'subjects', label: 'Subjects', fields: ['code', 'name', 'department', 'program', 'academicYear', 'credits'] },
+  { key: 'sections', label: 'Sections', fields: ['program', 'course', 'academicYear', 'department', 'name', 'capacity'] },
+  { key: 'subjects', label: 'Subjects', fields: ['code', 'name', 'department', 'program', 'course', 'academicYear', 'credits'] },
   { key: 'section-subjects', label: 'Section Subject Assignments', fields: ['section', 'subject', 'faculty', 'semester'] },
   { key: 'enrollments', label: 'Enrollments', fields: ['student', 'section', 'academicYear', 'semester', 'status'] },
 ];
@@ -17,9 +18,10 @@ const RESOURCES = [
 const DEFAULT_FORMS = {
   departments: { name: '', code: '' },
   programs: { name: '', code: '', department: '', durationYears: 4 },
+  courses: { name: '', code: '', program: '', department: '' },
   years: { program: '', yearNumber: 1, label: '' },
-  sections: { program: '', academicYear: '', department: '', name: '', capacity: 60 },
-  subjects: { code: '', name: '', department: '', program: '', academicYear: '', credits: 0 },
+  sections: { program: '', course: '', academicYear: '', department: '', name: '', capacity: 60 },
+  subjects: { code: '', name: '', department: '', program: '', course: '', academicYear: '', credits: 0 },
   'section-subjects': { section: '', subject: '', faculty: '', semester: '' },
   enrollments: { student: '', section: '', academicYear: '', semester: '', status: 'active' },
 };
@@ -33,6 +35,7 @@ const getFieldLabel = (field) => ({
   yearNumber: 'Year number',
   label: 'Label',
   academicYear: 'Academic Year',
+  course: 'Course',
   capacity: 'Capacity',
   subject: 'Subject',
   faculty: 'Faculty',
@@ -44,7 +47,7 @@ const getFieldLabel = (field) => ({
 
 const entityName = (entity) => {
   if (!entity) return '—';
-  return entity.name || entity.label || entity.code || entity.email || entity._id;
+  return entity.name || entity.label || entity.code || entity.email || entity.systemId || entity._id;
 };
 
 function ResourceSection({ resource, items, options, onCreate, onDelete, loading }) {
@@ -58,6 +61,7 @@ function ResourceSection({ resource, items, options, onCreate, onDelete, loading
   const fieldOptions = useMemo(() => ({
     department: options.departments || [],
     program: options.programs || [],
+    course: options.courses || [],
     academicYear: options.years || [],
     section: options.sections || [],
     subject: options.subjects || [],
@@ -89,7 +93,7 @@ function ResourceSection({ resource, items, options, onCreate, onDelete, loading
         >
           <option value="">Select {getFieldLabel(field)}</option>
           {selectOptions.map((item) => (
-            <option key={item._id} value={item._id}>{entityName(item)}</option>
+            <option key={item._id || item.systemId} value={item._id || item.systemId}>{entityName(item)}</option>
           ))}
         </select>
       );
@@ -180,6 +184,7 @@ export default function AcademicStructurePage() {
   const [data, setData] = useState({
     departments: [],
     programs: [],
+    courses: [],
     years: [],
     sections: [],
     subjects: [],
@@ -189,6 +194,7 @@ export default function AcademicStructurePage() {
   const [users, setUsers] = useState({ faculty: [], students: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, resource: '', id: '', name: '', loading: false });
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -197,6 +203,7 @@ export default function AcademicStructurePage() {
       const [
         departmentsRes,
         programsRes,
+        coursesRes,
         yearsRes,
         sectionsRes,
         subjectsRes,
@@ -207,6 +214,7 @@ export default function AcademicStructurePage() {
       ] = await Promise.all([
         API.get('/academics/departments'),
         API.get('/academics/programs'),
+        API.get('/academics/courses'),
         API.get('/academics/years'),
         API.get('/academics/sections'),
         API.get('/academics/subjects'),
@@ -219,6 +227,7 @@ export default function AcademicStructurePage() {
       setData({
         departments: departmentsRes.data?.data || [],
         programs: programsRes.data?.data || [],
+        courses: coursesRes.data?.data || [],
         years: yearsRes.data?.data || [],
         sections: sectionsRes.data?.data || [],
         subjects: subjectsRes.data?.data || [],
@@ -251,20 +260,24 @@ export default function AcademicStructurePage() {
     }
   };
 
-  const handleDelete = async (resource, id) => {
-    if (!window.confirm('Delete this record?')) return;
+  const handleDelete = async () => {
+    if (!confirmDelete.id || !confirmDelete.resource) return;
+    setConfirmDelete((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/academics/${resource}/${id}`);
+      await API.delete(`/academics/${confirmDelete.resource}/${confirmDelete.id}`);
       toast.success('Deleted');
       await loadAll();
+      setConfirmDelete({ open: false, resource: '', id: '', name: '', loading: false });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete record');
+      setConfirmDelete((current) => ({ ...current, loading: false }));
     }
   };
 
   const options = {
     departments: data.departments,
     programs: data.programs,
+    courses: data.courses,
     years: data.years,
     sections: data.sections,
     subjects: data.subjects,
@@ -274,6 +287,15 @@ export default function AcademicStructurePage() {
 
   return (
     <div>
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title="Delete academic record"
+        description={`Delete ${confirmDelete.name || 'this record'}? This action cannot be undone.`}
+        confirmLabel="Delete Record"
+        loading={confirmDelete.loading}
+        onConfirm={handleDelete}
+        onClose={() => setConfirmDelete({ open: false, resource: '', id: '', name: '', loading: false })}
+      />
       <PageHeader
         title="Academic Structure"
         subtitle="Manage departments, programs, sections, subjects, teaching assignments, and enrollments"
@@ -296,7 +318,16 @@ export default function AcademicStructurePage() {
             options={options}
             loading={loading}
             onCreate={handleCreate}
-            onDelete={handleDelete}
+            onDelete={(resourceKey, id) => {
+              const item = (data[resourceKey] || []).find((entry) => entry._id === id);
+              setConfirmDelete({
+                open: true,
+                resource: resourceKey,
+                id,
+                name: entityName(item),
+                loading: false,
+              });
+            }}
           />
         ))}
       </div>

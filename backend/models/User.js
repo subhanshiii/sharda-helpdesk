@@ -4,6 +4,14 @@ const jwt = require('jsonwebtoken');
 
 const userSchema = new mongoose.Schema(
   {
+    systemId: {
+      type: String,
+      required: [true, 'Please provide a system ID'],
+      unique: true,
+      immutable: true,
+      index: true,
+      match: [/^\d{10}$/, 'systemId must match YYYY followed by 6 digits'],
+    },
     name: {
       type: String,
       required: [true, 'Please provide a name'],
@@ -29,8 +37,20 @@ const userSchema = new mongoose.Schema(
       // Keep "agent" as a legacy alias so older records remain valid during migration.
       enum: ['student', 'faculty', 'staff', 'admin', 'agent'],
       default: 'student',
+      index: true,
+    },
+    adminTier: {
+      type: String,
+      enum: ['super_admin', 'admin'],
+      default: null,
+      index: true,
     },
     emailVerified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    passwordNeedsSetup: {
       type: Boolean,
       default: false,
       index: true,
@@ -78,9 +98,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    profileImage: {
+      type: String,
+      default: null,
+    },
+    avatarChoice: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
+      index: true,
     },
     lastLogin: {
       type: Date,

@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Permission = require('../models/Permission');
 const { DEFAULT_ROLE_PERMISSIONS, sanitizePermissions } = require('../utils/permissionDefaults');
 
+const isSuperAdmin = (user) => user?.role === 'admin' && user?.adminTier === 'super_admin';
+
 // ── protect: verify JWT from httpOnly cookie OR Bearer header ──
 // We support BOTH so existing clients still work during migration
 const attachAuthenticatedUser = async (req, token) => {
@@ -21,18 +23,20 @@ const attachAuthenticatedUser = async (req, token) => {
     throw error;
   }
 
-  if (user.status && user.status !== 'approved') {
-    const error = new Error(
-      user.status === 'pending'
-        ? 'Account pending approval. Please wait for admin approval.'
-        : 'Account is not allowed to sign in.'
-    );
+  if (!user.emailVerified) {
+    const error = new Error('Please verify your email');
     error.statusCode = 403;
     throw error;
   }
 
-  if (!user.emailVerified) {
-    const error = new Error('Email verification is required before sign in.');
+  if (user.status && user.status !== 'approved') {
+    const error = new Error(
+      user.status === 'pending'
+        ? 'Waiting for admin approval'
+        : user.status === 'rejected'
+          ? 'Your account has been rejected. Contact the administrator.'
+          : 'Account is not allowed to sign in.'
+    );
     error.statusCode = 403;
     throw error;
   }
@@ -44,6 +48,7 @@ const attachAuthenticatedUser = async (req, token) => {
   }
 
   req.user = user;
+  req.isSuperAdmin = isSuperAdmin(user);
 };
 
 const getAuthToken = (req, { allowQueryToken = false } = {}) => {
@@ -121,6 +126,15 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
+    if (isSuperAdmin(req.user)) {
+      req.permissions = sanitizePermissions('admin', {
+        ...DEFAULT_ROLE_PERMISSIONS.admin,
+        canManagePermissions: true,
+        canManageUsers: true,
+      });
+      return next();
+    }
+
     const permissionDoc = await Permission.getRolePermissions(req.user.role);
     const permissions = sanitizePermissions(
       req.user.role,
@@ -141,3 +155,5 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
     next(error);
   }
 };
+
+exports.isSuperAdmin = isSuperAdmin;

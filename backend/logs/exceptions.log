@@ -690,3 +690,293 @@ Error: listen EADDRINUSE: address already in use :::8080
   "version": "4.0.0",
   "environment": "development"
 }
+[00:47:50] [31merror[39m: uncaughtException: Cannot find module '../utils/emailService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/authController.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../utils/emailService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/authController.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)
+    at Module._load (node:internal/modules/cjs/loader:1226:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js:2:88)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/authController.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../utils/emailService'\nRequire stack:\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/controllers/authController.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)\n    at Module._load (node:internal/modules/cjs/loader:1226:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)\n    at require (node:internal/modules/helpers:152:16)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js:2:88)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)",
+  "exception": true,
+  "date": "Fri Apr 10 2026 00:47:50 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 19258,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 104792064,
+      "heapTotal": 60948480,
+      "heapUsed": 39532400,
+      "external": 20779627,
+      "arrayBuffers": 18297512
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.51416015625,
+      3.150390625,
+      3.04150390625
+    ],
+    "uptime": 113938
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1420,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "defaultResolveImpl",
+      "line": 1058,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 22,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "resolveForCJSWithHooks",
+      "line": 1063,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 37,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1226,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 16,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 152,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 88,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/queues/emailQueue.js",
+      "function": null,
+      "line": 2,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[16:58:12] [31merror[39m: uncaughtException: Cannot find module '../controllers/userController'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../controllers/userController'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)
+    at Module._load (node:internal/modules/cjs/loader:1226:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js:3:78)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../controllers/userController'\nRequire stack:\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)\n    at Module._load (node:internal/modules/cjs/loader:1226:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)\n    at require (node:internal/modules/helpers:152:16)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js:3:78)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)",
+  "exception": true,
+  "date": "Fri Apr 10 2026 16:58:12 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 65116,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 118358016,
+      "heapTotal": 66912256,
+      "heapUsed": 43489584,
+      "external": 20811550,
+      "arrayBuffers": 18329434
+    }
+  },
+  "os": {
+    "loadavg": [
+      1.6728515625,
+      2.00439453125,
+      1.9931640625
+    ],
+    "uptime": 172160
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1420,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "defaultResolveImpl",
+      "line": 1058,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 22,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "resolveForCJSWithHooks",
+      "line": 1063,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 37,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1226,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 16,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 152,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 78,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/userRoutes.js",
+      "function": null,
+      "line": 3,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}

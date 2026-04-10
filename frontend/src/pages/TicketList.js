@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../utils/api';
-import { EmptyState } from '../components/ui';
+import { EmptyState, ConfirmDialog, PageHeader } from '../components/ui';
 import { TicketListSkeleton, TicketCardSkeleton } from '../components/skeletons/SkeletonComponents';
 import TicketCard from '../components/TicketCard';
 import { CATEGORIES, PRIORITIES, STATUSES } from '../utils/helpers';
 import { FiPlusCircle, FiSearch, FiFilter, FiX } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 /**
  * Memoized filter select — only re-renders when its own value changes
@@ -25,6 +27,7 @@ const FilterSelect = memo(({ value, onChange, options, placeholder }) => (
 const MemoTicketCard = memo(TicketCard);
 
 export default function TicketList() {
+  const { user } = useAuth();
   const [tickets,     setTickets]     = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -32,6 +35,8 @@ export default function TicketList() {
   const [filters,     setFilters]     = useState({ status: '', category: '', priority: '', search: '' });
   const [searchInput, setSearchInput] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [confirmState, setConfirmState] = useState({ open: false, bulk: false, loading: false, ticket: null });
 
   // Memoize the query string — only recompute when filters change
   const queryString = useMemo(() => {
@@ -82,6 +87,56 @@ export default function TicketList() {
     setSearchInput('');
   }, []);
 
+  const handleDeleteTicket = useCallback(async (ticket) => {
+    setConfirmState({ open: true, bulk: false, loading: false, ticket });
+  }, []);
+
+  const confirmDeleteTicket = useCallback(async () => {
+    if (!confirmState.ticket) return;
+    const previousTickets = tickets;
+    setConfirmState((current) => ({ ...current, loading: true }));
+    setTickets((current) => current.filter((entry) => entry._id !== confirmState.ticket._id));
+    setSelectedIds((current) => current.filter((id) => id !== confirmState.ticket._id));
+
+    try {
+      await API.delete(`/tickets/${confirmState.ticket._id}`);
+      toast.success('Ticket deleted');
+    } catch (error) {
+      setTickets(previousTickets);
+      toast.error(error.response?.data?.message || 'Failed to delete ticket');
+    } finally {
+      setConfirmState({ open: false, bulk: false, loading: false, ticket: null });
+    }
+  }, [confirmState.ticket, tickets]);
+
+  const handleSelectTicket = useCallback((ticketId, checked) => {
+    setSelectedIds((current) => (
+      checked ? [...new Set([...current, ticketId])] : current.filter((id) => id !== ticketId)
+    ));
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!selectedIds.length) return;
+    setConfirmState({ open: true, bulk: true, loading: false, ticket: null });
+  }, [selectedIds.length]);
+
+  const confirmBulkDelete = useCallback(async () => {
+    const previousTickets = tickets;
+    setConfirmState((current) => ({ ...current, loading: true }));
+    setTickets((current) => current.filter((ticket) => !selectedIds.includes(ticket._id)));
+    setSelectedIds([]);
+
+    try {
+      await API.delete('/tickets', { data: { ids: selectedIds } });
+      toast.success('Selected tickets deleted');
+    } catch (error) {
+      setTickets(previousTickets);
+      toast.error(error.response?.data?.message || 'Failed to delete selected tickets');
+    } finally {
+      setConfirmState({ open: false, bulk: false, loading: false, ticket: null });
+    }
+  }, [selectedIds, tickets]);
+
   // Memoize active filter count to avoid recalculating on every render
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter(Boolean).length,
@@ -92,16 +147,34 @@ export default function TicketList() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-gray-900">Support Tickets</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{pagination.total} ticket{pagination.total !== 1 ? 's' : ''} total</p>
-        </div>
-        <Link to="/tickets/new" className="btn-primary flex-shrink-0">
-          <FiPlusCircle size={15} /> New Ticket
-        </Link>
-      </div>
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.bulk ? 'Delete selected tickets' : 'Delete ticket'}
+        description={confirmState.bulk
+          ? `Delete ${selectedIds.length} selected ticket(s)? This action cannot be undone.`
+          : `Delete "${confirmState.ticket?.title || 'this ticket'}"? This action cannot be undone.`}
+        confirmLabel={confirmState.bulk ? 'Delete Selected' : 'Delete Ticket'}
+        loading={confirmState.loading}
+        onConfirm={confirmState.bulk ? confirmBulkDelete : confirmDeleteTicket}
+        onClose={() => setConfirmState({ open: false, bulk: false, loading: false, ticket: null })}
+      />
+      <PageHeader
+        title="Support Tickets"
+        description="Track support requests, triage issues, and manage open ticket workflows."
+        meta={`${pagination.total} ticket${pagination.total !== 1 ? 's' : ''} total`}
+        action={(
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedIds.length > 0 ? (
+              <button onClick={handleBulkDelete} className="btn-danger flex-shrink-0">
+                Delete Selected ({selectedIds.length})
+              </button>
+            ) : null}
+            <Link to="/tickets/new" className="btn-primary flex-shrink-0">
+              <FiPlusCircle size={15} /> New Ticket
+            </Link>
+          </div>
+        )}
+      />
 
       {/* Search + filter bar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -172,7 +245,16 @@ export default function TicketList() {
       ) : (
         <>
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {tickets.map(t => <MemoTicketCard key={t._id} ticket={t} />)}
+            {tickets.map((ticket) => (
+              <MemoTicketCard
+                key={ticket._id}
+                ticket={ticket}
+                canDelete={user?.role === 'admin' || ticket.user?._id === user?._id}
+                onDelete={handleDeleteTicket}
+                selected={selectedIds.includes(ticket._id)}
+                onSelect={handleSelectTicket}
+              />
+            ))}
             {/* Show skeleton cards while loading more */}
             {loadingMore && [...Array(3)].map((_, i) => <TicketCardSkeleton key={`sk-${i}`} />)}
           </div>

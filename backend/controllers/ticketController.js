@@ -52,8 +52,23 @@ exports.updateTicket = async (req, res, next) => {
 
 exports.deleteTicket = async (req, res, next) => {
   try {
-    await ticketService.deleteTicket(req.params.id, req.io);
+    await ticketService.deleteTicket(req.params.id, req.user, req.io);
     res.status(200).json({ success: true, message: 'Ticket deleted successfully' });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+exports.bulkDeleteTickets = async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    if (!ids.length) {
+      return res.status(400).json({ success: false, message: 'Select at least one ticket to delete' });
+    }
+
+    const result = await ticketService.bulkDeleteTickets(ids, req.user, req.io);
+    res.status(200).json({ success: true, ...result, message: 'Tickets deleted successfully' });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     next(error);

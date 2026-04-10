@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useTheme } from '../../context/ThemeContext';
 import { FiX, FiEdit3, FiTrash2, FiUsers, FiSave, FiSearch, FiUserPlus } from 'react-icons/fi';
 import { getRoleLabel } from '../../utils/helpers';
+import { ConfirmDialog } from '../ui';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Student' },
@@ -23,6 +24,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
   const [searchResults, setSearchResults] = useState([]);
   const [selectedRole, setSelectedRole] = useState('student');
   const [searching, setSearching] = useState(false);
+  const [confirmState, setConfirmState] = useState({ open: false, mode: '', userId: '', loading: false });
 
   useEffect(() => {
     setForm({
@@ -36,6 +38,7 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
     setSearchQuery('');
     setSearchResults([]);
     setSelectedRole('student');
+    setConfirmState({ open: false, mode: '', userId: '', loading: false });
   }, [group]);
 
   if (!isOpen || !group) return null;
@@ -122,8 +125,13 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
   };
 
   const handleRemoveMember = async (userId) => {
-    if (!window.confirm('Remove this member from the group?')) return;
+    setConfirmState({ open: true, mode: 'remove-member', userId, loading: false });
+  };
 
+  const confirmRemoveMember = async () => {
+    if (!confirmState.userId) return;
+    const userId = confirmState.userId;
+    setConfirmState((current) => ({ ...current, loading: true }));
     setLoading(true);
     try {
       await API.delete(`/chat-groups/${group._id}/members/${userId}`);
@@ -138,12 +146,16 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
       toast.error(err.response?.data?.message || 'Failed to remove member');
     } finally {
       setLoading(false);
+      setConfirmState({ open: false, mode: '', userId: '', loading: false });
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete "${group.name}"? This action cannot be undone.`)) return;
+    setConfirmState({ open: true, mode: 'delete-group', userId: '', loading: false });
+  };
 
+  const confirmDeleteGroup = async () => {
+    setConfirmState((current) => ({ ...current, loading: true }));
     setLoading(true);
     try {
       await API.delete(`/chat-groups/${group._id}`);
@@ -154,11 +166,23 @@ export default function GroupInfoModal({ group, isOpen, onClose, canManageGroup,
       toast.error('Failed to delete group');
     } finally {
       setLoading(false);
+      setConfirmState({ open: false, mode: '', userId: '', loading: false });
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.mode === 'delete-group' ? 'Delete group' : 'Remove member'}
+        description={confirmState.mode === 'delete-group'
+          ? `Are you sure you want to delete "${group.name}"? This action cannot be undone.`
+          : 'Are you sure you want to remove this member from the group?'}
+        confirmLabel={confirmState.mode === 'delete-group' ? 'Delete Group' : 'Remove Member'}
+        loading={confirmState.loading}
+        onConfirm={confirmState.mode === 'delete-group' ? confirmDeleteGroup : confirmRemoveMember}
+        onClose={() => setConfirmState({ open: false, mode: '', userId: '', loading: false })}
+      />
       <div className={`rounded-2xl max-w-md w-full shadow-xl ${
         isDark ? 'bg-slate-950 border border-slate-800' : 'bg-white'
       }`}>

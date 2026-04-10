@@ -8,6 +8,12 @@ const sectionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      default: null,
+      index: true,
+    },
     academicYear: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicYear',

@@ -137,7 +137,7 @@ const createGroup = async ({ name, department, year, section, description, creat
   const normalizedDescription = normalizeGroupValue(description);
 
   // Check duplicate group name
-  const existing = await Group.findOne({ name: normalizedName, isActive: true });
+  const existing = await Group.findOne({ name: normalizedName, createdBy: creatorId, isActive: true });
   if (existing) {
     const err = new Error(`A group named "${name}" already exists`);
     err.statusCode = 400;

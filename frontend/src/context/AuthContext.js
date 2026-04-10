@@ -78,6 +78,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const googleLogin = async (credential) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    try {
+      const res = await API.post('/auth/google', { credential });
+      dispatch({ type: 'AUTH_SUCCESS', payload: res.data });
+      return { success: true, data: res.data?.user || null };
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Google sign-in failed';
+      dispatch({ type: 'SET_ERROR', payload: msg });
+      return {
+        success: false,
+        message: msg,
+        data: err.response?.data?.data || null,
+      };
+    }
+  };
+
   const register = async (formData) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
@@ -86,6 +103,7 @@ export const AuthProvider = ({ children }) => {
       return {
         success: true,
         message: res.data?.message || 'Registration submitted for approval',
+        data: res.data?.data || null,
       };
     } catch (err) {
       const msg = err.response?.data?.message || 'Registration failed';
@@ -108,7 +126,7 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (user) => dispatch({ type: 'UPDATE_USER', payload: user });
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ ...state, login, googleLogin, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,284 +1,265 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
-import { PageHeader, FullPageSpinner, EmptyState, Avatar, Alert } from '../components/ui';
+import { PageHeader, FullPageSpinner, EmptyState, Avatar, ConfirmDialog } from '../components/ui';
 import { getRoleColor, getRoleLabel, formatDate } from '../utils/helpers';
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiUpload, FiChevronRight } from 'react-icons/fi';
 
-const ROLES = ['student', 'faculty', 'staff', 'admin'];
+const initialFilters = {
+  role: '',
+  department: '',
+  status: '',
+  emailVerified: '',
+  isActive: '',
+  expiryState: '',
+  joinedFrom: '',
+  joinedTo: '',
+};
 
-function UserModal({ user, onClose, onSaved }) {
-  const [form, setForm] = useState(
-    user
-      ? {
-          name: user.name,
-          email: user.email,
-          role: user.role === 'agent' ? 'staff' : user.role,
-          department: user.department || '',
-          year: user.year || '',
-          section: user.section || '',
-          isActive: user.isActive,
-          status: user.status || 'approved',
-          expiryDate: user.expiryDate ? new Date(user.expiryDate).toISOString().slice(0, 10) : '',
-        }
-      : {
-          name: '',
-          email: '',
-          password: '',
-          role: 'staff',
-          department: '',
-          year: '',
-          section: '',
-          status: 'approved',
-          expiryDate: '',
-        }
-  );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (user) {
-        await API.put(`/users/${user._id}`, form);
-        toast.success('User updated');
-      } else {
-        await API.post('/users', form);
-        toast.success('User created');
-      }
-      onSaved();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save user');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-lg animate-fade-in">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">{user ? 'Edit User' : 'Add New User'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><FiX size={20} /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && <Alert type="error" message={error} />}
-          <div>
-            <label className="label">Full Name</label>
-            <input className="input" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Full name" required />
-          </div>
-          <div>
-            <label className="label">Email</label>
-            <input type="email" className="input" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="Email address" required />
-          </div>
-          {!user && (
-            <div>
-              <label className="label">Password</label>
-              <input type="password" className="input" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} placeholder="Minimum 6 characters" required minLength={6} />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Role</label>
-              <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                {ROLES.map(r => <option key={r} value={r}>{getRoleLabel(r)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Department</label>
-              <input className="input" value={form.department} onChange={e => setForm(f => ({...f, department: e.target.value}))} placeholder="e.g. IT Dept" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Year</label>
-              <input className="input" value={form.year} onChange={e => setForm(f => ({...f, year: e.target.value}))} placeholder="e.g. 2" />
-            </div>
-            <div>
-              <label className="label">Section</label>
-              <input className="input" value={form.section} onChange={e => setForm(f => ({...f, section: e.target.value}))} placeholder="e.g. A" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Status</label>
-              <select className="input" value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
-                <option value="approved">Approved</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
-                <option value="suspended">Suspended</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Expiry Date</label>
-              <input type="date" className="input" value={form.expiryDate} onChange={e => setForm(f => ({...f, expiryDate: e.target.value}))} />
-            </div>
-          </div>
-          {user && (
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({...f, isActive: e.target.checked}))} className="rounded" />
-              Account Active
-            </label>
-          )}
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-              {loading ? 'Saving...' : <><FiCheck size={14} /> Save</>}
-            </button>
-            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
+const FILTER_STORAGE_KEY = 'identity-access-filters-v1';
 
 export default function UsersPage() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [roleFilter, setRoleFilter] = useState('');
-  const [search, setSearch] = useState('');
-  const [modal, setModal] = useState(null); // null | 'create' | user object
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
+  const persistedState = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, []);
+  const [search, setSearch] = useState(persistedState?.search || '');
+  const [filters, setFilters] = useState(() => ({ ...initialFilters, ...(persistedState?.filters || {}) }));
+  const [filterMeta, setFilterMeta] = useState({ roles: [], departments: [] });
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: persistedState?.currentPage || 1 });
+  const [confirmState, setConfirmState] = useState({ open: false, user: null, loading: false });
+  const [showFilters, setShowFilters] = useState(Boolean(persistedState?.showFilters));
 
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page, limit: 15 });
-      if (roleFilter) params.append('role', roleFilter);
-      if (search)     params.append('search', search);
+      const params = new URLSearchParams({ page, limit: 8 });
+      if (search) params.append('search', search);
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          params.append(key, value);
+        }
+      });
       const res = await API.get(`/users?${params}`);
-      setUsers(res.data.data);
+      setUsers(res.data.data || []);
       setPagination({ total: res.data.total, totalPages: res.data.totalPages, currentPage: res.data.currentPage });
-    } catch {} finally { setLoading(false); }
-  }, [roleFilter, search]);
+      setFilterMeta({
+        roles: res.data?.meta?.roles || [],
+        departments: res.data?.meta?.departments || [],
+      });
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, search]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchUsers(pagination.currentPage); }, [fetchUsers, pagination.currentPage]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this user?')) return;
+  useEffect(() => {
+    sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+      search,
+      filters,
+      currentPage: pagination.currentPage,
+      showFilters,
+    }));
+  }, [filters, pagination.currentPage, search, showFilters]);
+
+  const requestDelete = (user) => setConfirmState({ open: true, user, loading: false });
+
+  const handleDelete = async () => {
+    if (!confirmState.user) return;
+    setConfirmState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/users/${id}`);
+      await API.delete(`/users/${confirmState.user.systemId}`);
       toast.success('User deleted');
-      fetchUsers();
-    } catch (err) { toast.error(err.response?.data?.message || 'Delete failed'); }
+      setConfirmState({ open: false, user: null, loading: false });
+      await fetchUsers(pagination.currentPage);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Delete failed');
+      setConfirmState((current) => ({ ...current, loading: false }));
+    }
+  };
+
+  const updateFilter = (key, value) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+    setPagination((current) => ({ ...current, currentPage: 1 }));
+  };
+
+  const resetFilters = () => {
+    setFilters(initialFilters);
+    setSearch('');
+    setShowFilters(false);
+    setPagination((current) => ({ ...current, currentPage: 1 }));
+    sessionStorage.removeItem(FILTER_STORAGE_KEY);
   };
 
   return (
-    <div>
-      {modal && (
-        <UserModal
-          user={modal === 'create' ? null : modal}
-          onClose={() => setModal(null)}
-          onSaved={() => { setModal(null); fetchUsers(); }}
-        />
-      )}
+    <div className="space-y-6">
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Delete user"
+        description={`Are you sure you want to delete ${confirmState.user?.name || 'this user'}? This will permanently remove the user from the database.`}
+        confirmLabel="Delete User"
+        loading={confirmState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setConfirmState({ open: false, user: null, loading: false })}
+      />
 
       <PageHeader
-        title="User Management"
-        subtitle={`${pagination.total} users total`}
+        title="Identity & Access"
+        description="Manage verified identities, lifecycle controls, and access-ready user records across the ERP."
+        meta={`${pagination.total} managed identit${pagination.total === 1 ? 'y' : 'ies'}`}
         action={
-          <button onClick={() => setModal('create')} className="btn-primary">
-            <FiPlus size={16} /> Add User
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/users/new" className="btn-primary">
+              <FiPlus size={16} /> Provision User
+            </Link>
+            <Link to="/users/import" className="btn-secondary">
+              <FiUpload size={16} /> Import CSV
+            </Link>
+          </div>
         }
       />
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-          <input
-            className="input pl-9"
-            placeholder="Search by name, email, or ID..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="space-y-4">
+        <div className="card p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+              <input className="input pl-9" placeholder="Search by system ID, name, or email..." value={search} onChange={e => { setSearch(e.target.value); setPagination((current) => ({ ...current, currentPage: 1 })); }} />
+            </div>
+            <select className="input lg:w-44" value={filters.role} onChange={e => updateFilter('role', e.target.value)}>
+              <option value="">All Roles</option>
+              {filterMeta.roles.map((role) => <option key={role} value={role}>{getRoleLabel(role)}</option>)}
+            </select>
+            <select className="input lg:w-48" value={filters.department} onChange={e => updateFilter('department', e.target.value)}>
+              <option value="">All Departments</option>
+              {filterMeta.departments.map((department) => <option key={department} value={department}>{department}</option>)}
+            </select>
+            <select className="input lg:w-40" value={filters.status} onChange={e => updateFilter('status', e.target.value)}>
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            <div className="flex gap-2 lg:ml-auto">
+              <button type="button" onClick={() => setShowFilters((current) => !current)} className="btn-secondary text-xs">
+                {showFilters ? 'Hide Filters' : 'More Filters'}
+              </button>
+              <button type="button" onClick={resetFilters} className="btn-secondary text-xs">
+                Reset
+              </button>
+            </div>
+          </div>
+          {showFilters ? (
+            <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 md:grid-cols-2 xl:grid-cols-4">
+              <select className="input" value={filters.emailVerified} onChange={e => updateFilter('emailVerified', e.target.value)}>
+                <option value="">Verification</option>
+                <option value="true">Verified</option>
+                <option value="false">Unverified</option>
+              </select>
+              <select className="input" value={filters.isActive} onChange={e => updateFilter('isActive', e.target.value)}>
+                <option value="">Activity</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+              <select className="input" value={filters.expiryState} onChange={e => updateFilter('expiryState', e.target.value)}>
+                <option value="">Expiry</option>
+                <option value="none">No expiry</option>
+                <option value="expired">Expired</option>
+                <option value="expiring">Expiring soon</option>
+                <option value="active">Long-term access</option>
+              </select>
+              <div className="text-xs text-gray-500 flex items-center">Joined between</div>
+              <input className="input" type="date" value={filters.joinedFrom} onChange={e => updateFilter('joinedFrom', e.target.value)} />
+              <input className="input" type="date" value={filters.joinedTo} onChange={e => updateFilter('joinedTo', e.target.value)} />
+            </div>
+          ) : null}
         </div>
-        <select className="input w-auto" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-          <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{getRoleLabel(r)}</option>)}
-        </select>
-      </div>
 
-      {loading ? <FullPageSpinner /> : users.length === 0 ? (
-        <EmptyState icon="👤" title="No users found" description="Try adjusting your filters" />
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {['User', 'Role', 'Department', 'Status', 'Joined', 'Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {users.map(u => (
-                  <tr key={u._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={u.name} size="sm" />
-                        <div>
-                          <p className="font-medium text-gray-900">{u.name}</p>
-                          <p className="text-xs text-gray-400">{u.email}</p>
-                          {u.enrollmentId && <p className="text-xs text-gray-400 font-mono">{u.enrollmentId}</p>}
+        {loading ? <FullPageSpinner /> : users.length === 0 ? (
+          <EmptyState icon="👤" title="No users found" description="Provision identities or import them with CSV." />
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {users.map((u) => (
+                <div
+                  key={u.systemId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/admin/users/${u.systemId}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') navigate(`/admin/users/${u.systemId}`);
+                  }}
+                  className="card flex min-h-[220px] cursor-pointer flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:shadow-card-hover"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar user={u} size="md" />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-gray-900">{u.name}</p>
+                          <p className="truncate text-xs text-gray-400">{u.email}</p>
+                          <p className="mt-1 text-xs font-mono text-gray-500">{u.systemId}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
+                      <FiChevronRight size={16} className="mt-1 flex-shrink-0 text-gray-300" />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <span className={`badge ${getRoleColor(u.role)}`}>{getRoleLabel(u.role)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {[u.department, u.year && `Year ${u.year}`, u.section && `Sec ${u.section}`].filter(Boolean).join(' · ') || '—'}
-                    </td>
-                    <td className="px-4 py-3">
+                      {u.adminTier === 'super_admin' ? <span className="badge bg-amber-100 text-amber-700">Super Admin</span> : null}
+                    </div>
+
+                    <div className="mt-4 space-y-2 text-sm text-gray-500">
+                      <p>{[u.department, u.year && `Year ${u.year}`, u.section && `Section ${u.section}`].filter(Boolean).join(' · ') || 'No academic mapping'}</p>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                          {u.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                        {u.status ? (
-                          <span className={`badge ${
-                            u.status === 'approved'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : u.status === 'pending'
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {u.status}
-                          </span>
-                        ) : null}
+                        <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
+                        <span className={`badge ${u.emailVerified ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{u.emailVerified ? 'Verified' : 'Unverified'}</span>
+                        <span className={`badge ${u.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : u.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{u.status}</span>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                    <div className="text-xs text-gray-400">
                       <div>{formatDate(u.createdAt)}</div>
                       {u.expiryDate ? <div className="mt-1">Expires {formatDate(u.expiryDate)}</div> : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setModal(u)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
-                          <FiEdit2 size={14} />
-                        </button>
-                        <button onClick={() => handleDelete(u._id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                          <FiTrash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-center gap-2 p-4 border-t border-gray-100">
-              <button onClick={() => fetchUsers(pagination.currentPage - 1)} disabled={pagination.currentPage === 1} className="btn-secondary text-xs">Previous</button>
-              <span className="text-xs text-gray-500 self-center">Page {pagination.currentPage} of {pagination.totalPages}</span>
-              <button onClick={() => fetchUsers(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages} className="btn-secondary text-xs">Next</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/users/${u.systemId}/edit`} onClick={(event) => event.stopPropagation()} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
+                        <FiEdit2 size={14} />
+                      </Link>
+                      <button onClick={(event) => { event.stopPropagation(); requestDelete(u); }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <FiTrash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      )}
+
+            {pagination.totalPages > 1 ? (
+              <div className="flex items-center justify-end gap-3">
+                <button onClick={() => fetchUsers(pagination.currentPage - 1)} disabled={pagination.currentPage === 1} className="btn-secondary text-xs">Previous</button>
+                <span className="text-xs text-gray-500">Page {pagination.currentPage} of {pagination.totalPages}</span>
+                <button onClick={() => fetchUsers(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages} className="btn-secondary text-xs">Next Page</button>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
     </div>
   );
 }

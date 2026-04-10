@@ -1,5 +1,5 @@
 import React from 'react';
-import { getCategoryIcon } from '../utils/helpers';
+import { getAvatarSource, getAvatarTone, getCategoryIcon, getInitials } from '../utils/helpers';
 
 export const StatusBadge = ({ status }) => {
   const map = {
@@ -48,15 +48,36 @@ export const EmptyState = ({ icon, title, description, action }) => (
   </div>
 );
 
-export const PageHeader = ({ title, subtitle, action }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-    <div>
-      <h1 className="font-display text-2xl font-bold text-gray-900">{title}</h1>
-      {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+export const PageHeader = ({ title, subtitle, description, meta, action }) => {
+  const supportingCopy = description || subtitle;
+  const metaItems = Array.isArray(meta) ? meta.filter(Boolean) : meta ? [meta] : [];
+
+  return (
+    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1">
+        {title ? <h1 className="sr-only">{title}</h1> : null}
+        {supportingCopy ? (
+          <p className="max-w-3xl font-display text-lg font-semibold leading-8 text-gray-900 sm:text-xl">
+            {supportingCopy}
+          </p>
+        ) : null}
+        {metaItems.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            {metaItems.map((item, index) => (
+              <span
+                key={`${typeof item === 'string' ? item : 'meta'}-${index}`}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {action ? <div className="flex-shrink-0 self-start">{action}</div> : null}
     </div>
-    {action && <div className="flex-shrink-0">{action}</div>}
-  </div>
-);
+  );
+};
 
 export const StatCard = ({ label, value, icon, gradient, trend }) => (
   <div className={`card p-5 overflow-hidden relative group hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200`}>
@@ -74,12 +95,39 @@ export const StatCard = ({ label, value, icon, gradient, trend }) => (
   </div>
 );
 
-export const Avatar = ({ name = '', size = 'sm' }) => {
-  const sizeMap = { sm: 'w-7 h-7 text-xs', md: 'w-9 h-9 text-sm', lg: 'w-12 h-12 text-base' };
-  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+export const Avatar = ({ user, name = '', src = '', avatarChoice = '', size = 'sm', className = '' }) => {
+  const sizeMap = {
+    sm: 'w-8 h-8 text-xs rounded-full',
+    md: 'w-10 h-10 text-sm rounded-full',
+    lg: 'w-14 h-14 text-base rounded-full',
+    xl: 'w-20 h-20 text-xl rounded-full',
+  };
+  const resolvedName = name || user?.name || '';
+  const resolvedSrc = src || getAvatarSource(user || { profileImage: null, avatar: null, avatarChoice });
+  const tone = getAvatarTone(user?.systemId || user?.email || resolvedName);
+
+  if (resolvedSrc) {
+    return (
+      <div
+        className={`${sizeMap[size] || sizeMap.sm} p-1 shadow-sm flex-shrink-0 ${className}`}
+        style={{ backgroundColor: '#ffffff' }}
+      >
+        <img
+          src={resolvedSrc}
+          alt={resolvedName || 'Avatar'}
+          loading="lazy"
+          className="h-full w-full rounded-full object-contain"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={`rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold flex-shrink-0 shadow-sm ${sizeMap[size]}`}>
-      {initials}
+    <div
+      className={`${sizeMap[size] || sizeMap.sm} flex items-center justify-center font-bold flex-shrink-0 shadow-sm ${className}`}
+      style={{ backgroundColor: '#ffffff', color: tone.fg }}
+    >
+      {getInitials(resolvedName || 'U')}
     </div>
   );
 };
@@ -97,6 +145,41 @@ export const Alert = ({ type = 'error', message }) => {
     <div className={`border rounded-xl px-4 py-3 text-sm flex items-start gap-2 ${map[type]}`}>
       <span>{icons[type]}</span>
       <span>{message}</span>
+    </div>
+  );
+};
+
+export const ConfirmDialog = ({
+  open,
+  title = 'Confirm action',
+  description = 'Are you sure you want to continue?',
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  tone = 'danger',
+  loading = false,
+  onConfirm,
+  onClose,
+}) => {
+  if (!open) return null;
+
+  const toneClasses = tone === 'danger'
+    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-200'
+    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h3 className="font-display text-xl font-bold text-gray-900">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-gray-500">{description}</p>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={loading} className="btn-secondary justify-center">
+            {cancelLabel}
+          </button>
+          <button type="button" onClick={onConfirm} disabled={loading} className={`btn-primary justify-center ${toneClasses}`}>
+            {loading ? 'Please wait...' : confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

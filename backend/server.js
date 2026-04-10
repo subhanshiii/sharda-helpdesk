@@ -10,6 +10,7 @@ const connectDB    = require('./config/db');
 const { initSocket } = require('./socket/socketManager');
 const errorHandler = require('./middleware/errorHandler');
 const { ensureInitialAdmin } = require('./utils/bootstrapAdmin');
+const { backfillMissingSystemIds } = require('./services/userProvisioningService');
 
 // Load security middleware (graceful if packages missing)
 let helmetConfig = (req,res,next) => next();
@@ -56,7 +57,7 @@ app.use(helmetConfig);
 app.use(cors({
   origin:         process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials:    true,
-  methods:        ['GET','POST','PUT','DELETE','OPTIONS'],
+  methods:        ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','X-Correlation-ID'],
 }));
 app.use(express.json({ limit: '10kb' }));
@@ -75,6 +76,7 @@ app.use(trackRequest);
 
 // ── Routes ─────────────────────────────────────────────
 app.use('/api/auth',              require('./routes/authRoutes'));
+app.use('/api/verify-email',      require('./routes/emailVerificationRoutes'));
 app.use('/api/tickets',           require('./routes/ticketRoutes'));
 app.use('/api/users',             require('./routes/userRoutes'));
 app.use('/api/academics',         require('./routes/academicRoutes'));
@@ -117,6 +119,7 @@ const PORT = process.env.PORT || 8080;
 const startServer = async () => {
   try {
     await connectDB();
+    await backfillMissingSystemIds();
     await ensureInitialAdmin(logger);
 
     server.listen(PORT, () => {

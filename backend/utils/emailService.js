@@ -1,13 +1,124 @@
 const { Resend } = require('resend');
+const logger = require('./logger');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.FROM_EMAIL || 'onboarding@resend.dev';
+// FIXED: support SMTP for Gmail delivery while keeping Resend as a fallback.
+let nodemailer = null;
+try {
+  // FIXED: load nodemailer only when available so local installs without it do not crash at require time.
+  nodemailer = require('nodemailer');
+} catch (error) {
+  nodemailer = null;
+}
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const getEmailUser = () => String(process.env.EMAIL_USER || '').trim();
+const getEmailPass = () => String(process.env.EMAIL_PASS || '').replace(/\s+/g, '').trim();
+const getFromEmail = () => String(process.env.FROM_EMAIL || process.env.EMAIL_FROM || getEmailUser() || 'onboarding@resend.dev').trim();
 const APP_NAME = 'Sharda University Helpdesk';
+
+const getSmtpConfig = () => {
+  // FIXED: allow Gmail SMTP/app-password delivery through env config.
+  const emailUser = getEmailUser();
+  const emailPass = getEmailPass();
+
+  if (
+    !emailUser ||
+    !emailPass ||
+    emailUser === 'your_email@gmail.com' ||
+    emailPass === 'your_app_password' ||
+    emailPass === 'your_16_char_app_password'
+  ) {
+    return null;
+  }
+
+  return {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT || 587),
+    secure: Number(process.env.EMAIL_PORT || 587) === 465,
+    auth: {
+      user: emailUser,
+      pass: emailPass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+};
+
+const getTransporter = () => {
+  const smtpConfig = getSmtpConfig();
+  if (!smtpConfig || !nodemailer) {
+    return null;
+  }
+
+  return nodemailer.createTransport(smtpConfig);
+};
+
+const sendEmail = async ({ to, subject, html }) => {
+  const transporter = getTransporter();
+  const smtpConfig = getSmtpConfig();
+
+  logger.info('Email delivery attempt', {
+    to,
+    subject,
+    smtpConfigured: Boolean(smtpConfig),
+    smtpUser: smtpConfig ? getEmailUser() : null,
+    smtpPasswordPresent: Boolean(getEmailPass()),
+    fromEmail: getFromEmail(),
+    resendConfigured: Boolean(resend),
+    nodemailerAvailable: Boolean(nodemailer),
+  });
+
+  if (transporter) {
+    // FIXED: prefer SMTP when configured so Gmail inbox delivery can work with app passwords.
+    try {
+      const info = await transporter.sendMail({
+        from: getFromEmail(),
+        to,
+        subject,
+        html,
+      });
+      logger.info('Email sent via SMTP', { to, subject, messageId: info.messageId });
+      return { success: true, provider: 'smtp', messageId: info.messageId };
+    } catch (error) {
+      logger.error('SMTP email failed', {
+        to,
+        subject,
+        smtpUser: getEmailUser(),
+        fromEmail: getFromEmail(),
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  if (resend) {
+    // FIXED: keep Resend as a working fallback when SMTP is not configured.
+    const response = await resend.emails.send({
+      from: getFromEmail(),
+      to,
+      subject,
+      html,
+    });
+    if (response?.error) {
+      logger.error('Resend email failed', {
+        to,
+        subject,
+        error: response.error,
+      });
+      throw new Error(response.error.message || 'Resend failed to deliver the email');
+    }
+
+    logger.info('Email sent via Resend', { to, subject, messageId: response?.data?.id });
+    return { success: true, provider: 'resend', messageId: response?.data?.id || null };
+  }
+
+  throw new Error('No email provider configured');
+};
 
 exports.sendEmailVerificationEmail = async ({ toEmail, userName, verificationLink }) => {
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendEmail({
       to: toEmail,
       subject: `Verify Your Email — ${APP_NAME}`,
       html: `
@@ -48,17 +159,14 @@ exports.sendEmailVerificationEmail = async ({ toEmail, userName, verificationLin
       `,
     });
     return { success: true };
-  } catch (err) {
-    console.error('❌ Email verification send failed:', err);
-    return { success: false, error: err.message };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 };
 
-// ── Forgot Password Email ──────────────────────────────
 exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendEmail({
       to: toEmail,
       subject: `Reset Your Password — ${APP_NAME}`,
       html: `
@@ -72,7 +180,6 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
           <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
             <tr><td align="center">
               <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
-                <!-- Header -->
                 <tr>
                   <td style="background:linear-gradient(135deg,#0c1654,#1e3a8a,#1e40af);padding:32px 40px;text-align:center;">
                     <div style="width:4px;height:3px;background:linear-gradient(90deg,#f59e0b,#ec4899,#06b6d4,#10b981);margin-bottom:20px;"></div>
@@ -80,7 +187,6 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
                     <p style="color:rgba(147,197,253,0.8);margin:4px 0 0;font-size:13px;">Helpdesk Portal</p>
                   </td>
                 </tr>
-                <!-- Body -->
                 <tr>
                   <td style="padding:40px;">
                     <h2 style="color:#1e293b;font-size:20px;font-weight:700;margin:0 0 8px;">Reset Your Password 🔐</h2>
@@ -89,7 +195,7 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
                       Click the button below to set a new password.
                     </p>
                     <div style="text-align:center;margin:32px 0;">
-                      <a href="${resetLink}" 
+                      <a href="${resetLink}"
                          style="display:inline-block;background:linear-gradient(135deg,#1e40af,#2563eb);color:white;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;box-shadow:0 4px 14px rgba(30,58,138,0.35);">
                         Reset My Password →
                       </a>
@@ -105,7 +211,6 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
                     </p>
                   </td>
                 </tr>
-                <!-- Footer -->
                 <tr>
                   <td style="background:#f8faff;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
                     <p style="color:#94a3b8;font-size:12px;margin:0;">
@@ -120,19 +225,15 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
         </html>
       `,
     });
-    console.log(`✅ Password reset email sent to ${toEmail}`);
     return { success: true };
-  } catch (err) {
-    console.error('❌ Email send failed:', err);
-    return { success: false, error: err.message };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 };
 
-// ── Ticket Created Email ───────────────────────────────
 exports.sendTicketCreatedEmail = async ({ toEmail, userName, ticketId, ticketTitle, ticketLink }) => {
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendEmail({
       to: toEmail,
       subject: `Ticket ${ticketId} Created — ${APP_NAME}`,
       html: `
@@ -164,8 +265,9 @@ exports.sendTicketCreatedEmail = async ({ toEmail, userName, ticketId, ticketTit
       `,
     });
     return { success: true };
-  } catch (err) {
-    console.error('❌ Ticket email failed:', err);
-    return { success: false };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 };
+
+exports.sendEmailNow = sendEmail;

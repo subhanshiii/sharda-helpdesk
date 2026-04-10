@@ -85,30 +85,45 @@ emailQueue.on('stalled', (job) => {
  * Returns immediately — email sends in background
  */
 const queuePasswordResetEmail = async (data) => {
-  const job = await emailQueue.add(JOB_TYPES.PASSWORD_RESET, data, {
-    priority: 1, // High priority — user is waiting for this
-  });
-  console.log(`📬 Password reset email queued — job id: ${job.id}`);
-  return job;
+  try {
+    const job = await emailQueue.add(JOB_TYPES.PASSWORD_RESET, data, {
+      priority: 1, // High priority — user is waiting for this
+    });
+    console.log(`📬 Password reset email queued — job id: ${job.id}`);
+    return job;
+  } catch (error) {
+    // FIXED: fall back to direct send when Redis/Bull is unavailable so auth email flows still work.
+    return sendPasswordResetEmail(data);
+  }
 };
 
 const queueEmailVerificationEmail = async (data) => {
-  const job = await emailQueue.add(JOB_TYPES.EMAIL_VERIFICATION, data, {
-    priority: 1,
-  });
-  return job;
+  try {
+    const job = await emailQueue.add(JOB_TYPES.EMAIL_VERIFICATION, data, {
+      priority: 1,
+    });
+    return job;
+  } catch (error) {
+    // FIXED: send verification email immediately if queueing fails so signup verification is not blocked.
+    return sendEmailVerificationEmail(data);
+  }
 };
 
 /**
  * Add ticket creation notification to queue
  */
 const queueTicketCreatedEmail = async (data) => {
-  const job = await emailQueue.add(JOB_TYPES.TICKET_CREATED, data, {
-    priority: 2,
-    delay:    1000, // Small delay — don't spam if user creates multiple tickets
-  });
-  console.log(`📬 Ticket created email queued — job id: ${job.id}`);
-  return job;
+  try {
+    const job = await emailQueue.add(JOB_TYPES.TICKET_CREATED, data, {
+      priority: 2,
+      delay:    1000, // Small delay — don't spam if user creates multiple tickets
+    });
+    console.log(`📬 Ticket created email queued — job id: ${job.id}`);
+    return job;
+  } catch (error) {
+    // FIXED: avoid silently dropping ticket emails when the queue backend is down.
+    return sendTicketCreatedEmail(data);
+  }
 };
 
 /**

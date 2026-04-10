@@ -30,7 +30,7 @@ const isLockedPermission = (role, permissionKey) => (
 );
 
 export default function PermissionsPage() {
-  const { rolePermissions, availablePermissions, loading, updateRolePermissions } = usePermissions();
+  const { rolePermissions, availablePermissions, loading, updateRolePermissions, isSuperAdmin } = usePermissions();
   const [drafts, setDrafts] = useState({});
   const [savingRole, setSavingRole] = useState('');
 
@@ -85,12 +85,14 @@ export default function PermissionsPage() {
     <div>
       <PageHeader
         title="Permissions"
-        subtitle="Control feature access for each role without changing code."
+        subtitle={isSuperAdmin ? 'Control feature access for each role from the super admin console.' : 'View the role permission matrix managed by the super admin.'}
       />
 
       <Alert
         type="info"
-        message="These permissions are enforced on the backend, so route guards and buttons stay aligned with actual access."
+        message={isSuperAdmin
+          ? 'These permissions are enforced on the backend. Super admin changes update the entire ERP access model.'
+          : 'These permissions are enforced on the backend. Only the super admin can change role access.'}
       />
 
       <div className="card overflow-hidden mt-4">
@@ -133,7 +135,7 @@ export default function PermissionsPage() {
                             type="checkbox"
                             className="sr-only"
                             checked={Boolean(draft[permissionKey])}
-                            disabled={isLockedPermission(role, permissionKey)}
+                            disabled={isLockedPermission(role, permissionKey) || !isSuperAdmin}
                             onChange={() => handleToggle(role, permissionKey, permissions)}
                           />
                           <span
@@ -152,14 +154,18 @@ export default function PermissionsPage() {
                       </td>
                     ))}
                     <td className="px-4 py-4 text-right">
-                      <button
-                        onClick={() => handleSave(role, permissions)}
-                        disabled={!isDirty || isSaving}
-                        className="btn-primary"
-                      >
-                        <FiSave size={14} />
-                        {isSaving ? 'Saving...' : 'Save'}
-                      </button>
+                      {isSuperAdmin ? (
+                        <button
+                          onClick={() => handleSave(role, permissions)}
+                          disabled={!isDirty || isSaving}
+                          className="btn-primary"
+                        >
+                          <FiSave size={14} />
+                          {isSaving ? 'Saving...' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-xs font-medium text-gray-400">Super admin only</span>
+                      )}
                     </td>
                   </tr>
                 );

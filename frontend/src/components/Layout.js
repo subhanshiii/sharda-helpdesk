@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import NotificationBell from "./NotificationBell";
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionContext';
-import { getInitials, getRoleColor, getRoleLabel } from '../utils/helpers';
+import { getRoleLabel } from '../utils/helpers';
 import { useTheme } from '../context/ThemeContext';
+import { Avatar } from './ui';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
-  FiHome, FiList, FiUsers, FiUser,
-  FiLogOut, FiMenu, FiX, FiChevronRight,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers,
+  FiHome, FiList, FiUsers,
+  FiLogOut, FiMenu, FiX, FiChevronRight, FiArrowLeft,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers, FiUser,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -38,17 +39,45 @@ const SectionLabel = ({ label }) => (
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSuperAdmin } = usePermissions();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+  const footerNameRef = useRef(null);
+  const [footerNameStyle, setFooterNameStyle] = useState({
+    fontSize: '14px',
+    lineHeight: 1.1,
+    letterSpacing: '-0.01em',
+  });
 
   const handleLogout = () => { logout(); navigate('/login'); };
   const closeSidebar = () => setSidebarOpen(false);
+  const openProfilePage = () => { setProfileMenuOpen(false); navigate('/profile'); };
+  const handleBackNavigation = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/dashboard');
+  };
   const canAccessAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
     || hasPermission('canManageAssignments')
     || hasPermission('canSubmitAssignments');
+  const canAccessTimetable = ['student', 'faculty', 'admin'].includes(user?.role) || hasPermission('canManageTimetable');
+  const canAccessAttendance = ['student', 'faculty', 'admin'].includes(user?.role) || hasPermission('canMarkAttendance');
+  const footerDisplayName = user?.name || 'Unknown user';
+  const footerRoleTagStyle = user?.adminTier === 'super_admin'
+    ? { backgroundColor: '#fef3c7', color: '#b45309' }
+    : user?.role === 'admin'
+      ? { backgroundColor: '#dbeafe', color: '#1d4ed8' }
+      : user?.role === 'faculty'
+        ? { backgroundColor: '#ede9fe', color: '#6d28d9' }
+        : user?.role === 'staff'
+          ? { backgroundColor: '#dcfce7', color: '#15803d' }
+          : { backgroundColor: '#f1f5f9', color: '#475569' };
 
   const pageTitles = {
     '/dashboard':     'Dashboard',
@@ -58,8 +87,10 @@ export default function Layout() {
     '/timetable':     'Timetable',
     '/attendance':    'Attendance',
     '/users':         'User Management',
-    '/approvals':     'Account Approvals',
+    '/approvals':     'Identity Alerts',
     '/academics':     'Academic Structure',
+    '/users/new':     'Provision User',
+    '/users/import':  'Import Users',
     '/profile':       'My Profile',
     '/notice-board':  'Notice Board',
     '/announcements': 'Notice Board',
@@ -71,33 +102,89 @@ export default function Layout() {
   const pageTitle = (() => {
     if (location.pathname.startsWith('/tickets/')) return 'Ticket Details';
     if (location.pathname.startsWith('/assignments/')) return 'Assignment Details';
+    if (location.pathname.startsWith('/admin/users/')) return 'User Details';
+    if (location.pathname.startsWith('/users/') && !location.pathname.endsWith('/edit')) return 'User Details';
+    if (location.pathname.startsWith('/users/') && location.pathname.endsWith('/edit')) return 'Edit User';
     return pageTitles[location.pathname] || 'Sharda Platform';
   })();
 
-  const mainNavItems = [
-    { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
-    { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
-    { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: hasPermission('canViewChat') },
-  ].filter((item) => item.visible !== false);
+  const navSections = [
+    {
+      label: 'Workspace',
+      items: [
+        { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
+        { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
+        { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: hasPermission('canViewChat') },
+      ],
+    },
+    {
+      label: 'Operations',
+      items: [
+        { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Support Queue' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
+        { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
+        { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: canAccessTimetable },
+        { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: canAccessAttendance },
+      ],
+    },
+    {
+      label: 'Support',
+      items: [
+        { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
+        { to: '/faq', icon: FiHelpCircle, label: 'FAQ' },
+      ],
+    },
+    {
+      label: 'Administration',
+      items: [
+        { to: '/users', icon: FiUsers, label: 'Identity & Access', visible: hasPermission('canManageUsers') },
+        { to: '/approvals', icon: FiUserCheck, label: 'Identity Alerts', visible: hasPermission('canManageUsers') },
+        { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
+        { to: '/permissions', icon: FiShield, label: 'Permissions', visible: isSuperAdmin },
+      ],
+    },
+  ].map((section) => ({ ...section, items: section.items.filter((item) => item.visible !== false) }))
+    .filter((section) => section.items.length > 0);
 
-  const helpdeskNavItems = [
-    { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Tickets' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
-    { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
-    { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: ['student', 'faculty', 'admin'].includes(user?.role) },
-    { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: ['student', 'faculty', 'admin'].includes(user?.role) },
-  ].filter((item) => item.visible !== false);
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
 
-  const supportNavItems = [
-    { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
-    { to: '/faq', icon: FiHelpCircle, label: 'FAQ' },
-  ];
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
-  const adminNavItems = [
-    { to: '/users', icon: FiUsers, label: 'User Management', visible: hasPermission('canManageUsers') },
-    { to: '/approvals', icon: FiUserCheck, label: 'Account Approvals', visible: hasPermission('canManageUsers') },
-    { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
-    { to: '/permissions', icon: FiShield, label: 'Permissions', visible: hasPermission('canManagePermissions') },
-  ].filter((item) => item.visible !== false);
+  useLayoutEffect(() => {
+    const nameElement = footerNameRef.current;
+    if (!nameElement) return undefined;
+
+    const fitFooterName = () => {
+      let fontSize = 14;
+      let letterSpacing = -0.01;
+
+      nameElement.style.fontSize = `${fontSize}px`;
+      nameElement.style.letterSpacing = `${letterSpacing}em`;
+
+      while (fontSize > 8 && nameElement.scrollWidth > nameElement.clientWidth) {
+        fontSize -= 0.5;
+        letterSpacing = fontSize <= 9 ? -0.05 : fontSize <= 10.5 ? -0.04 : fontSize <= 12 ? -0.03 : -0.01;
+        nameElement.style.fontSize = `${fontSize}px`;
+        nameElement.style.letterSpacing = `${letterSpacing}em`;
+      }
+
+      setFooterNameStyle({
+        fontSize: `${fontSize}px`,
+        lineHeight: 1.1,
+        letterSpacing: `${letterSpacing}em`,
+      });
+    };
+
+    fitFooterName();
+    window.addEventListener('resize', fitFooterName);
+    return () => window.removeEventListener('resize', fitFooterName);
+  }, [footerDisplayName, sidebarOpen]);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full sidebar-bg">
@@ -107,8 +194,9 @@ export default function Layout() {
       {/* Logo */}
       <div className="relative px-5 pt-6 pb-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 shadow-lg flex-shrink-0">
-            <img src="/sharda-logo.png" alt="Sharda University" className="w-full h-full object-contain"
+          <div className="sidebar-logo-tile w-10 h-10 rounded-xl overflow-hidden p-1 shadow-lg flex-shrink-0">
+            {/* FIXED: restore the original Sharda logo in the sidebar header */}
+            <img src="/sharda-logo.png" alt="Sharda University" className="sidebar-logo-image w-full h-full object-contain"
               onError={e => { e.target.style.display='none'; }} />
           </div>
           <div>
@@ -126,57 +214,47 @@ export default function Layout() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto relative">
-        <SectionLabel label="Main" />
-        {mainNavItems.map((item) => (
-          <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} end={item.end} onClick={closeSidebar} />
-        ))}
-
-        {helpdeskNavItems.length > 0 && (
-          <>
-            <SectionLabel label="Helpdesk" />
-            {helpdeskNavItems.map((item) => (
-              <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
+        {navSections.map((section) => (
+          <React.Fragment key={section.label}>
+            <SectionLabel label={section.label} />
+            {section.items.map((item) => (
+              <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} end={item.end} onClick={closeSidebar} />
             ))}
-          </>
-        )}
-
-        <SectionLabel label="Support" />
-        {supportNavItems.map((item) => (
-          <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
+          </React.Fragment>
         ))}
-
-        {adminNavItems.length > 0 && (
-          <>
-            <SectionLabel label="Admin" />
-            {adminNavItems.map((item) => (
-              <NavItem key={item.to} to={item.to} icon={item.icon} label={item.label} onClick={closeSidebar} />
-            ))}
-          </>
-        )}
       </nav>
 
-      {/* Bottom */}
-      <div className="px-3 pb-3 space-y-0.5 relative border-t border-white/10 pt-3">
-        <NavItem to="/profile" icon={FiUser} label="My Profile" onClick={closeSidebar} />
-        <button onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-blue-100/60 hover:bg-red-500/20 hover:text-red-300 transition-all duration-200">
-          <FiLogOut size={17} /><span>Sign Out</span>
-        </button>
-      </div>
-
       {/* User card */}
-      <div className="mx-3 mb-4 p-3 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={() => { closeSidebar(); navigate('/profile'); }}
+        className="mx-3 mb-2 h-[76px] overflow-hidden rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-left backdrop-blur-sm transition hover:bg-white/15"
+      >
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-lg">
-            {getInitials(user?.name)}
+          <Avatar user={user} size="md" className="shadow-lg flex-shrink-0" />
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p
+              ref={footerNameRef}
+              className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
+              style={footerNameStyle}
+              title={footerDisplayName}
+            >
+              {footerDisplayName}
+            </p>
+            <div className="mt-1">
+              <span
+                className="inline-flex max-w-full items-center truncate rounded-full px-2.5 py-1 text-[11px] font-bold leading-none"
+                style={footerRoleTagStyle}
+              >
+                {user?.adminTier === 'super_admin' ? 'Super Admin' : getRoleLabel(user?.role)}
+              </span>
+            </div>
           </div>
-          <div className="overflow-hidden flex-1">
-            <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
-            <p className="text-xs text-blue-300/70 truncate">{user?.email}</p>
-          </div>
-          <span className={`badge text-xs ${getRoleColor(user?.role)}`}>{getRoleLabel(user?.role)}</span>
         </div>
-      </div>
+      </button>
+      <p className="px-4 pb-4 text-[11px] leading-4 text-blue-200/55">
+        Icons made by Freepik from www.flaticon.com
+      </p>
     </div>
   );
 
@@ -200,6 +278,16 @@ export default function Layout() {
               onClick={() => setSidebarOpen(true)}>
               <FiMenu size={22} />
             </button>
+            {location.pathname !== '/dashboard' ? (
+              <button
+                type="button"
+                onClick={handleBackNavigation}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <FiArrowLeft size={16} />
+                Back
+              </button>
+            ) : null}
             <div>
               <h2 className="font-display font-bold text-gray-900 text-lg leading-none">{pageTitle}</h2>
               <p className="text-xs text-gray-400 mt-0.5 hidden sm:block">
@@ -209,12 +297,38 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell />
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white cursor-pointer shadow-md ${
-              isDark ? 'bg-gradient-to-br from-slate-700 to-slate-900' : 'bg-gradient-to-br from-blue-600 to-blue-800'
-            }`}>
-              {getInitials(user?.name)}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((current) => !current)}
+                className="rounded-full"
+              >
+                <Avatar user={user} size="md" className={`cursor-pointer shadow-md ${isDark ? 'ring-1 ring-slate-700/80' : 'ring-1 ring-slate-200'}`} />
+              </button>
+              {profileMenuOpen ? (
+                <div className={`absolute right-0 top-12 z-50 w-52 rounded-2xl border shadow-xl ${isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'}`}>
+                  <button
+                    type="button"
+                    onClick={openProfilePage}
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition ${isDark ? 'text-slate-100 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    <FiUser size={15} />
+                    My Profile
+                  </button>
+                  <div className={isDark ? 'border-t border-slate-700' : 'border-t border-gray-100'} />
+                  <button
+                    type="button"
+                    onClick={() => { setProfileMenuOpen(false); handleLogout(); }}
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition ${isDark ? 'text-red-300 hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'}`}
+                  >
+                    <FiLogOut size={15} />
+                    Logout
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
+        
         </header>
 
         <main className="flex-1 overflow-y-auto">

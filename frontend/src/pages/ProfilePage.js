@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
-import { PageHeader, Alert } from '../components/ui';
-import { getRoleColor, formatDate } from '../utils/helpers';
-import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck } from 'react-icons/fi';
+import { PageHeader, Alert, Avatar } from '../components/ui';
+import { getAvatarPresetUrl, getRoleColor, formatDate } from '../utils/helpers';
+import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck, FiUpload, FiImage } from 'react-icons/fi';
+import { AVATAR_OPTIONS } from '../constants/avatarOptions';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
@@ -23,6 +24,8 @@ export default function ProfilePage() {
   const [passLoading,    setPassLoading]    = useState(false);
   const [profileError,   setProfileError]   = useState('');
   const [passError,      setPassError]      = useState('');
+  const [avatarLoading,  setAvatarLoading]  = useState(false);
+  const [avatarExpanded, setAvatarExpanded] = useState(false);
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -37,6 +40,39 @@ export default function ProfilePage() {
       setProfileError(err.response?.data?.message || 'Update failed');
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const handleAvatarChoice = async (avatarChoice) => {
+    setAvatarLoading(true);
+    try {
+      const res = await API.put('/auth/updateprofile', { avatarChoice, removeProfileImage: true });
+      updateUser(res.data.data);
+      toast.success('Avatar updated');
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to update avatar');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('profileImage', file);
+    setAvatarLoading(true);
+    try {
+      const res = await API.post('/auth/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      updateUser(res.data.data);
+      toast.success('Profile image updated');
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to upload image');
+    } finally {
+      setAvatarLoading(false);
+      event.target.value = '';
     }
   };
 
@@ -74,9 +110,7 @@ export default function ProfilePage() {
       <div className="card p-6">
         {/* Avatar + role banner */}
         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
-          <div className="w-16 h-16 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-2xl font-bold flex-shrink-0">
-            {(user?.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-          </div>
+          <Avatar user={user} size="xl" />
           <div>
             <h2 className="text-lg font-bold text-gray-900">{user?.name}</h2>
             <p className="text-sm text-gray-500">{user?.email}</p>
@@ -87,6 +121,50 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <button
+            type="button"
+            onClick={() => setAvatarExpanded((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-left transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-3">
+              <FiImage size={15} className="text-gray-500" />
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Profile picture & avatar</div>
+                <p className="mt-0.5 text-sm text-gray-500">Click to {avatarExpanded ? 'hide' : 'manage'} uploaded and preset avatars.</p>
+              </div>
+            </div>
+            <span className="text-sm font-semibold text-blue-600">{avatarExpanded ? 'Hide' : 'Manage'}</span>
+          </button>
+
+          {avatarExpanded ? (
+            <>
+              <p className="mt-4 text-sm text-gray-500">Priority order: uploaded image, selected avatar, then generated initials.</p>
+              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-200 hover:bg-blue-50">
+                <FiUpload size={14} />
+                {avatarLoading ? 'Uploading...' : 'Upload image'}
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarLoading} />
+              </label>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {AVATAR_OPTIONS.map((avatarChoice) => (
+                  <button
+                    key={avatarChoice}
+                    type="button"
+                    disabled={avatarLoading}
+                    onClick={() => handleAvatarChoice(avatarChoice)}
+                    className={`rounded-2xl border p-3 transition ${user?.avatarChoice === avatarChoice ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                  >
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 shadow-sm">
+                      <img src={getAvatarPresetUrl(avatarChoice)} alt="Preset avatar" className="h-full w-full rounded-full object-contain" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-gray-400">Icons made by Freepik from www.flaticon.com</p>
+            </>
+          ) : null}
         </div>
 
         {/* Stats */}

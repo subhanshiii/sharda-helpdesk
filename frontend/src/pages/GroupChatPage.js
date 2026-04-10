@@ -144,7 +144,15 @@ export default function GroupChatPage() {
   }, []);
 
   const handleGroupCreated = useCallback((newGroup) => {
-    setGroups(prev => [newGroup, ...prev]);
+    setGroups(prev => { // FIXED: dedupe local insert against the socket-created event so one action never renders two groups.
+      const existingIndex = prev.findIndex((group) => group._id === newGroup._id);
+      if (existingIndex !== -1) {
+        const next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], ...newGroup };
+        return next;
+      }
+      return [newGroup, ...prev];
+    });
     setActiveGroup(newGroup);
     setShowSidebar(false);
   }, []);

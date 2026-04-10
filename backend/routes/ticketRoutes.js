@@ -6,21 +6,23 @@ const {
   createTicket,
   updateTicket,
   deleteTicket,
+  bulkDeleteTickets,
   addReply,
 } = require('../controllers/ticketController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 router
   .route('/')
   .get(protect, getTickets)
-  .post(protect, upload.array('attachments', 5), createTicket);
+  .post(protect, upload.array('attachments', 5), createTicket)
+  .delete(protect, bulkDeleteTickets);
 
 router
   .route('/:id')
   .get(protect, getTicket)
   .put(protect, updateTicket)
-  .delete(protect, authorize('admin'), deleteTicket);
+  .delete(protect, deleteTicket);
 
 router
   .route('/:id/replies')

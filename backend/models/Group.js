@@ -96,6 +96,10 @@ const groupSchema = new mongoose.Schema(
 groupSchema.index({ 'members.user': 1 });        // Find groups for a user
 groupSchema.index({ department: 1, year: 1 });   // Filter by dept + year
 groupSchema.index({ createdBy: 1 });              // Find groups by creator
+groupSchema.index( // FIXED: prevent duplicate active groups with the same name from the same creator at the database level.
+  { name: 1, createdBy: 1, isActive: 1 },
+  { unique: true, partialFilterExpression: { isActive: true } }
+);
 
 // ── Virtual: member count ──────────────────────────────
 groupSchema.virtual('memberCount').get(function () {

@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import {
   FiArrowRight,
   FiCalendar,
+  FiCheck,
+  FiCircle,
   FiEye,
   FiEyeOff,
   FiMessageCircle,
@@ -17,7 +19,6 @@ import {
 import API from '../utils/api';
 import { Alert, EmptyState, FullPageSpinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { usePermissions } from '../context/PermissionContext';
 import { getNotificationLink, useNotificationContext } from '../context/NotificationContext';
 import { formatDate, formatRelative } from '../utils/helpers';
 import TodaysThought from '../components/dashboard/TodaysThought';
@@ -55,67 +56,80 @@ const ticketTone = (ticket) => {
   return 'bg-blue-50 text-blue-700';
 };
 
-const assignmentDone = (assignment, canManageAssignments) => (
-  canManageAssignments
-    ? (assignment.gradedCount || 0) >= (assignment.submissionCount || 0) && (assignment.submissionCount || 0) > 0
-    : Boolean(assignment.mySubmission)
-);
-
-const TaskColumn = ({ title, hint, tasks, emptyText, actionLabel, onAction, onDelete }) => (
-  <section className="rounded-3xl border border-gray-100 bg-white">
-    <div className="border-b border-gray-100 px-4 py-3.5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">{title}</p>
-      <p className="mt-1 text-sm text-gray-500">{hint}</p>
-    </div>
-    <div className="space-y-3 p-4 min-h-[220px]">
-      {tasks.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">
-          {emptyText}
-        </div>
-      ) : tasks.map((task) => (
-        <div key={task.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900">{task.title}</p>
-              {task.meta ? <p className="mt-1 text-sm text-gray-500">{task.meta}</p> : null}
-              {task.note ? <p className="mt-2 text-sm text-gray-600">{task.note}</p> : null}
-            </div>
-            {onDelete && task.kind === 'personal' ? (
-              <button onClick={() => onDelete(task.id)} className="text-gray-300 hover:text-red-500 transition-colors">
-                <FiTrash2 size={15} />
+const ReminderList = ({ tasks, emptyText, onToggle, onDelete, editingTaskId, editingTitle, onStartEdit, onEditChange, onEditSave, onEditCancel }) => (
+  <div className="dashboard-reminder-list">
+    {tasks.length === 0 ? (
+      <div className="dashboard-empty-state rounded-2xl border border-dashed border-gray-200 p-5 text-center text-sm text-gray-400">
+        {emptyText}
+      </div>
+    ) : (
+      tasks.map((task) => (
+        <div key={task.id} className={`dashboard-reminder-item flex items-start gap-3 rounded-2xl border border-gray-100 px-4 py-3 ${task.status === 'done' ? 'is-complete' : ''}`}>
+          <button
+            type="button"
+            onClick={() => onToggle(task)}
+            className={`dashboard-reminder-check inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border transition-colors ${
+              task.status === 'done'
+                ? 'border-emerald-200 bg-emerald-500 text-white'
+                : 'border-gray-300 bg-white text-transparent hover:border-emerald-300'
+            }`}
+            aria-label={task.status === 'done' ? 'Mark as incomplete' : 'Mark as complete'}
+          >
+            {task.status === 'done' ? <FiCheck size={14} /> : <FiCircle size={12} />}
+          </button>
+          <div className="min-w-0 flex-1">
+            {editingTaskId === task.id ? (
+              <input
+                className="dashboard-reminder-input input h-9 min-h-0 px-3 py-2 text-sm"
+                value={editingTitle}
+                onChange={(event) => onEditChange(event.target.value)}
+                onBlur={() => onEditSave(task)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    onEditSave(task);
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    onEditCancel();
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => onStartEdit(task)}
+                className={`dashboard-reminder-title block w-full text-left text-sm font-medium text-gray-900 ${task.status === 'done' ? 'line-through opacity-60' : ''}`}
+              >
+                {task.title}
               </button>
-            ) : null}
+            )}
+            {task.note ? <p className={`dashboard-reminder-note mt-1 text-xs text-gray-500 ${task.status === 'done' ? 'opacity-60' : ''}`}>{task.note}</p> : null}
           </div>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <span className={`badge ${task.kind === 'assigned' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
-              {task.kind === 'assigned' ? 'Assigned' : 'Personal'}
-            </span>
-            {onAction ? (
-              <button onClick={() => onAction(task)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
-                {actionLabel}
-              </button>
-            ) : null}
-          </div>
+          <button type="button" onClick={() => onDelete(task.id)} className="dashboard-icon-button dashboard-reminder-delete mt-0.5 text-gray-300 hover:text-red-500 transition-colors">
+            <FiTrash2 size={15} />
+          </button>
         </div>
-      ))}
-    </div>
-  </section>
+      ))
+    )}
+  </div>
 );
 
 const SectionCard = ({ title, subtitle, action, onHide, children }) => (
-  <section className="card overflow-hidden">
-    <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3.5">
-      <div>
-        <h2 className="font-display text-base font-bold text-gray-900">{title}</h2>
-        {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
+  <section className="dashboard-panel dashboard-section-card overflow-hidden h-full">
+    <div className="dashboard-panel-header flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+      <div className="min-w-0 flex-1">
+        <h2 className="dashboard-section-title font-display text-base font-bold text-gray-900">{title}</h2>
+        {subtitle ? <p className="dashboard-subtitle mt-1 text-sm text-gray-500">{subtitle}</p> : null}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="dashboard-panel-actions flex flex-shrink-0 flex-wrap items-center justify-end gap-2 self-start">
         {action}
         {onHide ? (
           <button
             type="button"
             onClick={onHide}
-            className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+            className="dashboard-chip inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
           >
             <FiEyeOff size={13} />
             Hide
@@ -123,27 +137,22 @@ const SectionCard = ({ title, subtitle, action, onHide, children }) => (
         ) : null}
       </div>
     </div>
-    <div className="p-4">{children}</div>
+    <div className="dashboard-panel-body p-5">{children}</div>
   </section>
 );
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { hasPermission } = usePermissions();
   const { notifications, unreadCount } = useNotificationContext();
 
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState(createEmptyWorkspace());
   const [error, setError] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskNote, setNewTaskNote] = useState('');
   const [savingTask, setSavingTask] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState('');
+  const [editingTaskTitle, setEditingTaskTitle] = useState('');
   const hiddenWidgets = workspace.widgetPreferences?.hidden || [];
-
-  const canSeeAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
-    || hasPermission('canManageAssignments')
-    || hasPermission('canSubmitAssignments');
-  const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
 
   const loadWorkspace = useCallback(async () => {
     setLoading(true);
@@ -163,29 +172,16 @@ export default function Dashboard() {
     loadWorkspace();
   }, [loadWorkspace]);
 
-  const assignedTasks = useMemo(() => (workspace.assignments || []).map((assignment) => ({
-    id: `assigned-${assignment._id}`,
-    kind: 'assigned',
-    title: assignment.title,
-    meta: `${assignment.subject || 'General'} · due ${formatRelative(assignment.dueDate)}`,
-    done: assignmentDone(assignment, canManageAssignments),
-    link: `/assignments/${assignment._id}`,
-  })), [workspace.assignments, canManageAssignments]);
-
   const board = useMemo(() => {
     const personalTasks = workspace.personalTasks || [];
     return {
-      personal: personalTasks.filter((task) => task.status !== 'done').map((task) => ({ ...task, kind: 'personal' })),
-      assigned: assignedTasks.filter((task) => !task.done),
-      completed: [
-        ...personalTasks.filter((task) => task.status === 'done').map((task) => ({ ...task, kind: 'personal' })),
-        ...assignedTasks.filter((task) => task.done),
-      ],
+      active: personalTasks.filter((task) => task.status !== 'done'),
+      completed: personalTasks.filter((task) => task.status === 'done'),
     };
-  }, [assignedTasks, workspace.personalTasks]);
+  }, [workspace.personalTasks]);
 
   const stats = useMemo(() => ({
-    pendingTasks: board.personal.length + board.assigned.length,
+    pendingTasks: board.active.length,
     activeTickets: workspace.stats?.openTickets || 0,
     newNotices: workspace.notices?.length || 0,
     attendanceRate: workspace.attendance?.attendanceRate || 0,
@@ -226,14 +222,13 @@ export default function Dashboard() {
     try {
       const res = await API.post('/dashboard/tasks', {
         title: newTaskTitle.trim(),
-        note: newTaskNote.trim(),
+        note: '',
       });
       setWorkspace((current) => ({
         ...current,
         personalTasks: [res.data?.data, ...(current.personalTasks || [])],
       }));
       setNewTaskTitle('');
-      setNewTaskNote('');
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Failed to create task');
     } finally {
@@ -252,6 +247,30 @@ export default function Dashboard() {
       }));
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Failed to update task');
+    }
+  };
+
+  const saveTaskTitle = async (task, nextTitle) => {
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle || trimmedTitle === task.title) {
+      setEditingTaskId('');
+      setEditingTaskTitle('');
+      return;
+    }
+
+    try {
+      const res = await API.put(`/dashboard/tasks/${task.id}`, { title: trimmedTitle });
+      setWorkspace((current) => ({
+        ...current,
+        personalTasks: (current.personalTasks || []).map((entry) => (
+          entry.id === task.id ? res.data?.data : entry
+        )),
+      }));
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to update task');
+    } finally {
+      setEditingTaskId('');
+      setEditingTaskTitle('');
     }
   };
 
@@ -334,19 +353,19 @@ export default function Dashboard() {
   if (loading) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-5">
+    <div className="dashboard-shell space-y-6 px-4 sm:px-6 lg:px-8">
       <TodaysThought />
 
       {hiddenWidgets.length ? (
-        <section className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-3">
+        <section className="dashboard-hidden-bar rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Hidden Sections</span>
+            <span className="dashboard-eyebrow">Hidden Sections</span>
             {hiddenWidgets.map((widgetKey) => (
               <button
                 key={widgetKey}
                 type="button"
                 onClick={() => showWidget(widgetKey)}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200"
+                className="dashboard-chip inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
               >
                 <FiEye size={12} />
                 {hiddenWidgetLabels[widgetKey] || widgetKey}
@@ -357,86 +376,102 @@ export default function Dashboard() {
       ) : null}
 
       {isWidgetVisible('dailyFocus') && workspace.dailyInsight?.message ? (
-        <section className="rounded-3xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 px-4 py-3.5 flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-white text-blue-700 shadow-sm flex items-center justify-center flex-shrink-0">
+        <section className="dashboard-focus-card rounded-3xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 px-5 py-4 flex items-start gap-4">
+          <div className="dashboard-focus-icon w-11 h-11 rounded-2xl bg-white text-blue-700 shadow-sm flex items-center justify-center flex-shrink-0">
             <FiZap size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-blue-500 font-semibold">Daily Focus</p>
-            <p className="text-sm sm:text-[15px] text-gray-700 leading-7 mt-1">{workspace.dailyInsight.message}</p>
+            <p className="dashboard-focus-title dashboard-eyebrow text-blue-500">Daily Focus</p>
+            <p className="dashboard-focus-body mt-1 text-sm sm:text-[15px] text-gray-700 leading-7">{workspace.dailyInsight.message}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => hideWidget('dailyFocus')}
-            className="ml-auto inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-blue-100 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:border-blue-200 hover:text-blue-700"
-          >
-            <FiEyeOff size={12} />
-            Hide
-          </button>
+          <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => hideWidget('dailyFocus')}
+              className="dashboard-chip inline-flex items-center gap-1 rounded-full border border-blue-100 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 hover:border-blue-200 hover:text-blue-700"
+            >
+              <FiEyeOff size={12} />
+              Hide
+            </button>
+          </div>
         </section>
       ) : null}
 
       {error ? <Alert type="warning" message={error} /> : null}
 
-      <section className="card p-4 sm:p-5">
-        <div className={`grid gap-4 items-start ${showAcademicSnapshot ? 'xl:grid-cols-[1.25fr,0.75fr]' : 'grid-cols-1'}`}>
-          <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      <section className="dashboard-panel p-5 sm:p-6">
+        <div className={`grid gap-5 items-stretch ${showAcademicSnapshot ? 'xl:grid-cols-[minmax(0,1.4fr),minmax(320px,0.82fr)]' : 'grid-cols-1'}`}>
+          <div className="space-y-5">
+            <div className="dashboard-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-500">{getGreeting(user?.name || 'there')}</p>
-                <h1 className="font-display text-2xl font-bold text-gray-900">Unified Dashboard</h1>
-                <p className="text-sm text-gray-500 mt-1">Academic progress, support, and campus updates from one workspace.</p>
+                <p className="dashboard-subtitle text-sm text-gray-500">{getGreeting(user?.name || 'there')}</p>
+                <p className="dashboard-page-title mt-1 font-display text-2xl font-bold text-gray-900">Academic progress, support, and campus updates from one workspace.</p>
+                <p className="dashboard-subtitle text-sm text-gray-500 mt-2">Use this unified view to stay on top of priorities, support tasks, and campus activity.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Link to="/tickets/new" className="btn-primary"><FiPlusCircle size={15} /> Create Ticket</Link>
-                <Link to="/group-chat" className="btn-secondary"><FiMessageCircle size={15} /> Open Chat</Link>
-                <Link to="/notice-board" className="btn-secondary"><FiSpeaker size={15} /> View Notices</Link>
+              <div className="dashboard-action-row flex flex-wrap justify-start gap-3 max-[600px]:flex-col">
+                <Link to="/tickets/new" className="dashboard-action-button btn-primary justify-center rounded-lg px-5 py-2.5 text-sm"><FiPlusCircle size={15} /> Create Ticket</Link>
+                <Link to="/group-chat" className="dashboard-action-button btn-secondary justify-center rounded-lg px-5 py-2.5 text-sm"><FiMessageCircle size={15} /> Open Chat</Link>
+                <Link to="/notice-board" className="dashboard-action-button btn-secondary justify-center rounded-lg px-5 py-2.5 text-sm"><FiSpeaker size={15} /> View Notices</Link>
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-blue-500">Pending Tasks</p>
-                <p className="font-display text-2xl font-black text-blue-900 mt-1">{stats.pendingTasks}</p>
+            <div className="dashboard-stats-grid grid [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))] gap-5 items-start">
+              <div className="dashboard-stat-card rounded-[12px] border border-gray-100 bg-gray-50 p-5 h-full">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="dashboard-stat-title text-base font-medium text-gray-900">Pending Tasks</p>
+                </div>
+                <p className="dashboard-stat-value font-display text-2xl font-black text-blue-900 mt-3">{stats.pendingTasks}</p>
+                <p className="dashboard-stat-copy mt-3 text-sm text-gray-500">Personal reminders waiting for action.</p>
               </div>
-              <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-amber-500">Active Tickets</p>
-                <p className="font-display text-2xl font-black text-amber-900 mt-1">{stats.activeTickets}</p>
+              <div className="dashboard-stat-card rounded-[12px] border border-gray-100 bg-gray-50 p-5 h-full">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="dashboard-stat-title text-base font-medium text-gray-900">Active Tickets</p>
+                </div>
+                <p className="dashboard-stat-value font-display text-2xl font-black text-amber-900 mt-3">{stats.activeTickets}</p>
+                <p className="dashboard-stat-copy mt-3 text-sm text-gray-500">Current support issues that are still open or in progress.</p>
               </div>
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-emerald-500">Notice Highlights</p>
-                <p className="font-display text-2xl font-black text-emerald-900 mt-1">{stats.newNotices}</p>
+              <div className="dashboard-stat-card rounded-[12px] border border-gray-100 bg-gray-50 p-5 h-full">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="dashboard-stat-title text-base font-medium text-gray-900">Notice Highlights</p>
+                </div>
+                <p className="dashboard-stat-value font-display text-2xl font-black text-emerald-900 mt-3">{stats.newNotices}</p>
+                <p className="dashboard-stat-copy mt-3 text-sm text-gray-500">Important campus updates currently highlighted in the notice board.</p>
               </div>
-              <div className="rounded-2xl border border-violet-100 bg-violet-50/80 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-semibold text-violet-500">Attendance</p>
-                <p className="font-display text-2xl font-black text-violet-900 mt-1">{stats.attendanceRate}%</p>
+              <div className="dashboard-stat-card rounded-[12px] border border-gray-100 bg-gray-50 p-5 h-full">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="dashboard-stat-title text-base font-medium text-gray-900">Attendance</p>
+                </div>
+                <p className="dashboard-stat-value font-display text-2xl font-black text-violet-900 mt-3">{stats.attendanceRate}%</p>
+                <p className="dashboard-stat-copy mt-3 text-sm text-gray-500">Latest attendance percentage captured from recent section sessions.</p>
               </div>
             </div>
           </div>
 
           {showAcademicSnapshot ? (
-            <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+            <div className="dashboard-panel dashboard-academic-snapshot rounded-3xl border border-gray-100 bg-slate-50 p-5 h-full">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs uppercase tracking-[0.18em] text-gray-400 font-semibold">Academic Snapshot</p>
-                <button
-                  type="button"
-                  onClick={() => hideWidget('academicSnapshot')}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                >
-                  <FiEyeOff size={12} />
-                  Hide
-                </button>
+                <p className="dashboard-eyebrow">Academic Snapshot</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => hideWidget('academicSnapshot')}
+                    className="dashboard-chip inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  >
+                    <FiEyeOff size={12} />
+                    Hide
+                  </button>
+                </div>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+              <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-4">
                   <p className="text-xl font-black text-gray-900">{workspace.assignments?.length || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Assignments</p>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-4">
                   <p className="text-xl font-black text-gray-900">{workspace.timetable?.length || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Classes</p>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white px-3 py-3">
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-4">
                   <p className="text-xl font-black text-gray-900">{unreadCount}</p>
                   <p className="text-xs text-gray-500 mt-1">Unread</p>
                 </div>
@@ -447,59 +482,44 @@ export default function Dashboard() {
       </section>
 
       {middleSectionCount > 0 ? (
-      <div className={`grid gap-5 ${middleSectionCount > 1 ? 'xl:grid-cols-[1.35fr,1fr]' : 'grid-cols-1'}`}>
+      <div className={`dashboard-content-grid grid gap-5 items-start ${middleSectionCount > 1 ? 'xl:grid-cols-[minmax(0,1.35fr),minmax(340px,1fr)]' : 'grid-cols-1'}`}>
         {showProductivityBoard ? (
-        <SectionCard title="Productivity Board" subtitle="Personal todo meets assigned academic work" onHide={() => hideWidget('productivityBoard')}>
-          <div className="grid lg:grid-cols-[0.95fr,1fr,1fr] gap-4">
-            <div className="space-y-4">
-              <form onSubmit={createTask} className="rounded-3xl border border-gray-100 bg-slate-50 p-4 space-y-3">
+        <SectionCard title="Productivity Board" subtitle="Simple reminders for the day" onHide={() => hideWidget('productivityBoard')}>
+          <div className="dashboard-reminder-shell space-y-4">
+            <form onSubmit={createTask} className="dashboard-reminder-form flex flex-col gap-3 rounded-2xl border border-gray-100 bg-slate-50 p-4 sm:flex-row sm:items-center">
+              <input className="input flex-1" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="Add a reminder" />
+              <button type="submit" disabled={savingTask} className="btn-primary min-w-[124px] justify-center">
+                <FiPlus size={14} /> {savingTask ? 'Saving...' : 'Add'}
+              </button>
+            </form>
+
+            <div className="dashboard-panel-secondary dashboard-reminder-panel rounded-3xl border border-gray-100 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-gray-400 font-semibold">Add Personal Task</p>
-                  <h3 className="font-semibold text-gray-900 mt-1">Stay ahead of small commitments</h3>
+                  <p className="dashboard-eyebrow">Your List</p>
+                  <p className="dashboard-subtitle mt-1">Quick reminders that stay in place as you update them.</p>
                 </div>
-                <input className="input" value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="Prepare presentation notes" />
-                <textarea className="input resize-none" rows={3} value={newTaskNote} onChange={(event) => setNewTaskNote(event.target.value)} placeholder="Optional note or next step..." />
-                <button type="submit" disabled={savingTask} className="btn-primary w-full justify-center">
-                  <FiPlus size={14} /> {savingTask ? 'Saving...' : 'Add Task'}
-                </button>
-              </form>
-
-              <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-emerald-500 font-semibold">Momentum</p>
-                <p className="mt-2 text-sm font-semibold text-emerald-900">
-                  {board.completed.length
-                    ? `${board.completed.length} item${board.completed.length > 1 ? 's are' : ' is'} already complete. Keep that pace going.`
-                    : 'Finish one focused task early to make the whole dashboard feel lighter.'}
-                </p>
+                <span className="dashboard-chip inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-600">
+                  {board.active.length} open
+                </span>
               </div>
-            </div>
-
-            <TaskColumn
-              title="Assigned Tasks"
-              hint="Active coursework and submissions"
-              tasks={board.assigned}
-              emptyText={canSeeAssignments ? 'No open assigned work right now.' : 'Assignments are not enabled for this role.'}
-              actionLabel="Open"
-              onAction={(task) => window.location.assign(task.link)}
-            />
-
-            <div className="space-y-4">
-              <TaskColumn
-                title="Personal Todo"
-                hint="Your own reminders and next actions"
-                tasks={(workspace.personalTasks || []).filter((task) => task.status !== 'done').map((task) => ({ ...task, kind: 'personal' }))}
-                emptyText="No personal tasks yet."
-                actionLabel="Done"
-                onAction={(task) => updateTask(task, 'done')}
+              <ReminderList
+                tasks={workspace.personalTasks || []}
+                emptyText="No reminders yet. Add one above to get started."
+                onToggle={(task) => updateTask(task, task.status === 'done' ? 'todo' : 'done')}
                 onDelete={deleteTask}
-              />
-              <TaskColumn
-                title="Completed"
-                hint="Finished items and closed loops"
-                tasks={board.completed}
-                emptyText="Nothing completed yet."
-                actionLabel="Reopen"
-                onAction={(task) => task.kind === 'personal' ? updateTask(task, 'todo') : window.location.assign(task.link)}
+                editingTaskId={editingTaskId}
+                editingTitle={editingTaskTitle}
+                onStartEdit={(task) => {
+                  setEditingTaskId(task.id);
+                  setEditingTaskTitle(task.title);
+                }}
+                onEditChange={setEditingTaskTitle}
+                onEditSave={(task) => saveTaskTitle(task, editingTaskTitle)}
+                onEditCancel={() => {
+                  setEditingTaskId('');
+                  setEditingTaskTitle('');
+                }}
               />
             </div>
           </div>
@@ -512,22 +532,22 @@ export default function Dashboard() {
           <SectionCard title="Academic Overview" subtitle="Timetable, attendance, and deadlines" onHide={() => hideWidget('academicOverview')}>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <Link to="/timetable" className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                <Link to="/timetable" className="dashboard-link-card rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                   <div className="flex items-center gap-2 text-blue-700"><FiCalendar size={16} /><span className="font-semibold">Timetable</span></div>
                   <p className="mt-2 text-sm text-gray-600">{workspace.timetable?.length || 0} upcoming class slots</p>
                 </Link>
-                <Link to="/attendance" className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 hover:border-violet-200 hover:bg-violet-50 transition-colors">
+                <Link to="/attendance" className="dashboard-link-card rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 hover:border-violet-200 hover:bg-violet-50 transition-colors">
                   <div className="flex items-center gap-2 text-violet-700"><FiUserCheck size={16} /><span className="font-semibold">Attendance</span></div>
                   <p className="mt-2 text-sm text-gray-600">{workspace.attendance?.attendanceRate || 0}% attendance pulse</p>
                 </Link>
               </div>
 
               {(workspace.timetable || []).slice(0, 4).map((entry) => (
-                <div key={entry._id} className="rounded-2xl border border-gray-100 px-4 py-3">
+                <div key={entry._id} className="dashboard-item-card rounded-2xl border border-gray-100 px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-gray-900">{entry.title}</p>
-                      <p className="mt-1 text-sm text-gray-500">{entry.dayOfWeek} · {entry.startTime} - {entry.endTime}</p>
+                      <p className="dashboard-item-title font-semibold text-gray-900">{entry.title}</p>
+                      <p className="dashboard-item-meta mt-1 text-sm text-gray-500">{entry.dayOfWeek} · {entry.startTime} - {entry.endTime}</p>
                     </div>
                     <span className="badge bg-blue-50 text-blue-700">{entry.room || 'Classroom'}</span>
                   </div>
@@ -535,11 +555,11 @@ export default function Dashboard() {
               ))}
 
               {workspace.attendance?.recentSessions?.length ? (
-                <div className="rounded-2xl border border-gray-100 bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-gray-400 font-semibold">Recent Attendance</p>
+                <div className="dashboard-panel-secondary rounded-2xl border border-gray-100 bg-slate-50 p-4">
+                  <p className="dashboard-eyebrow">Recent Attendance</p>
                   <div className="mt-3 space-y-2">
                     {workspace.attendance.recentSessions.slice(0, 3).map((session) => (
-                      <div key={session._id} className="flex items-center justify-between gap-3 text-sm">
+                      <div key={session._id} className="dashboard-compact-row flex items-center justify-between gap-3 text-sm">
                         <div>
                           <p className="font-medium text-gray-900">{session.title}</p>
                           <p className="text-gray-500">{formatDate(session.date)}</p>
@@ -567,13 +587,16 @@ export default function Dashboard() {
             {(workspace.notices || []).length === 0 ? (
               <EmptyState icon="📌" title="No notices right now" description="New announcements will appear here." />
             ) : (
-              <div className="space-y-3">
+              <div className="dashboard-notice-list">
                 {(workspace.notices || []).slice(0, 3).map((notice) => (
-                  <Link key={notice._id} to="/notice-board" className="block rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                  <Link key={notice._id} to="/notice-board" className="dashboard-notice-item dashboard-link-card block rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-900">{notice.title}</p>
-                        <p className="mt-1 text-sm text-gray-500 line-clamp-2">{notice.description}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="dashboard-item-title font-semibold text-gray-900">{notice.title}</p>
+                        </div>
+                        <p className="dashboard-item-meta mt-2 text-sm text-gray-500">{notice.description}</p>
+                        <p className="mt-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">{formatDate(notice.createdAt || notice.publishDate || notice.updatedAt)}</p>
                       </div>
                       <span className={`badge ${
                         notice.priority === 'high' ? 'bg-red-50 text-red-700' :
@@ -595,18 +618,18 @@ export default function Dashboard() {
       ) : null}
 
       {lowerSectionCount > 0 ? (
-      <div className={`grid gap-5 ${lowerSectionCount > 1 ? 'xl:grid-cols-[1.15fr,0.85fr]' : 'grid-cols-1'}`}>
+      <div className={`dashboard-content-grid grid gap-5 items-start ${lowerSectionCount > 1 ? 'xl:grid-cols-[minmax(0,1.15fr),minmax(320px,0.85fr)]' : 'grid-cols-1'}`}>
         {showRecentActivity ? (
         <SectionCard title="Recent Activity" subtitle="Support, submissions, and live updates" onHide={() => hideWidget('recentActivity')}>
           {activityItems.length === 0 ? (
             <EmptyState icon="📬" title="No recent activity" description="Your recent support and notification history will appear here." />
           ) : (
             <div className="space-y-3">
-              {activityItems.map((item) => (
-                <Link key={item.id} to={item.link} className="flex items-start justify-between gap-3 rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+              {activityItems.slice(0, 4).map((item) => (
+                <Link key={item.id} to={item.link} className="dashboard-link-card flex items-start justify-between gap-3 rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900">{item.title}</p>
-                    <p className="mt-1 text-sm text-gray-500">{item.meta}</p>
+                    <p className="dashboard-item-title font-semibold text-gray-900">{item.title}</p>
+                    <p className="dashboard-item-meta mt-1 text-sm text-gray-500">{item.meta}</p>
                   </div>
                   {item.badge}
                 </Link>
@@ -626,19 +649,37 @@ export default function Dashboard() {
           {(workspace.tickets || []).length === 0 ? (
             <EmptyState icon="🎫" title="No recent tickets" description="Create a support request whenever you need help." />
           ) : (
-            <div className="space-y-3">
-              {(workspace.tickets || []).map((ticket) => (
-                <Link key={ticket._id} to={`/tickets/${ticket._id}`} className="block rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-3 text-center">
+                  <p className="text-lg font-black text-gray-900">{(workspace.tickets || []).filter((ticket) => ['Open', 'In Progress'].includes(ticket.status)).length}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">Open</p>
+                </div>
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-3 text-center">
+                  <p className="text-lg font-black text-gray-900">{(workspace.tickets || []).filter((ticket) => ticket.assignedTo?.name).length}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">Assigned</p>
+                </div>
+                <div className="dashboard-mini-stat rounded-2xl border border-gray-100 bg-white px-3 py-3 text-center">
+                  <p className="text-lg font-black text-gray-900">{(workspace.tickets || []).filter((ticket) => ticket.priority === 'High' || ticket.priority === 'Critical').length}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500">Priority</p>
+                </div>
+              </div>
+              {(workspace.tickets || []).slice(0, 4).map((ticket) => (
+                <Link key={ticket._id} to={`/tickets/${ticket._id}`} className="dashboard-helpdesk-ticket dashboard-link-card block rounded-2xl border border-gray-100 p-4 hover:border-blue-200 hover:bg-blue-50 transition-colors">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900">{ticket.title}</p>
-                      <p className="mt-1 text-sm text-gray-500">{ticket.ticketId} · {ticket.routingDepartment || ticket.category}</p>
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="dashboard-item-title font-semibold text-gray-900">{ticket.title}</p>
+                        <span className={`badge ${ticketTone(ticket)}`}>{ticket.status}</span>
+                      </div>
+                      <p className="dashboard-item-meta text-sm text-gray-500">{ticket.ticketId} · {ticket.routingDepartment || ticket.category}</p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
+                        <span>{formatRelative(ticket.createdAt)}</span>
+                        <span>{ticket.assignedTo?.name || 'Awaiting assignee'}</span>
+                        {ticket.priority ? <span>{ticket.priority} priority</span> : null}
+                      </div>
                     </div>
-                    <span className={`badge ${ticketTone(ticket)}`}>{ticket.status}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-gray-400">
-                    <span>{formatRelative(ticket.createdAt)}</span>
-                    <span>{ticket.assignedTo?.name || 'Awaiting assignee'}</span>
+                    <FiArrowRight size={15} className="mt-1 shrink-0 text-gray-300" />
                   </div>
                 </Link>
               ))}

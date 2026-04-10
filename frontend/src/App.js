@@ -17,12 +17,18 @@ const VerifyEmailPage      = lazy(() => import('./pages/VerifyEmailPage'));
 const Dashboard            = lazy(() => import('./pages/Dashboard'));
 const TicketList           = lazy(() => import('./pages/TicketList'));
 const CreateTicket         = lazy(() => import('./pages/CreateTicket'));
+const CreateNoticePage     = lazy(() => import('./pages/CreateNoticePage'));
+const CreateAssignmentPage = lazy(() => import('./pages/CreateAssignmentPage'));
+const CreateAttendancePage = lazy(() => import('./pages/CreateAttendancePage'));
 const TicketDetail         = lazy(() => import('./pages/TicketDetail'));
 const AssignmentsPage      = lazy(() => import('./pages/AssignmentsPage'));
 const AssignmentDetail     = lazy(() => import('./pages/AssignmentDetail'));
 const TimetablePage        = lazy(() => import('./pages/TimetablePage'));
 const AttendancePage       = lazy(() => import('./pages/AttendancePage'));
 const UsersPage            = lazy(() => import('./pages/UsersPage'));
+const UserFormPage         = lazy(() => import('./pages/UserFormPage'));
+const UserImportReviewPage = lazy(() => import('./pages/UserImportReviewPage'));
+const UserDetailPage       = lazy(() => import('./pages/UserDetailPage'));
 const AccountApprovalsPage = lazy(() => import('./pages/AccountApprovalsPage'));
 const AcademicStructurePage = lazy(() => import('./pages/AcademicStructurePage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
@@ -38,11 +44,11 @@ const Layout               = lazy(() => import('./components/Layout'));
 
 const ProtectedRoute = ({ children, roles, permission }) => {
   const { user, token } = useAuth();
-  const { hasPermission, loading } = usePermissions();
+  const { hasPermission, loading, isSuperAdmin } = usePermissions();
   if (!token || !user) return <Navigate to="/login" replace />;
   if (permission && loading) return <FullPageSpinner />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
-  if (permission && !hasPermission(permission)) return <Navigate to="/dashboard" replace />;
+  if (permission && !isSuperAdmin && !hasPermission(permission)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -68,11 +74,15 @@ function AppRoutes() {
         <Route path="/tickets/new"       element={<Suspense fallback={<FullPageSpinner />}><CreateTicket /></Suspense>} />
         <Route path="/tickets/:id"       element={<Suspense fallback={<FullPageSpinner />}><TicketDetail /></Suspense>} />
         <Route path="/assignments"       element={<Suspense fallback={<FullPageSpinner />}><AssignmentsPage /></Suspense>} />
+        <Route path="/assignments/new"   element={<Suspense fallback={<FullPageSpinner />}><CreateAssignmentPage /></Suspense>} />
         <Route path="/assignments/:id"   element={<Suspense fallback={<FullPageSpinner />}><AssignmentDetail /></Suspense>} />
         <Route path="/timetable"         element={<ProtectedRoute roles={['student', 'faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><TimetablePage /></Suspense></ProtectedRoute>} />
         <Route path="/attendance"        element={<ProtectedRoute roles={['student', 'faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><AttendancePage /></Suspense></ProtectedRoute>} />
+        <Route path="/attendance/new"    element={<ProtectedRoute roles={['faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><CreateAttendancePage /></Suspense></ProtectedRoute>} />
+        <Route path="/attendance/:id/edit" element={<ProtectedRoute roles={['faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><CreateAttendancePage /></Suspense></ProtectedRoute>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
         <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
+        <Route path="/notice-board/new"  element={<Suspense fallback={<FullPageSpinner />}><CreateNoticePage /></Suspense>} />
         <Route path="/announcements"     element={<Navigate to="/notice-board" replace />} />
         <Route path="/opportunities"     element={<Suspense fallback={<FullPageSpinner />}><OpportunitiesPage /></Suspense>} />
         <Route path="/events"            element={<Suspense fallback={<FullPageSpinner />}><EventsPage /></Suspense>} />
@@ -81,6 +91,11 @@ function AppRoutes() {
         <Route path="/academic-calendar" element={<Navigate to="/notice-board" replace />} />
         <Route path="/group-chat"        element={<Suspense fallback={<FullPageSpinner />}><GroupChatPage /></Suspense>} />
         <Route path="/users"             element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UsersPage /></Suspense></ProtectedRoute>} />
+        <Route path="/users/new"         element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserFormPage /></Suspense></ProtectedRoute>} />
+        <Route path="/users/import"      element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserImportReviewPage /></Suspense></ProtectedRoute>} />
+        <Route path="/users/:systemId"   element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserDetailPage /></Suspense></ProtectedRoute>} />
+        <Route path="/admin/users/:systemId" element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserDetailPage /></Suspense></ProtectedRoute>} />
+        <Route path="/users/:systemId/edit" element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserFormPage /></Suspense></ProtectedRoute>} />
         <Route path="/approvals"         element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><AccountApprovalsPage /></Suspense></ProtectedRoute>} />
         <Route path="/academics"         element={<ProtectedRoute permission="canManageAcademics"><Suspense fallback={<FullPageSpinner />}><AcademicStructurePage /></Suspense></ProtectedRoute>} />
         <Route path="/permissions"       element={<ProtectedRoute permission="canManagePermissions"><Suspense fallback={<FullPageSpinner />}><PermissionsPage /></Suspense></ProtectedRoute>} />

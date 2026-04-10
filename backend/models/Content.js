@@ -78,8 +78,8 @@ const contentSchema = new mongoose.Schema(
       required: true,
     },
     source: {
-      legacyModel: { type: String, trim: true, default: null },
-      legacyId: { type: String, trim: true, default: null },
+      legacyModel: { type: String, trim: true },
+      legacyId: { type: String, trim: true },
     },
   },
   { timestamps: true }
@@ -88,7 +88,16 @@ const contentSchema = new mongoose.Schema(
 contentSchema.index({ contentType: 1, status: 1, publishAt: -1 });
 contentSchema.index({ startsAt: 1, endsAt: 1 });
 contentSchema.index({ category: 1, priority: 1 });
-contentSchema.index({ 'source.legacyModel': 1, 'source.legacyId': 1 }, { unique: true, sparse: true });
+contentSchema.index(
+  { 'source.legacyModel': 1, 'source.legacyId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'source.legacyModel': { $exists: true, $type: 'string' },
+      'source.legacyId': { $exists: true, $type: 'string' },
+    },
+  }
+);
 contentSchema.index({ title: 'text', description: 'text' });
 
 module.exports = mongoose.model('Content', contentSchema);

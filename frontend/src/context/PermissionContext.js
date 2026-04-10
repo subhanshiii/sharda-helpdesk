@@ -86,10 +86,11 @@ export function PermissionProvider({ children }) {
     rolePermissions,
     availablePermissions,
     loading,
+    isSuperAdmin: user?.role === 'admin' && user?.adminTier === 'super_admin',
     hasPermission,
     refreshPermissions: loadPermissions,
     updateRolePermissions,
-  }), [permissions, rolePermissions, availablePermissions, loading, hasPermission, loadPermissions, updateRolePermissions]);
+  }), [permissions, rolePermissions, availablePermissions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
 
   return (
     <PermissionContext.Provider value={value}>

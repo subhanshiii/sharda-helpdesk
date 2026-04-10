@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Department = require('../models/Department');
 const Program = require('../models/Program');
+const Course = require('../models/Course');
 const AcademicYear = require('../models/AcademicYear');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
@@ -13,6 +14,7 @@ const { normalizeRole } = require('../utils/roleHelpers');
 const modelMap = {
   departments: Department,
   programs: Program,
+  courses: Course,
   years: AcademicYear,
   sections: Section,
   subjects: Subject,
@@ -22,9 +24,10 @@ const modelMap = {
 
 const populateMap = {
   programs: 'department',
+  courses: 'program department',
   years: 'program',
-  sections: 'program academicYear department advisorFaculty',
-  subjects: 'department program academicYear',
+  sections: 'program course academicYear department advisorFaculty',
+  subjects: 'department program course academicYear',
   'section-subjects': 'section subject faculty',
   enrollments: 'student section academicYear',
 };
@@ -39,10 +42,14 @@ exports.getProgramReport = async (req, res, next) => {
       .lean();
 
     const programIds = programs.map((program) => program._id);
-    const [subjectsByProgram, sectionsByProgram, enrollmentsBySection] = await Promise.all([
+    const [coursesByProgram, subjectsByCourse, sectionsByProgram, enrollmentsBySection] = await Promise.all([
+      Course.aggregate([
+        { $match: { program: { $in: programIds }, isActive: true } },
+        { $group: { _id: '$program', courseIds: { $addToSet: '$_id' }, courseCount: { $sum: 1 } } },
+      ]),
       Subject.aggregate([
         { $match: { program: { $in: programIds }, isActive: true } },
-        { $group: { _id: '$program', subjectCount: { $sum: 1 } } },
+        { $group: { _id: '$course', subjectCount: { $sum: 1 } } },
       ]),
       Section.aggregate([
         { $match: { program: { $in: programIds }, isActive: true } },
@@ -54,19 +61,23 @@ exports.getProgramReport = async (req, res, next) => {
       ]),
     ]);
 
-    const subjectMap = new Map(subjectsByProgram.map((entry) => [String(entry._id), entry.subjectCount]));
+    const courseMap = new Map(coursesByProgram.map((entry) => [String(entry._id), entry]));
+    const subjectMap = new Map(subjectsByCourse.map((entry) => [String(entry._id), entry.subjectCount]));
     const enrollmentMap = new Map(enrollmentsBySection.map((entry) => [String(entry._id), entry.activeStudents]));
 
     const data = programs.map((program) => {
       const sectionEntry = sectionsByProgram.find((entry) => String(entry._id) === String(program._id));
+      const courseEntry = courseMap.get(String(program._id));
       const enrolledStudents = (sectionEntry?.sectionIds || []).reduce(
         (total, sectionId) => total + (enrollmentMap.get(String(sectionId)) || 0),
         0
       );
+      const subjectCount = (courseEntry?.courseIds || []).reduce((total, courseId) => total + (subjectMap.get(String(courseId)) || 0), 0);
 
       return {
         ...program,
-        subjectCount: subjectMap.get(String(program._id)) || 0,
+        subjectCount,
+        courseCount: courseEntry?.courseCount || 0,
         sectionCount: sectionEntry?.sectionCount || 0,
         enrolledStudents,
       };
@@ -88,11 +99,12 @@ exports.getEnrollmentReport = async (req, res, next) => {
     if (req.query.student) query.student = req.query.student;
 
     const enrollments = await Enrollment.find(query)
-      .populate('student', 'name email role enrollmentId department section')
+      .populate('student', 'systemId name email role department section')
       .populate({
         path: 'section',
         populate: [
           { path: 'program', select: 'name code department' },
+          { path: 'course', select: 'name code' },
           { path: 'academicYear', select: 'label yearNumber' },
           { path: 'department', select: 'name code' },
         ],
@@ -134,11 +146,12 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
         path: 'section',
         populate: [
           { path: 'program', select: 'name code department' },
+          { path: 'course', select: 'name code' },
           { path: 'academicYear', select: 'label yearNumber' },
           { path: 'department', select: 'name code' },
         ],
       })
-      .populate('student', 'name email enrollmentId department section')
+      .populate('student', 'systemId name email department section')
       .lean();
 
     if (!enrollment?.section?._id) {

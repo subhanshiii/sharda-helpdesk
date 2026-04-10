@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   FiAlertCircle,
@@ -9,11 +10,9 @@ import {
   FiPlus,
   FiSearch,
   FiTrash2,
-  FiUpload,
-  FiX,
 } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, EmptyState, PageHeader } from '../components/ui';
+import { Alert, ConfirmDialog, EmptyState, PageHeader } from '../components/ui';
 import { formatRelative, getAssetUrl, getRoleLabel } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
@@ -31,30 +30,23 @@ const PRIORITY_STYLES = {
   low: { tone: 'border-blue-200 bg-blue-50 text-blue-700', label: 'Update' },
 };
 
-const emptyAudience = {
-  audienceRoles: '',
-  audienceDepartments: '',
-  audienceYears: '',
-  audienceSections: '',
-};
-
 const EmptyNoticeSkeleton = () => (
   <div className="space-y-4">
     <div className="card p-5 animate-pulse">
       <div className="h-4 w-24 rounded bg-gray-200" />
-      <div className="h-8 w-3/4 rounded bg-gray-200 mt-4" />
-      <div className="space-y-2 mt-4">
+      <div className="mt-4 h-8 w-3/4 rounded bg-gray-200" />
+      <div className="mt-4 space-y-2">
         <div className="h-4 w-full rounded bg-gray-100" />
         <div className="h-4 w-5/6 rounded bg-gray-100" />
         <div className="h-4 w-2/3 rounded bg-gray-100" />
       </div>
     </div>
-    <div className="grid lg:grid-cols-2 gap-4">
+    <div className="grid gap-4 lg:grid-cols-2">
       {[1, 2, 3, 4].map((item) => (
         <div key={item} className="card p-4 animate-pulse">
           <div className="h-4 w-20 rounded bg-gray-200" />
-          <div className="h-6 w-2/3 rounded bg-gray-200 mt-3" />
-          <div className="space-y-2 mt-4">
+          <div className="mt-3 h-6 w-2/3 rounded bg-gray-200" />
+          <div className="mt-4 space-y-2">
             <div className="h-3 w-full rounded bg-gray-100" />
             <div className="h-3 w-4/5 rounded bg-gray-100" />
           </div>
@@ -84,174 +76,6 @@ const AudiencePills = ({ audience }) => {
     </div>
   );
 };
-
-function NoticeComposer({ onClose, onCreated }) {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    category: 'academic',
-    priority: 'medium',
-    ...emptyAudience,
-  });
-  const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!form.title.trim() || !form.description.trim()) {
-      setError('Title and description are required');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const payload = new FormData();
-      Object.entries(form).forEach(([key, value]) => payload.append(key, value));
-      payload.append('contentType', 'notice');
-      payload.append('type', form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'info' : 'warning');
-      files.forEach((file) => payload.append('attachments', file));
-
-      const response = await API.post('/content', payload, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      onCreated(response.data.data);
-      toast.success('Notice published');
-      onClose();
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Failed to publish notice');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div>
-            <h2 className="font-display text-lg font-bold text-gray-900">Publish Notice</h2>
-            <p className="mt-1 text-xs text-gray-500">Keep it crisp, targeted, and easy to scan.</p>
-          </div>
-          <button onClick={onClose} className="rounded-xl p-2 text-gray-500 hover:bg-gray-100">
-            <FiX size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          {error ? <Alert type="error" message={error} /> : null}
-
-          <div>
-            <label className="label">Title</label>
-            <input
-              className="input"
-              value={form.title}
-              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Semester registration window revised"
-            />
-          </div>
-
-          <div>
-            <label className="label">Description</label>
-            <textarea
-              className="input resize-none"
-              rows={5}
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Write the full notice here..."
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">Category</label>
-              <select
-                className="input"
-                value={form.category}
-                onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-              >
-                {CATEGORY_OPTIONS.filter((option) => option.value !== 'all').map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Priority</label>
-              <select
-                className="input"
-                value={form.priority}
-                onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}
-              >
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">Audience Roles</label>
-              <input
-                className="input"
-                value={form.audienceRoles}
-                onChange={(event) => setForm((current) => ({ ...current, audienceRoles: event.target.value }))}
-                placeholder="student, faculty"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Departments</label>
-              <input
-                className="input"
-                value={form.audienceDepartments}
-                onChange={(event) => setForm((current) => ({ ...current, audienceDepartments: event.target.value }))}
-                placeholder="CSE, IT"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Years</label>
-              <input
-                className="input"
-                value={form.audienceYears}
-                onChange={(event) => setForm((current) => ({ ...current, audienceYears: event.target.value }))}
-                placeholder="1, 2"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Sections</label>
-              <input
-                className="input"
-                value={form.audienceSections}
-                onChange={(event) => setForm((current) => ({ ...current, audienceSections: event.target.value }))}
-                placeholder="A, B"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="label">Attachments</label>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 px-4 py-5 text-sm text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50">
-              <FiUpload size={16} className="text-blue-600" />
-              Upload supporting files
-              <input type="file" multiple className="hidden" onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 5))} />
-            </label>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-              {loading ? 'Publishing...' : 'Publish Notice'}
-            </button>
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 function FeaturedNotice({ notice, canDelete, onDelete }) {
   const priorityStyle = PRIORITY_STYLES[notice.priority] || PRIORITY_STYLES.medium;
@@ -353,12 +177,13 @@ function CompactNotice({ notice, canDelete, onDelete }) {
 }
 
 export default function AnnouncementsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showComposer, setShowComposer] = useState(false);
+  const [deleteState, setDeleteState] = useState({ open: false, noticeId: '', loading: false });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
 
@@ -413,48 +238,58 @@ export default function AnnouncementsPage() {
   }), [featuredNotice?.category, filteredItems.length, urgentItems.length]);
 
   const deleteItem = async (id) => {
-    if (!window.confirm('Delete this notice?')) return;
+    setDeleteState({ open: true, noticeId: id, loading: false });
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!deleteState.noticeId) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/content/${id}`);
-      setItems((current) => current.filter((item) => item._id !== id));
+      await API.delete(`/content/${deleteState.noticeId}`);
+      setItems((current) => current.filter((item) => item._id !== deleteState.noticeId));
       toast.success('Notice deleted');
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Delete failed');
+    } finally {
+      setDeleteState({ open: false, noticeId: '', loading: false });
     }
   };
 
   return (
     <div className="space-y-5">
-      {showComposer ? (
-        <NoticeComposer
-          onClose={() => setShowComposer(false)}
-          onCreated={(notice) => setItems((current) => [notice, ...current])}
-        />
-      ) : null}
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete notice"
+        description="Are you sure you want to delete this notice? This action cannot be undone."
+        confirmLabel="Delete Notice"
+        loading={deleteState.loading}
+        onConfirm={confirmDeleteItem}
+        onClose={() => setDeleteState({ open: false, noticeId: '', loading: false })}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
         <PageHeader
           title="Notice Board"
           subtitle="Important university updates, arranged for fast scanning."
           action={canManage ? (
-            <button onClick={() => setShowComposer(true)} className="btn-primary">
+            <button onClick={() => navigate('/notice-board/new')} className="btn-primary">
               <FiPlus size={15} /> Publish Notice
             </button>
           ) : null}
         />
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-blue-900">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Visible</p>
-            <p className="mt-1 font-display text-2xl font-black">{summary.total}</p>
+          <div className="notice-summary-card rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-blue-900">
+            <p className="notice-summary-label text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Visible</p>
+            <p className="notice-summary-value mt-1 font-display text-2xl font-black">{summary.total}</p>
           </div>
-          <div className="rounded-2xl border border-red-100 bg-red-50/80 px-4 py-3 text-red-900">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Urgent</p>
-            <p className="mt-1 font-display text-2xl font-black">{summary.urgent}</p>
+          <div className="notice-summary-card rounded-2xl border border-red-100 bg-red-50/80 px-4 py-3 text-red-900">
+            <p className="notice-summary-label text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Urgent</p>
+            <p className="notice-summary-value mt-1 font-display text-2xl font-black">{summary.urgent}</p>
           </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-emerald-900">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Lead Type</p>
-            <p className="mt-1 font-display text-lg font-black capitalize">{summary.pinnedLabel}</p>
+          <div className="notice-summary-card rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-emerald-900">
+            <p className="notice-summary-label text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Lead Type</p>
+            <p className="notice-summary-value mt-1 font-display text-lg font-black capitalize">{summary.pinnedLabel}</p>
           </div>
         </div>
       </div>

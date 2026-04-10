@@ -257,6 +257,7 @@ const createContent = async ({ body, files, userId }) => {
     publishAt: body.publishAt || Date.now(),
     expiresAt: body.expiresAt || null,
     createdBy: userId,
+    source: undefined,
   });
 
   await document.populate('createdBy', 'name role department year section');

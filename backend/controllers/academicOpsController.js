@@ -3,6 +3,7 @@ const AttendanceSession = require('../models/AttendanceSession');
 const Enrollment = require('../models/Enrollment');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
+const SectionSubject = require('../models/SectionSubject');
 const User = require('../models/User');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 
@@ -31,6 +32,42 @@ const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: user
     path: 'section',
     populate: [{ path: 'department', select: 'name' }],
   });
+
+const getFacultyAssignments = async (facultyId) => SectionSubject.find({ faculty: facultyId, isActive: true })
+  .select('section subject')
+  .lean();
+
+const getFacultySectionIds = async (facultyId) => {
+  const assignments = await getFacultyAssignments(facultyId);
+  return [...new Set(assignments.map((assignment) => assignment.section?.toString()).filter(Boolean))];
+};
+
+const ensureFacultySectionAccess = async (user, sectionId, subjectId = null) => {
+  if (normalizeRole(user.role) !== 'faculty') {
+    return;
+  }
+
+  if (!sectionId) {
+    return;
+  }
+
+  const query = {
+    faculty: user.id,
+    isActive: true,
+    section: sectionId,
+  };
+
+  if (subjectId) {
+    query.subject = subjectId;
+  }
+
+  const assignment = await SectionSubject.findOne(query).lean();
+  if (!assignment) {
+    const error = new Error('Faculty can only access sections assigned to them');
+    error.statusCode = 403;
+    throw error;
+  }
+};
 
 const toMinutes = (value = '') => {
   const [hours, minutes] = String(value).split(':').map(Number);
@@ -66,6 +103,11 @@ const buildTimetablePayload = async (body, userId) => {
       throw error;
     }
     payload.subject = subject.name;
+    payload.subjectCode = body.subjectCode || subject.code || '';
+  }
+
+  if (!payload.subjectCode && body.subjectCode) {
+    payload.subjectCode = String(body.subjectCode).trim();
   }
 
   return payload;
@@ -123,10 +165,7 @@ exports.getTimetable = async (req, res, next) => {
         query.section = req.user.section;
       }
     } else if (role === 'faculty') {
-      query.$or = [
-        { faculty: req.user.id },
-        ...(req.user.department ? [{ department: req.user.department }] : []),
-      ];
+      query.faculty = req.user.id;
     } else if (req.query.sectionId) {
       query.sectionId = req.query.sectionId;
     }
@@ -151,12 +190,23 @@ exports.createTimetableEntry = async (req, res, next) => {
     }
 
     const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     await ensureTimetableConflicts(payload);
 
     const entry = await TimetableEntry.create({
       ...payload,
       createdBy: req.user.id,
     });
+
+    if (payload.subjectCode && payload.subjectId) {
+      await TimetableEntry.updateMany(
+        {
+          _id: { $ne: entry._id },
+          subjectId: payload.subjectId,
+        },
+        { $set: { subjectCode: payload.subjectCode } }
+      );
+    }
 
     const populated = await TimetableEntry.findById(entry._id)
       .populate('faculty', 'name email role department')
@@ -181,6 +231,7 @@ exports.updateTimetableEntry = async (req, res, next) => {
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
     const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     await ensureTimetableConflicts(payload, req.params.id);
 
     const updated = await TimetableEntry.findOneAndUpdate(query, payload, { new: true, runValidators: true })
@@ -191,6 +242,16 @@ exports.updateTimetableEntry = async (req, res, next) => {
 
     if (!updated) {
       return res.status(404).json({ success: false, message: 'Timetable entry not found' });
+    }
+
+    if (payload.subjectCode && payload.subjectId) {
+      await TimetableEntry.updateMany(
+        {
+          _id: { $ne: updated._id },
+          subjectId: payload.subjectId,
+        },
+        { $set: { subjectCode: payload.subjectCode } }
+      );
     }
 
     res.status(200).json({ success: true, data: updated });
@@ -225,8 +286,10 @@ exports.getAttendanceOptions = async (req, res, next) => {
   try {
     const { department, year, section } = req.query;
     const userScope = buildAcademicScope(req.user);
+    const role = normalizeRole(req.user.role);
 
     if (req.query.sectionId) {
+      await ensureFacultySectionAccess(req.user, req.query.sectionId, req.query.subjectId || null);
       const enrollmentQuery = { section: req.query.sectionId, status: 'active' };
       const enrollments = await Enrollment.find(enrollmentQuery)
         .populate('student', 'name email department year section sectionId')
@@ -238,6 +301,23 @@ exports.getAttendanceOptions = async (req, res, next) => {
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
       return res.status(200).json({ success: true, data: students });
+    }
+
+    if (role === 'faculty') {
+      const allowedSectionIds = await getFacultySectionIds(req.user.id);
+      const enrollments = await Enrollment.find({ section: { $in: allowedSectionIds }, status: 'active' })
+        .populate('student', 'name email department year section sectionId')
+        .lean();
+
+      const filteredStudents = enrollments
+        .map((enrollment) => enrollment.student)
+        .filter(Boolean)
+        .filter((student) => (!department || student.department === department)
+          && (!year || student.year === year)
+          && (!section || student.section === section))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+      return res.status(200).json({ success: true, data: filteredStudents });
     }
 
     const lookup = {
@@ -274,7 +354,12 @@ exports.getAttendanceSessions = async (req, res, next) => {
         query.section = req.user.section;
       }
     } else if (role === 'faculty') {
-      query.$or = [{ faculty: req.user.id }, { department: req.user.department }];
+      const allowedSectionIds = await getFacultySectionIds(req.user.id);
+      query.sectionId = { $in: allowedSectionIds };
+      query.faculty = req.user.id;
+      if (req.query.sectionId && !allowedSectionIds.includes(String(req.query.sectionId))) {
+        return res.status(403).json({ success: false, message: 'Faculty cannot access attendance for this section' });
+      }
     } else if (req.query.sectionId) {
       query.sectionId = req.query.sectionId;
     }
@@ -308,6 +393,7 @@ exports.createAttendanceSession = async (req, res, next) => {
     }
 
     const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     const session = await AttendanceSession.create({
       ...payload,
       faculty: req.user.id,
@@ -339,6 +425,7 @@ exports.updateAttendanceSession = async (req, res, next) => {
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
     const payload = await buildTimetablePayload(req.body, req.user.id);
+    await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     const update = {
       title: payload.title,
       subject: payload.subject,

@@ -335,7 +335,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
 };
 
 // ── Delete ticket ──────────────────────────────────────
-const deleteTicket = async (ticketId, io) => {
+const deleteTicket = async (ticketId, user, io) => {
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) {
     const err = new Error('Ticket not found');
@@ -343,10 +343,35 @@ const deleteTicket = async (ticketId, io) => {
     throw err;
   }
 
+  if (user.role !== 'admin' && ticket.user.toString() !== user.id) {
+    const err = new Error('Only the ticket owner or an admin can delete this ticket');
+    err.statusCode = 403;
+    throw err;
+  }
+
   await ticket.deleteOne();
   logger.info('Ticket deleted', { ticketId });
 
   if (io) emitToTicket(io, ticketId, 'ticket:deleted', { ticketId });
+};
+
+const bulkDeleteTickets = async (ticketIds, user, io) => {
+  const tickets = await Ticket.find({ _id: { $in: ticketIds } }).select('_id user');
+
+  const forbidden = tickets.some((ticket) => user.role !== 'admin' && ticket.user.toString() !== user.id);
+  if (forbidden) {
+    const err = new Error('You can only bulk delete your own tickets');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  await Ticket.deleteMany({ _id: { $in: tickets.map((ticket) => ticket._id) } });
+
+  if (io) {
+    tickets.forEach((ticket) => emitToTicket(io, ticket._id.toString(), 'ticket:deleted', { ticketId: ticket._id.toString() }));
+  }
+
+  return { deletedCount: tickets.length };
 };
 
 // ── Add reply ──────────────────────────────────────────
@@ -440,4 +465,4 @@ const addReply = async (ticketId, replyData, user, files, io) => {
   return updated;
 };
 
-module.exports = { getTickets, getTicketById, createTicket, updateTicket, deleteTicket, addReply };
+module.exports = { getTickets, getTicketById, createTicket, updateTicket, deleteTicket, bulkDeleteTickets, addReply };

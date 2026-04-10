@@ -36,7 +36,7 @@ exports.getPermissions = async (req, res, next) => {
       availablePermissions: PERMISSION_KEYS,
     };
 
-    if (currentPermissions.canManagePermissions) {
+    if (req.user?.adminTier === 'super_admin' || currentPermissions.canManagePermissions) {
       const roles = await Promise.all(ROLE_ORDER.map(getRolePayload));
       response.roles = roles;
     }
@@ -52,6 +52,13 @@ exports.getPermissions = async (req, res, next) => {
 // @access  Private/Admin with permission management access
 exports.updateRolePermissions = async (req, res, next) => {
   try {
+    if (req.user?.adminTier !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the super admin can modify role permissions',
+      });
+    }
+
     const role = normalizeRole(req.params.role);
 
     if (!ROLE_ORDER.includes(role)) {

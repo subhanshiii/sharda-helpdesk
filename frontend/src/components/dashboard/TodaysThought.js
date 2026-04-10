@@ -49,14 +49,11 @@ const writeCachedThought = (quote) => {
 };
 
 const ThoughtSkeleton = () => (
-  <section className="card overflow-hidden border-violet-100">
+  <section className="dashboard-thought-card card overflow-hidden border-violet-100">
     <div className="animate-pulse px-4 py-4 sm:px-5">
       <div className="h-3 w-28 rounded-full bg-violet-100" />
-      <div className="mt-4 h-6 w-11/12 rounded bg-gray-200" />
-      <div className="mt-2 h-6 w-4/5 rounded bg-gray-200" />
-      <div className="mt-4 flex items-center gap-2">
-        <div className="h-4 w-28 rounded-full bg-gray-200" />
-      </div>
+      <div className="mt-4 h-5 w-10/12 rounded bg-gray-200" />
+      <div className="mt-2 h-5 w-3/4 rounded bg-gray-200" />
     </div>
   </section>
 );
@@ -141,10 +138,12 @@ export default function TodaysThought() {
   if (loading) return <ThoughtSkeleton />;
 
   return (
-    <section className="card overflow-hidden border-violet-100 bg-gradient-to-r from-violet-50 via-white to-sky-50">
+    <section className="dashboard-thought-card card overflow-hidden border-violet-100 bg-gradient-to-r from-violet-50 via-white to-sky-50 min-h-[132px]">
       <div className="px-4 py-4 sm:px-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-500">Today&apos;s Thought</p>
-        <blockquote className="mt-3 text-base font-medium leading-7 text-gray-800 sm:text-lg">
+        <div className="flex items-start justify-between gap-3">
+          <p className="dashboard-thought-title dashboard-eyebrow text-violet-500">Today&apos;s Thought</p>
+        </div>
+        <blockquote className="dashboard-thought-body mt-3 max-w-3xl text-[15px] font-medium leading-7 text-gray-800 sm:text-base">
           &ldquo;{displayedQuote}&rdquo;
         </blockquote>
       </div>
