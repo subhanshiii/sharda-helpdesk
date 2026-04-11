@@ -4,6 +4,8 @@ const EmailVerification = require('../models/EmailVerification');
 const PasswordReset = require('../models/PasswordReset');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
+const fs = require('fs/promises');
+const path = require('path');
 const logger = require('../utils/logger');
 const { sendEmailVerificationEmail } = require('../utils/emailService');
 const { validationResult } = require('express-validator');
@@ -14,6 +16,7 @@ const {
 
 const RESEND_TEST_MODE_ERROR = 'You can only send testing emails to your own email address';
 const GOOGLE_TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo';
+const AVATAR_DIRECTORY = path.join(__dirname, '../../frontend/public/avatars');
 
 const createPasswordSetupToken = async (user) => {
   await PasswordReset.deleteMany({ user: user._id });
@@ -320,6 +323,29 @@ exports.getGoogleClientConfig = async (req, res) => (
     },
   })
 );
+
+exports.getAvatarOptions = async (req, res, next) => {
+  try {
+    const entries = await fs.readdir(AVATAR_DIRECTORY, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => /\.(png|jpe?g|webp|svg)$/i.test(name))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const fallback = files.includes('default.png') ? 'default.png' : files[0] || null;
+    const avatars = files.filter((name) => name !== fallback);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        avatars,
+        fallback,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 exports.adminLogin = async (req, res, next) => {
   try {

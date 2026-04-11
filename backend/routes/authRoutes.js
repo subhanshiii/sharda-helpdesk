@@ -3,7 +3,7 @@ const { body } = require('express-validator');
 const router  = express.Router();
 
 const {
-  register, login, adminLogin, googleAuth, getGoogleClientConfig, logout, getMe, updateProfile, uploadProfileAvatar, changePassword, getPendingUsers, updateApprovalStatus, verifyEmail, resendVerification,
+  register, login, adminLogin, googleAuth, getGoogleClientConfig, getAvatarOptions, logout, getMe, updateProfile, uploadProfileAvatar, changePassword, getPendingUsers, updateApprovalStatus, verifyEmail, resendVerification,
 } = require('../controllers/authController');
 const {
   forgotPassword, resetPassword, verifyResetToken,
@@ -34,6 +34,7 @@ router.post('/login',
 
 router.post('/google', authLimiter, googleAuth);
 router.get('/google/config', getGoogleClientConfig);
+router.get('/avatar-options', protect, getAvatarOptions);
 
 router.get('/verify-email/:token', verifyEmail);
 router.get('/verify-email', verifyEmail);

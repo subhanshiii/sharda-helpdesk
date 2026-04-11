@@ -71,6 +71,7 @@ if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 // Static files — serve uploads
 app.use('/uploads',      express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/chat', express.static(path.join(__dirname, 'uploads/chat')));
+app.use('/avatars',      express.static(path.join(__dirname, '../frontend/public/avatars')));
 
 app.use(trackRequest);
 
