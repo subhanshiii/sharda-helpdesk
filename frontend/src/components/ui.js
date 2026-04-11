@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getAvatarSource, getAvatarTone, getCategoryIcon, getInitials } from '../utils/helpers';
+import { getAvatarUrl, getDefaultAvatarFilename } from '../constants/avatarOptions';
 
 export const StatusBadge = ({ status }) => {
   const map = {
@@ -105,18 +107,34 @@ export const Avatar = ({ user, name = '', src = '', avatarChoice = '', size = 's
   const resolvedName = name || user?.name || '';
   const resolvedSrc = src || getAvatarSource(user || { profileImage: null, avatar: null, avatarChoice });
   const tone = getAvatarTone(user?.systemId || user?.email || resolvedName);
+  const [displaySrc, setDisplaySrc] = useState(resolvedSrc);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
 
-  if (resolvedSrc) {
+  useEffect(() => {
+    setDisplaySrc(resolvedSrc);
+    setFallbackFailed(false);
+  }, [resolvedSrc]);
+
+  if (displaySrc && !fallbackFailed) {
     return (
       <div
         className={`${sizeMap[size] || sizeMap.sm} p-1 shadow-sm flex-shrink-0 ${className}`}
         style={{ backgroundColor: '#ffffff' }}
       >
         <img
-          src={resolvedSrc}
+          src={displaySrc}
           alt={resolvedName || 'Avatar'}
           loading="lazy"
           className="h-full w-full rounded-full object-contain"
+          onError={() => {
+            const fallbackFilename = getDefaultAvatarFilename();
+            const defaultSrc = fallbackFilename ? getAvatarUrl(fallbackFilename) : '';
+            if (defaultSrc && displaySrc !== defaultSrc) {
+              setDisplaySrc(defaultSrc);
+              return;
+            }
+            setFallbackFailed(true);
+          }}
         />
       </div>
     );
@@ -149,6 +167,67 @@ export const Alert = ({ type = 'error', message }) => {
   );
 };
 
+export const Modal = ({
+  open,
+  onClose,
+  children,
+  panelClassName = '',
+  contentClassName = '',
+  closeOnOutside = true,
+  zIndexClassName = 'z-[90]',
+}) => {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className={`fixed inset-0 ${zIndexClassName} grid place-items-center p-4`}>
+      <button
+        type="button"
+        aria-label="Close modal"
+        className="modal-backdrop absolute inset-0"
+        onClick={closeOnOutside ? onClose : undefined}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`modal-panel relative w-full ${panelClassName}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className={contentClassName}>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 export const ConfirmDialog = ({
   open,
   title = 'Confirm action',
@@ -160,15 +239,13 @@ export const ConfirmDialog = ({
   onConfirm,
   onClose,
 }) => {
-  if (!open) return null;
-
   const toneClasses = tone === 'danger'
     ? 'bg-red-600 hover:bg-red-700 focus:ring-red-200'
     : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200';
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <Modal open={open} onClose={onClose} panelClassName="max-w-md">
+      <div className="w-full rounded-3xl border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-700/80 dark:bg-slate-900">
         <h3 className="font-display text-xl font-bold text-gray-900">{title}</h3>
         <p className="mt-2 text-sm leading-6 text-gray-500">{description}</p>
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -180,6 +257,6 @@ export const ConfirmDialog = ({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

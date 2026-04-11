@@ -20,11 +20,15 @@ router.get('/reports/programs', permissionMiddleware('canManageAcademics'), acad
 router.get('/reports/enrollments', permissionMiddleware('canManageAcademics'), academicController.getEnrollmentReport);
 router.get('/reports/students/:studentId', academicController.getStudentAcademicOverview);
 router.get('/me/overview', academicController.getStudentAcademicOverview);
+router.get('/structure-tree', permissionMiddleware('canManageAcademics'), academicController.getStructureTree);
+router.post('/setup', permissionMiddleware('canManageAcademics'), academicController.quickSetup);
+router.patch('/section-subjects/:id', permissionMiddleware('canManageAcademics'), academicController.updateSectionSubjectFaculty);
 
-router.get('/:resource(departments|programs|courses|years|sections|subjects|section-subjects|enrollments)', academicController.list);
-router.post('/:resource(departments|programs|courses|years|sections|subjects|section-subjects|enrollments)', permissionMiddleware('canManageAcademics'), academicController.create);
-router.put('/:resource(departments|programs|courses|years|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
-router.delete('/:resource(departments|programs|courses|years|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.remove);
+router.get('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)', academicController.list);
+router.post('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)', permissionMiddleware('canManageAcademics'), academicController.create);
+router.put('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
+router.patch('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
+router.delete('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.remove);
 
 router.get('/timetable', getTimetable);
 router.post('/timetable', permissionMiddleware('canManageTimetable'), createTimetableEntry);

@@ -110,7 +110,7 @@ export default function Layout() {
 
   const navSections = [
     {
-      label: 'Workspace',
+      label: 'Daily Workspace',
       items: [
         { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
         { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
@@ -118,27 +118,27 @@ export default function Layout() {
       ],
     },
     {
-      label: 'Operations',
+      label: 'Academic Operations',
       items: [
-        { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Support Queue' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
         { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
         { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: canAccessTimetable },
         { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: canAccessAttendance },
+        { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
       ],
     },
     {
-      label: 'Support',
+      label: 'Support & Services',
       items: [
+        { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Support Queue' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
         { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
         { to: '/faq', icon: FiHelpCircle, label: 'FAQ' },
       ],
     },
     {
-      label: 'Administration',
+      label: 'Governance',
       items: [
         { to: '/users', icon: FiUsers, label: 'Identity & Access', visible: hasPermission('canManageUsers') },
         { to: '/approvals', icon: FiUserCheck, label: 'Identity Alerts', visible: hasPermission('canManageUsers') },
-        { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
         { to: '/permissions', icon: FiShield, label: 'Permissions', visible: isSuperAdmin },
       ],
     },

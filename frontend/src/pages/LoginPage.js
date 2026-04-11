@@ -232,7 +232,7 @@ export default function LoginPage() {
 </div>
 
           <div className="mb-8">
-            <h2 className="font-display text-3xl font-black text-gray-900">Welcome back</h2>
+            <h2 className="font-display text-3xl font-black text-gray-900">Welcome back!</h2>
             <p className="text-gray-500 text-sm mt-1">Sign in with your verified and approved university email account</p>
           </div>
 

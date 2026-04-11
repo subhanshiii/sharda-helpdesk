@@ -5,6 +5,7 @@ const EmailVerification = require('../models/EmailVerification');
 const YearCounter = require('../models/YearCounter');
 const logger = require('../utils/logger');
 const { sendEmailVerificationEmail } = require('../utils/emailService');
+const { buildLifecycleSnapshot } = require('../utils/userLifecycle');
 
 const SYSTEM_ID_REGEX = /^\d{10}$/;
 const RESEND_TEST_MODE_ERROR = 'You can only send testing emails to your own email address';
@@ -112,9 +113,11 @@ const buildUserCreatePayload = async ({
   password,
   role,
   adminTier,
+  collegeId,
   sectionId,
   department,
   departmentId,
+  programId,
   year,
   section,
   expiryDate,
@@ -133,9 +136,11 @@ const buildUserCreatePayload = async ({
   role,
   adminTier: role === 'admin' ? (adminTier || 'admin') : null,
   systemId: await resolveSystemId(systemId),
+  collegeId: collegeId || null,
   sectionId: sectionId || null,
   department: department || '',
   departmentId: departmentId || null,
+  programId: programId || null,
   year: year || '',
   section: section || '',
   expiryDate: expiryDate || null,
@@ -146,30 +151,51 @@ const buildUserCreatePayload = async ({
   avatarChoice: avatarChoice || null,
 });
 
-const serializeManagedUser = (user) => ({
-  _id: user._id,
-  systemId: user.systemId,
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  adminTier: user.adminTier || null,
-  status: user.status,
-  emailVerified: user.emailVerified,
-  passwordNeedsSetup: Boolean(user.passwordNeedsSetup),
-  isActive: user.isActive,
-  department: user.department,
-  departmentId: user.departmentId || null,
-  year: user.year || '',
-  section: user.section || '',
-  sectionId: user.sectionId || null,
-  expiryDate: user.expiryDate || null,
-  avatar: user.avatar || null,
-  profileImage: user.profileImage || null,
-  avatarChoice: user.avatarChoice || null,
-  lastLogin: user.lastLogin || null,
-  createdAt: user.createdAt,
-  updatedAt: user.updatedAt,
-});
+const serializeManagedUser = (user) => {
+  const serialized = {
+    _id: user._id,
+    systemId: user.systemId,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    adminTier: user.adminTier || null,
+    collegeId: user.collegeId || null,
+    status: user.status,
+    emailVerified: user.emailVerified,
+    passwordNeedsSetup: Boolean(user.passwordNeedsSetup),
+    isActive: user.isActive,
+    department: user.department,
+    departmentId: user.departmentId || null,
+    programId: user.programId || null,
+    year: user.year || '',
+    section: user.section || '',
+    sectionId: user.sectionId || null,
+    expiryDate: user.expiryDate || null,
+    avatar: user.avatar || null,
+    profileImage: user.profileImage || null,
+    avatarChoice: user.avatarChoice || null,
+    lastLogin: user.lastLogin || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+
+  return {
+    ...serialized,
+    lifecycle: buildLifecycleSnapshot({
+      role: serialized.role,
+      emailVerified: serialized.emailVerified,
+      passwordNeedsSetup: serialized.passwordNeedsSetup,
+      status: serialized.status,
+      isActive: serialized.isActive,
+      expiryDate: serialized.expiryDate,
+      isAssigned: serialized.role === 'student'
+        ? Boolean(serialized.sectionId || serialized.section)
+        : serialized.role === 'faculty'
+          ? Boolean(serialized.department || serialized.departmentId)
+          : true,
+    }),
+  };
+};
 
 const createManagedUser = async (payload, options = {}) => {
   const createPayload = await buildUserCreatePayload(payload);

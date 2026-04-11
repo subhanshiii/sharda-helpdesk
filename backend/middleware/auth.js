@@ -1,9 +1,11 @@
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
 const Permission = require('../models/Permission');
-const { DEFAULT_ROLE_PERMISSIONS, sanitizePermissions } = require('../utils/permissionDefaults');
+const { DEFAULT_ROLE_PERMISSIONS, ADMIN_TIER_ORDER, buildAdminTierPermissions, sanitizePermissions } = require('../utils/permissionDefaults');
 
 const isSuperAdmin = (user) => user?.role === 'admin' && user?.adminTier === 'super_admin';
+const normalizeTier = (tier) => tier || 'admin';
+const tierRank = (tier) => ADMIN_TIER_ORDER.indexOf(normalizeTier(tier));
 
 // ── protect: verify JWT from httpOnly cookie OR Bearer header ──
 // We support BOTH so existing clients still work during migration
@@ -126,12 +128,14 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
-    if (isSuperAdmin(req.user)) {
-      req.permissions = sanitizePermissions('admin', {
-        ...DEFAULT_ROLE_PERMISSIONS.admin,
-        canManagePermissions: true,
-        canManageUsers: true,
-      });
+    if (req.user.role === 'admin') {
+      req.permissions = sanitizePermissions('admin', buildAdminTierPermissions(req.user.adminTier));
+      if (!req.permissions[permissionKey]) {
+        return res.status(403).json({
+          success: false,
+          message: `Access denied. Missing permission: ${permissionKey}`,
+        });
+      }
       return next();
     }
 
@@ -154,6 +158,33 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+exports.requireAdminTier = (...tiers) => (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+
+  if (!tiers.includes(normalizeTier(req.user.adminTier))) {
+    return res.status(403).json({ success: false, message: 'Your admin tier cannot access this action' });
+  }
+
+  next();
+};
+
+exports.requireMinTier = (tier) => (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+
+  const requesterRank = tierRank(req.user.adminTier);
+  const requiredRank = tierRank(tier);
+
+  if (requesterRank === -1 || requiredRank === -1 || requesterRank < requiredRank) {
+    return res.status(403).json({ success: false, message: 'Your admin tier cannot access this action' });
+  }
+
+  next();
 };
 
 exports.isSuperAdmin = isSuperAdmin;

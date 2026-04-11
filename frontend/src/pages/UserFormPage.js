@@ -7,6 +7,24 @@ import { Alert, PageHeader } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
 
 const ROLES = ['student', 'faculty', 'staff', 'admin'];
+const ADMIN_TIER_GROUPS = [
+  {
+    label: 'System-level',
+    options: [
+      { value: 'super_admin', label: 'Super Admin' },
+      { value: 'admin', label: 'Admin' },
+    ],
+  },
+  {
+    label: 'Scoped',
+    options: [
+      { value: 'college_admin', label: 'College Admin' },
+      { value: 'department_admin', label: 'Department Admin' },
+      { value: 'program_coordinator', label: 'Program Coordinator' },
+      { value: 'section_moderator', label: 'Section Moderator' },
+    ],
+  },
+];
 
 const initialForm = {
   systemId: '',
@@ -14,13 +32,19 @@ const initialForm = {
   email: '',
   password: '',
   role: 'student',
+  adminTier: 'admin',
+  collegeId: '',
   department: '',
+  departmentId: '',
+  programId: '',
   year: '',
   section: '',
   status: 'pending',
   expiryDate: '',
   isActive: true,
   emailVerified: false,
+  sectionId: '',
+  adminScopeIds: [],
 };
 
 export default function UserFormPage() {
@@ -32,7 +56,12 @@ export default function UserFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [verificationLink, setVerificationLink] = useState('');
+  const [collegeOptions, setCollegeOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [programOptions, setProgramOptions] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
   const isStudent = form.role === 'student';
+  const isAdmin = form.role === 'admin';
   const { isSuperAdmin } = usePermissions();
 
   useEffect(() => {
@@ -51,13 +80,19 @@ export default function UserFormPage() {
           email: user.email || '',
           password: '',
           role: user.role || 'student',
+          adminTier: user.adminTier || 'admin',
+          collegeId: user.collegeId?._id || user.collegeId || '',
           department: user.department || '',
+          departmentId: user.departmentId?._id || user.departmentId || '',
+          programId: user.programId?._id || user.programId || '',
           year: user.year || '',
           section: user.section || '',
           status: user.status || 'pending',
           expiryDate: user.expiryDate ? new Date(user.expiryDate).toISOString().slice(0, 10) : '',
           isActive: user.isActive !== false,
           emailVerified: Boolean(user.emailVerified),
+          sectionId: user.sectionId?._id || user.sectionId || '',
+          adminScopeIds: Array.isArray(user.adminScopes) ? user.adminScopes.map((scope) => String(scope.scopeId)) : [],
         });
       } catch (requestError) {
         setError(requestError.response?.data?.message || 'Failed to load user');
@@ -69,6 +104,34 @@ export default function UserFormPage() {
     loadUser();
     return () => { mounted = false; };
   }, [isEdit, systemId]);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      API.get('/academics/colleges'),
+      API.get('/academics/departments'),
+      API.get('/academics/programs'),
+      API.get('/academics/sections'),
+    ])
+      .then(([collegesRes, departmentsRes, programsRes, sectionsRes]) => {
+        if (!mounted) return;
+        setCollegeOptions(collegesRes.data?.data || []);
+        setDepartmentOptions(departmentsRes.data?.data || []);
+        setProgramOptions(programsRes.data?.data || []);
+        setSectionOptions(sectionsRes.data?.data || []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setCollegeOptions([]);
+        setDepartmentOptions([]);
+        setProgramOptions([]);
+        setSectionOptions([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -82,6 +145,41 @@ export default function UserFormPage() {
       if (name === 'role' && value !== 'student') {
         next.year = '';
         next.section = '';
+        next.sectionId = '';
+      }
+      if (name === 'role' && value !== 'admin') {
+        next.adminTier = 'admin';
+        next.adminScopeIds = [];
+      }
+      if (name === 'role' && value === 'admin') {
+        next.adminTier = current.adminTier || 'admin';
+      }
+      if (name === 'adminTier') {
+        next.adminScopeIds = [];
+        if (value === 'super_admin' || value === 'admin') {
+          next.collegeId = '';
+          next.departmentId = '';
+          next.programId = '';
+        }
+      }
+      if (name === 'collegeId' && current.role === 'admin') {
+        next.departmentId = '';
+        next.programId = '';
+      }
+      if (name === 'departmentId' && current.role === 'admin') {
+        next.programId = '';
+      }
+      if (name === 'programId' && current.role === 'admin') {
+        next.adminScopeIds = [];
+      }
+      if (name === 'sectionId') {
+        const selectedSection = sectionOptions.find((entry) => String(entry._id) === String(value));
+        next.section = selectedSection?.name || '';
+        next.department = selectedSection?.department?.name || current.department || '';
+        next.departmentId = selectedSection?.department?._id || current.departmentId || '';
+        next.collegeId = selectedSection?.department?.college?._id || current.collegeId || '';
+        next.programId = selectedSection?.program?._id || current.programId || '';
+        next.year = selectedSection?.academicSession?.yearNumber ? String(selectedSection.academicSession.yearNumber) : current.year;
       }
       return next;
     });
@@ -94,15 +192,54 @@ export default function UserFormPage() {
     setError('');
     setVerificationLink('');
 
+    if (form.role === 'admin') {
+      const needsScope = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(form.adminTier);
+      const hasScope = form.adminTier === 'college_admin'
+        ? Boolean(form.collegeId)
+        : form.adminTier === 'department_admin'
+          ? Boolean(form.departmentId)
+          : form.adminTier === 'program_coordinator'
+            ? Boolean(form.programId)
+            : form.adminScopeIds.length > 0;
+      if (needsScope && !hasScope) {
+        setError('Please select the required scope for this admin tier');
+        setSaving(false);
+        return;
+      }
+    }
+
     try {
       const payload = {
         ...form,
         systemId: form.systemId || undefined,
         expiryDate: form.expiryDate || null,
       };
+      delete payload.adminScopeIds;
       const res = isEdit
         ? await API.put(`/users/${systemId}`, payload)
         : await API.post('/users', payload);
+
+      const savedUser = res.data?.data;
+      const scopedTierType = {
+        college_admin: 'college',
+        department_admin: 'department',
+        program_coordinator: 'program',
+        section_moderator: 'section',
+      }[form.adminTier];
+      const scopeIds = form.adminTier === 'college_admin'
+        ? (form.collegeId ? [form.collegeId] : [])
+        : form.adminTier === 'department_admin'
+          ? (form.departmentId ? [form.departmentId] : [])
+          : form.adminTier === 'program_coordinator'
+            ? (form.programId ? [form.programId] : [])
+            : form.adminScopeIds;
+
+      if (form.role === 'admin' && savedUser?._id) {
+        await API.post('/admin-scope', {
+          userId: savedUser._id,
+          scopes: scopedTierType ? scopeIds.map((scopeId) => ({ scopeType: scopedTierType, scopeId })) : [],
+        });
+      }
 
       if (res.data?.data?.verificationLink) {
         setVerificationLink(res.data.data.verificationLink);
@@ -151,6 +288,57 @@ export default function UserFormPage() {
               </div>
             </div>
 
+            {isAdmin ? (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="label">Admin Tier</label>
+                  <select name="adminTier" value={form.adminTier} onChange={handleChange} className="input">
+                    {ADMIN_TIER_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                {form.adminTier === 'college_admin' ? (
+                  <div>
+                    <label className="label">College Scope</label>
+                    <select name="collegeId" value={form.collegeId} onChange={handleChange} className="input" required>
+                      <option value="">Select College</option>
+                      {collegeOptions.map((college) => <option key={college._id} value={college._id}>{college.name}</option>)}
+                    </select>
+                  </div>
+                ) : null}
+
+                {form.adminTier === 'department_admin' ? (
+                  <div>
+                    <label className="label">Department Scope</label>
+                    <select name="departmentId" value={form.departmentId} onChange={handleChange} className="input" required>
+                      <option value="">Select Department</option>
+                      {departmentOptions
+                        .filter((department) => !form.collegeId || String(department.college?._id || department.college) === String(form.collegeId))
+                        .map((department) => <option key={department._id} value={department._id}>{department.name}</option>)}
+                    </select>
+                  </div>
+                ) : null}
+
+                {form.adminTier === 'program_coordinator' ? (
+                  <div>
+                    <label className="label">Program Scope</label>
+                    <select name="programId" value={form.programId} onChange={handleChange} className="input" required>
+                      <option value="">Select Program</option>
+                      {programOptions
+                        .filter((program) => !form.departmentId || String(program.department?._id || program.department) === String(form.departmentId))
+                        .map((program) => <option key={program._id} value={program._id}>{program.name}</option>)}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="grid gap-5 md:grid-cols-2">
               <div>
                 <label className="label">Full Name</label>
@@ -178,21 +366,70 @@ export default function UserFormPage() {
                   onChange={handleChange}
                   className="input"
                   placeholder={isStudent ? 'Student department' : 'Owning department'}
+                  disabled={isStudent && Boolean(form.sectionId)}
                 />
               </div>
               {isStudent ? (
                 <>
                   <div>
-                    <label className="label">Year</label>
-                    <input name="year" value={form.year} onChange={handleChange} className="input" placeholder="e.g. 2" />
+                    <label className="label">Section Assignment</label>
+                    <select name="sectionId" value={form.sectionId} onChange={handleChange} className="input">
+                      <option value="">Select a section</option>
+                      {sectionOptions.map((sectionOption) => (
+                        <option key={sectionOption._id} value={sectionOption._id}>
+                          {[
+                            sectionOption.program?.name,
+                            sectionOption.course?.name,
+                            sectionOption.academicSession?.label,
+                            sectionOption.name ? `Section ${sectionOption.name}` : null,
+                          ].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Assigning a section keeps student academics aligned with timetable, attendance, and subjects.</p>
                   </div>
                   <div>
-                    <label className="label">Section</label>
-                    <input name="section" value={form.section} onChange={handleChange} className="input" placeholder="e.g. A" />
+                    <label className="label">Year Snapshot</label>
+                    <input name="year" value={form.year} onChange={handleChange} className="input" placeholder="e.g. 2" disabled={Boolean(form.sectionId)} />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="label">Section Snapshot</label>
+                    <input name="section" value={form.section} onChange={handleChange} className="input" placeholder="e.g. A" disabled={Boolean(form.sectionId)} />
                   </div>
                 </>
               ) : null}
             </div>
+
+            {isAdmin && form.adminTier === 'section_moderator' ? (
+              <div>
+                <label className="label">Section Scope</label>
+                <div className="grid max-h-56 gap-3 overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50/70 p-4 md:grid-cols-2">
+                  {sectionOptions.map((sectionOption) => {
+                    const checked = form.adminScopeIds.includes(String(sectionOption._id));
+                    return (
+                      <label key={sectionOption._id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition ${checked ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => {
+                            const value = String(sectionOption._id);
+                            setForm((current) => ({
+                              ...current,
+                              adminScopeIds: event.target.checked
+                                ? [...current.adminScopeIds, value]
+                                : current.adminScopeIds.filter((entry) => entry !== value),
+                            }));
+                          }}
+                        />
+                        <span className="text-sm text-gray-700">
+                          {[sectionOption.program?.name, sectionOption.course?.name, sectionOption.academicSession?.label, sectionOption.name ? `Section ${sectionOption.name}` : null].filter(Boolean).join(' · ')}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-5 dark-surface-subtle">
               <div className="mb-4">

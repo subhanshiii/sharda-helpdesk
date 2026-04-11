@@ -14,10 +14,17 @@ const sectionSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
-    academicYear: {
+    academicSession: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'AcademicYear',
+      ref: 'AcademicSession',
       required: true,
+      index: true,
+    },
+    studyYear: {
+      type: Number,
+      min: 1,
+      max: 10,
+      default: null,
       index: true,
     },
     department: {
@@ -50,6 +57,6 @@ const sectionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-sectionSchema.index({ academicYear: 1, name: 1 }, { unique: true });
+sectionSchema.index({ program: 1, course: 1, academicSession: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Section', sectionSchema);

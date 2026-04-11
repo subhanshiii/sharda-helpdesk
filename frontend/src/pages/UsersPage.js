@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import { PageHeader, FullPageSpinner, EmptyState, Avatar, ConfirmDialog } from '../components/ui';
-import { getRoleColor, getRoleLabel, formatDate } from '../utils/helpers';
+import { getRoleColor, getRoleLabel, getAdminTierLabel, formatDate } from '../utils/helpers';
 import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiUpload, FiChevronRight } from 'react-icons/fi';
 
 const initialFilters = {
@@ -18,6 +18,38 @@ const initialFilters = {
 };
 
 const FILTER_STORAGE_KEY = 'identity-access-filters-v1';
+
+const lifecycleTone = (overall) => {
+  const map = {
+    active: 'bg-emerald-100 text-emerald-700',
+    ready: 'bg-blue-100 text-blue-700',
+    pending_verification: 'bg-amber-100 text-amber-700',
+    password_setup: 'bg-violet-100 text-violet-700',
+    assignment_pending: 'bg-orange-100 text-orange-700',
+    pending_approval: 'bg-slate-100 text-slate-700',
+    rejected: 'bg-rose-100 text-rose-700',
+    suspended: 'bg-red-100 text-red-700',
+    inactive: 'bg-slate-200 text-slate-700',
+    expired: 'bg-red-100 text-red-700',
+  };
+  return map[overall] || 'bg-slate-100 text-slate-700';
+};
+
+const lifecycleLabel = (overall) => {
+  const map = {
+    active: 'Active',
+    ready: 'Ready',
+    pending_verification: 'Verify Email',
+    password_setup: 'Set Password',
+    assignment_pending: 'Assign Context',
+    pending_approval: 'Pending',
+    rejected: 'Rejected',
+    suspended: 'Suspended',
+    inactive: 'Inactive',
+    expired: 'Expired',
+  };
+  return map[overall] || 'Pending';
+};
 
 export default function UsersPage() {
   const navigate = useNavigate();
@@ -219,7 +251,7 @@ export default function UsersPage() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className={`badge ${getRoleColor(u.role)}`}>{getRoleLabel(u.role)}</span>
-                      {u.adminTier === 'super_admin' ? <span className="badge bg-amber-100 text-amber-700">Super Admin</span> : null}
+                      {u.adminTier ? <span className={`badge ${u.adminTier === 'super_admin' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{getAdminTierLabel(u.adminTier)}</span> : null}
                     </div>
 
                     <div className="mt-4 space-y-2 text-sm text-gray-500">
@@ -228,6 +260,7 @@ export default function UsersPage() {
                         <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
                         <span className={`badge ${u.emailVerified ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{u.emailVerified ? 'Verified' : 'Unverified'}</span>
                         <span className={`badge ${u.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : u.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{u.status}</span>
+                        <span className={`badge ${lifecycleTone(u.lifecycle?.overall)}`}>{lifecycleLabel(u.lifecycle?.overall)}</span>
                       </div>
                     </div>
                   </div>

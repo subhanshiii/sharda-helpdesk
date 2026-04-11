@@ -11,6 +11,8 @@ const { initSocket } = require('./socket/socketManager');
 const errorHandler = require('./middleware/errorHandler');
 const { ensureInitialAdmin } = require('./utils/bootstrapAdmin');
 const { backfillMissingSystemIds } = require('./services/userProvisioningService');
+const { backfillAcademicSessionRefs, migrateAcademicIndexes } = require('./utils/academicSetupService');
+const AcademicSession = require('./models/AcademicSession');
 
 // Load security middleware (graceful if packages missing)
 let helmetConfig = (req,res,next) => next();
@@ -80,6 +82,7 @@ app.use('/api/auth',              require('./routes/authRoutes'));
 app.use('/api/verify-email',      require('./routes/emailVerificationRoutes'));
 app.use('/api/tickets',           require('./routes/ticketRoutes'));
 app.use('/api/users',             require('./routes/userRoutes'));
+app.use('/api/admin-scope',       require('./routes/adminScopeRoutes'));
 app.use('/api/academics',         require('./routes/academicRoutes'));
 app.use('/api/stats',             require('./routes/statsRoutes'));
 app.use('/api/dashboard',         require('./routes/dashboardRoutes'));
@@ -120,13 +123,17 @@ const PORT = process.env.PORT || 8080;
 const startServer = async () => {
   try {
     await connectDB();
+    await migrateAcademicIndexes();
+    await backfillAcademicSessionRefs();
     await backfillMissingSystemIds();
     await ensureInitialAdmin(logger);
+    const academicSessionCount = await AcademicSession.countDocuments();
 
     server.listen(PORT, () => {
       logger.info(`🚀 Sharda Platform v5.0 running on port ${PORT}`);
       logger.info(`💬 Group Chat: enabled`);
       logger.info(`🔌 Socket.io:  real-time enabled`);
+      logger.info(`📚 AcademicSession collection count: ${academicSessionCount}`);
     });
   } catch (error) {
     logger.error(`Startup bootstrap failed: ${error.message}`);

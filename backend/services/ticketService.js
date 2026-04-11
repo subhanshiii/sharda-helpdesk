@@ -18,6 +18,7 @@ const { queueTicketCreatedEmail, queueTicketUpdatedEmail, queueTicketAssignedEma
 const { invalidateStatsCache } = require('./statsService');
 const logger = require('../utils/logger');
 const { isSupportRole, getAssignableRoles } = require('../utils/roleHelpers');
+const { getScopedUserIdsForTickets } = require('../utils/scopeGuard');
 
 const CATEGORY_ROUTING = {
   'IT Support': 'IT',
@@ -75,7 +76,7 @@ const pickBestAssignee = async (category) => {
 };
 
 // ── Query builder ──────────────────────────────────────
-const buildTicketQuery = (user, filters = {}) => {
+const buildTicketQuery = async (user, filters = {}) => {
   let query = {};
 
   // Role-based filtering
@@ -83,6 +84,11 @@ const buildTicketQuery = (user, filters = {}) => {
     query.user = user.id;
   } else if (user.role !== 'admin') {
     query.$or = [{ assignedTo: user.id }, { assignedTo: null }];
+  } else {
+    const scopedUserIds = await getScopedUserIdsForTickets(user);
+    if (Array.isArray(scopedUserIds)) {
+      query.user = { $in: scopedUserIds };
+    }
   }
 
   // Apply filters
@@ -111,7 +117,7 @@ const buildTicketQuery = (user, filters = {}) => {
 // ── Get paginated tickets ──────────────────────────────
 const getTickets = async (user, filters, pagination) => {
   const { page = 1, limit = 10 } = pagination;
-  const query = buildTicketQuery(user, filters);
+  const query = await buildTicketQuery(user, filters);
 
   const [total, tickets] = await Promise.all([
     Ticket.countDocuments(query),
@@ -150,6 +156,15 @@ const getTicketById = async (ticketId, user) => {
     const err = new Error('Not authorized to view this ticket');
     err.statusCode = 403;
     throw err;
+  }
+
+  if (user.role === 'admin') {
+    const scopedUserIds = await getScopedUserIdsForTickets(user);
+    if (Array.isArray(scopedUserIds) && !scopedUserIds.some((id) => String(id) === String(ticket.user?._id))) {
+      const err = new Error('Not authorized to view this ticket');
+      err.statusCode = 403;
+      throw err;
+    }
   }
 
   // Filter internal notes for students

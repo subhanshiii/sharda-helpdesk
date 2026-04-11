@@ -1,10 +1,13 @@
 const User = require('../models/User');
+const AdminScope = require('../models/AdminScope');
 const Enrollment = require('../models/Enrollment');
 const SectionSubject = require('../models/SectionSubject');
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
+const Section = require('../models/Section');
 const { del, KEYS } = require('../config/cache');
 const { isSupportRole, normalizeRole } = require('../utils/roleHelpers');
+const { buildLifecycleSnapshot } = require('../utils/userLifecycle');
 const {
   createManagedUser,
   serializeManagedUser,
@@ -33,10 +36,12 @@ const normalizeUserPayload = (body = {}) => {
     email: body.email,
     password: body.password,
     role: normalizedRole,
-    adminTier: normalizedRole === 'admin' ? 'admin' : null,
+    adminTier: normalizedRole === 'admin' ? (body.adminTier || 'admin') : null,
     systemId: body.systemId,
+    collegeId: body.collegeId || null,
     department: body.department || '',
     departmentId: body.departmentId || null,
+    programId: body.programId || null,
     year: normalizedRole === 'student' ? (body.year || '') : '',
     section: normalizedRole === 'student' ? (body.section || '') : '',
     sectionId: normalizedRole === 'student' ? (body.sectionId || null) : null,
@@ -62,6 +67,101 @@ const normalizeUserPayload = (body = {}) => {
   return payload;
 };
 
+const applyStudentSectionContext = async (payload) => {
+  if (normalizeRole(payload.role) !== 'student' || !payload.sectionId) {
+    return payload;
+  }
+
+  const sectionDoc = await Section.findById(payload.sectionId)
+    .populate({
+      path: 'department',
+      select: 'name college',
+      populate: { path: 'college', select: 'name code' },
+    })
+    .populate('program', 'name code')
+    .populate('academicSession', 'label yearNumber')
+    .lean();
+
+  if (!sectionDoc) {
+    const error = new Error('Selected section was not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    ...payload,
+    collegeId: sectionDoc.department?.college?._id || payload.collegeId || null,
+    department: sectionDoc.department?.name || payload.department || '',
+    programId: sectionDoc.program?._id || payload.programId || null,
+    year: sectionDoc.academicSession?.yearNumber ? String(sectionDoc.academicSession.yearNumber) : (payload.year || ''),
+    section: sectionDoc.name || payload.section || '',
+  };
+};
+
+const deriveEnrollmentSemester = (sectionDoc) => {
+  if (sectionDoc?.studyYear) return `Year ${sectionDoc.studyYear}`;
+  return '';
+};
+
+const syncStudentEnrollment = async (userId, previousSectionId, nextSectionId) => {
+  const previous = previousSectionId ? String(previousSectionId) : '';
+  const next = nextSectionId ? String(nextSectionId) : '';
+  const activeEnrollment = await Enrollment.findOne({ student: userId, status: 'active' }).sort({ createdAt: -1 });
+
+  if (!next) {
+    if (activeEnrollment) {
+      activeEnrollment.status = 'inactive';
+      await activeEnrollment.save({ validateBeforeSave: false });
+    }
+    return;
+  }
+
+  const sectionDoc = await Section.findById(next).populate('department').populate('program').populate('academicSession');
+  if (!sectionDoc) {
+    const error = new Error('Selected section was not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (activeEnrollment && String(activeEnrollment.section) === next) {
+    if (String(activeEnrollment.academicSession || '') !== String(sectionDoc.academicSession?._id || '')) {
+      activeEnrollment.academicSession = sectionDoc.academicSession?._id || null;
+    }
+    activeEnrollment.semester = deriveEnrollmentSemester(sectionDoc);
+    await activeEnrollment.save({ validateBeforeSave: false });
+    return;
+  }
+
+  if (activeEnrollment) {
+    activeEnrollment.status = 'inactive';
+    await activeEnrollment.save({ validateBeforeSave: false });
+  }
+
+  if (previous && previous !== next) {
+    await Enrollment.updateMany(
+      { student: userId, section: previous, status: 'active' },
+      { $set: { status: 'inactive' } }
+    );
+  }
+
+  const reusableEnrollment = await Enrollment.findOne({ student: userId, section: next, status: 'inactive' }).sort({ updatedAt: -1 });
+  if (reusableEnrollment) {
+    reusableEnrollment.academicSession = sectionDoc.academicSession?._id || null;
+    reusableEnrollment.semester = deriveEnrollmentSemester(sectionDoc);
+    reusableEnrollment.status = 'active';
+    await reusableEnrollment.save({ validateBeforeSave: false });
+    return;
+  }
+
+  await Enrollment.create({
+    student: userId,
+    section: sectionDoc._id,
+    academicSession: sectionDoc.academicSession?._id,
+    semester: deriveEnrollmentSemester(sectionDoc),
+    status: 'active',
+  });
+};
+
 const buildUserDetail = async (user) => {
   const populatedUser = await User.findById(user._id)
     .select('-password')
@@ -70,11 +170,17 @@ const buildUserDetail = async (user) => {
       populate: [
         { path: 'program', select: 'name code' },
         { path: 'course', select: 'name code' },
-        { path: 'academicYear', select: 'label yearNumber' },
-        { path: 'department', select: 'name code' },
+        { path: 'academicSession', select: 'label yearNumber' },
+        { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
       ],
     })
+    .populate('collegeId', 'name code')
+    .populate('programId', 'name code')
     .lean();
+
+  const adminScopes = normalizeRole(user.role) === 'admin'
+    ? await AdminScope.find({ userId: user._id }).lean()
+    : [];
 
   const enrollment = await Enrollment.findOne({ student: user._id, status: 'active' })
     .populate({
@@ -82,8 +188,8 @@ const buildUserDetail = async (user) => {
       populate: [
         { path: 'program', select: 'name code' },
         { path: 'course', select: 'name code' },
-        { path: 'academicYear', select: 'label yearNumber' },
-        { path: 'department', select: 'name code' },
+        { path: 'academicSession', select: 'label yearNumber' },
+        { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
       ],
     })
     .lean();
@@ -118,13 +224,27 @@ const buildUserDetail = async (user) => {
 
   return {
     ...sanitizeUserDoc(populatedUser),
+    adminScopes,
+    lifecycle: buildLifecycleSnapshot({
+      role: populatedUser.role,
+      emailVerified: populatedUser.emailVerified,
+      passwordNeedsSetup: populatedUser.passwordNeedsSetup,
+      status: populatedUser.status,
+      isActive: populatedUser.isActive,
+      expiryDate: populatedUser.expiryDate,
+      isAssigned: normalizeRole(populatedUser.role) === 'student'
+        ? Boolean(enrollment?.section || populatedUser?.sectionId)
+        : normalizeRole(populatedUser.role) === 'faculty'
+          ? teachingAssignments.length > 0
+          : true,
+    }),
     sectionContext: sectionContext
       ? {
           id: sectionContext._id,
           name: sectionContext.name,
           program: sectionContext.program || null,
           course: sectionContext.course || null,
-          academicYear: sectionContext.academicYear || null,
+          academicSession: sectionContext.academicSession || null,
           department: sectionContext.department || null,
         }
       : null,
@@ -133,7 +253,7 @@ const buildUserDetail = async (user) => {
           id: enrollment._id,
           semester: enrollment.semester,
           status: enrollment.status,
-          academicYearId: enrollment.academicYear || null,
+          academicSessionId: enrollment.academicSession || null,
         }
       : null,
     subjects: subjectAssignments.map((entry) => ({
@@ -310,8 +430,12 @@ exports.createUser = async (req, res, next) => {
     }
 
     const payload = normalizeUserPayload(req.body);
+    const resolvedPayload = await applyStudentSectionContext(payload);
 
-    const { user, verification } = await createManagedUser(payload);
+    const { user, verification } = await createManagedUser(resolvedPayload);
+    if (normalizeRole(user.role) === 'student' && user.sectionId) {
+      await syncStudentEnrollment(user._id, '', String(user.sectionId));
+    }
     await invalidateUserCaches(String(user._id));
 
     res.status(201).json({
@@ -432,8 +556,15 @@ exports.updateUser = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Only the super admin can modify admin accounts' });
     }
 
-    const normalized = normalizeUserPayload({ ...user.toObject(), ...req.body, password: undefined, systemId: user.systemId });
-    const allowedFields = ['name', 'email', 'role', 'adminTier', 'department', 'departmentId', 'year', 'section', 'sectionId', 'isActive', 'status', 'expiryDate', 'avatarChoice', 'emailVerified'];
+    const previousSectionId = user.sectionId ? String(user.sectionId) : '';
+    const normalized = await applyStudentSectionContext(
+      normalizeUserPayload({ ...user.toObject(), ...req.body, password: undefined, systemId: user.systemId })
+    );
+    if (normalizeRole(normalized.role) === 'student' && req.body.sectionId !== undefined && !normalized.sectionId) {
+      normalized.section = '';
+      normalized.year = '';
+    }
+    const allowedFields = ['name', 'email', 'role', 'adminTier', 'collegeId', 'department', 'departmentId', 'programId', 'year', 'section', 'sectionId', 'isActive', 'status', 'expiryDate', 'avatarChoice', 'emailVerified'];
     allowedFields.forEach((field) => {
       if (normalized[field] !== undefined) {
         user[field] = normalized[field];
@@ -444,6 +575,9 @@ exports.updateUser = async (req, res, next) => {
     }
 
     await user.save();
+    if (normalizeRole(user.role) === 'student') {
+      await syncStudentEnrollment(user._id, previousSectionId, user.sectionId ? String(user.sectionId) : '');
+    }
     await invalidateUserCaches(String(user._id));
 
     res.status(200).json({ success: true, data: sanitizeUserDoc(user) });
@@ -541,6 +675,7 @@ exports.deleteUser = async (req, res, next) => {
       });
     }
 
+    await AdminScope.deleteMany({ userId: user._id });
     await user.deleteOne();
     await invalidateUserCaches(String(user._id));
 

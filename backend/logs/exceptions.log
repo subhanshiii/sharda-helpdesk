@@ -980,3 +980,142 @@ Require stack:
   "version": "4.0.0",
   "environment": "development"
 }
+[01:11:54] [31merror[39m: uncaughtException: Cannot find module './utils/academicSetupService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module './utils/academicSetupService'
+Require stack:
+- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)
+    at Module._load (node:internal/modules/cjs/loader:1226:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:14:36)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module './utils/academicSetupService'\nRequire stack:\n- /Users/work/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1420:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1058:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1063:22)\n    at Module._load (node:internal/modules/cjs/loader:1226:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)\n    at require (node:internal/modules/helpers:152:16)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:14:36)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)",
+  "exception": true,
+  "date": "Sun Apr 12 2026 01:11:54 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 78018,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 99008512,
+      "heapTotal": 60588032,
+      "heapUsed": 29152280,
+      "external": 20717715,
+      "arrayBuffers": 18296406
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.0859375,
+      4.18310546875,
+      3.44091796875
+    ],
+    "uptime": 288182
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1420,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "defaultResolveImpl",
+      "line": 1058,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 22,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "resolveForCJSWithHooks",
+      "line": 1063,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 37,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1226,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 16,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 152,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 36,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": null,
+      "line": 14,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}

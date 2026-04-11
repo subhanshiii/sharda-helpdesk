@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema(
     },
     adminTier: {
       type: String,
-      enum: ['super_admin', 'admin'],
+      enum: ['super_admin', 'admin', 'college_admin', 'department_admin', 'program_coordinator', 'section_moderator'],
       default: null,
       index: true,
     },
@@ -68,6 +68,18 @@ const userSchema = new mongoose.Schema(
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Department',
+      default: null,
+      index: true,
+    },
+    collegeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'College',
+      default: null,
+      index: true,
+    },
+    programId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Program',
       default: null,
       index: true,
     },

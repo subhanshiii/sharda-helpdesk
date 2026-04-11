@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiArrowLeft, FiCalendar, FiEdit2, FiMail, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiUpload, FiImage } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiEdit2, FiMail, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
-import { formatDate, formatRelative, getRoleColor, getRoleLabel, getAvatarPresetUrl } from '../utils/helpers';
-import { AVATAR_OPTIONS } from '../constants/avatarOptions';
+import { formatDate, formatRelative, getRoleColor, getRoleLabel } from '../utils/helpers';
+import { fetchAvatarOptions } from '../constants/avatarOptions';
+import AvatarPickerPopover from '../components/AvatarPickerPopover';
 import { usePermissions } from '../context/PermissionContext';
 
 const MetaItem = ({ icon: Icon, label, value }) => (
@@ -18,13 +19,27 @@ const MetaItem = ({ icon: Icon, label, value }) => (
   </div>
 );
 
+const lifecycleTone = {
+  active: 'bg-emerald-100 text-emerald-700',
+  ready: 'bg-blue-100 text-blue-700',
+  pending_verification: 'bg-amber-100 text-amber-700',
+  password_setup: 'bg-violet-100 text-violet-700',
+  assignment_pending: 'bg-orange-100 text-orange-700',
+  pending_approval: 'bg-slate-100 text-slate-700',
+  rejected: 'bg-rose-100 text-rose-700',
+  suspended: 'bg-red-100 text-red-700',
+  inactive: 'bg-slate-200 text-slate-700',
+  expired: 'bg-red-100 text-red-700',
+};
+
 export default function UserDetailPage() {
   const { systemId } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingAvatar, setSavingAvatar] = useState(false);
-  const [avatarExpanded, setAvatarExpanded] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarOptions, setAvatarOptions] = useState([]);
   const [deleteState, setDeleteState] = useState({ open: false, loading: false });
   const [error, setError] = useState('');
   const [accountControl, setAccountControl] = useState({ status: 'pending', emailVerified: false, isActive: true, expiryDate: '' });
@@ -91,12 +106,26 @@ export default function UserDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systemId]);
 
+  useEffect(() => {
+    let active = true;
+    fetchAvatarOptions()
+      .then((avatars) => {
+        if (active) setAvatarOptions(avatars);
+      })
+      .catch(() => {
+        if (active) setAvatarOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const academicSummary = useMemo(() => {
     if (!user) return [];
     return [
       user.sectionContext?.program?.name,
       user.sectionContext?.course?.name,
-      user.sectionContext?.academicYear?.label,
+      user.sectionContext?.academicSession?.label,
       user.sectionContext?.name ? `Section ${user.sectionContext.name}` : null,
     ].filter(Boolean);
   }, [user]);
@@ -197,6 +226,18 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
+      <AvatarPickerPopover
+        open={avatarPickerOpen}
+        title="Avatar & Profile Image"
+        subtitle="Assign a preset avatar or upload a custom image without shifting the page layout."
+        avatars={avatarOptions}
+        selectedAvatar={user?.avatarChoice || ''}
+        loading={savingAvatar}
+        onClose={() => setAvatarPickerOpen(false)}
+        onSelect={selectAvatar}
+        onUpload={uploadAvatar}
+      />
+
       <ConfirmDialog
         open={deleteState.open}
         title="Delete user"
@@ -241,6 +282,7 @@ export default function UserDetailPage() {
                   <span className={`badge ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
                   {user.adminTier === 'super_admin' ? <span className="badge bg-amber-100 text-amber-700">Super Admin</span> : null}
                   <span className={`badge ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : user.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{user.status}</span>
+                  <span className={`badge ${lifecycleTone[user.lifecycle?.overall] || 'bg-slate-100 text-slate-700'}`}>{String(user.lifecycle?.overall || 'pending').replace(/_/g, ' ')}</span>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <MetaItem icon={FiMail} label="Email" value={user.email} />
@@ -253,12 +295,30 @@ export default function UserDetailPage() {
           </div>
 
           <div className="card p-6">
+            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Lifecycle</h3>
+            <p className="mt-1 text-sm text-gray-500 dark-text-muted">Track exactly where this identity is in onboarding and operational readiness.</p>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {(user.lifecycle?.stages || []).map((stage) => (
+                <div key={stage.key} className={`rounded-2xl border px-4 py-4 ${stage.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-900">{stage.label}</p>
+                    <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${stage.complete ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      <FiCheckCircle size={14} />
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-gray-500">{stage.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card p-6">
             <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Academic Mapping</h3>
             <p className="mt-1 text-sm text-gray-500 dark-text-muted">Section, course, and subject context used to drive timetable, attendance, and assignments.</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <MetaItem icon={FiBookOpen} label="Program" value={user.sectionContext?.program?.name || user.department || '—'} />
               <MetaItem icon={FiBookOpen} label="Course" value={user.sectionContext?.course?.name || '—'} />
-              <MetaItem icon={FiBookOpen} label="Academic year" value={user.sectionContext?.academicYear?.label || user.year || '—'} />
+              <MetaItem icon={FiBookOpen} label="Academic session" value={user.sectionContext?.academicSession?.label || user.year || '—'} />
               <MetaItem icon={FiUser} label="Section" value={user.sectionContext?.name || user.section || '—'} />
             </div>
 
@@ -337,6 +397,37 @@ export default function UserDetailPage() {
               <MetaItem icon={FiUser} label="System ID" value={user.systemId} />
               <MetaItem icon={FiShield} label="Status" value={`${user.status} · ${user.isActive ? 'Active' : 'Inactive'} · ${user.emailVerified ? 'Verified' : 'Unverified'}`} />
               <MetaItem icon={FiCheckCircle} label="Academic context" value={academicSummary.join(' · ') || 'No academic mapping'} />
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Connected Modules</h3>
+            <p className="mt-1 text-sm text-gray-500 dark-text-muted">This identity record connects access, academics, and support activity across the ERP.</p>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Identity</p>
+                <p className="mt-2 text-sm text-gray-700 dark-text-primary">Lifecycle, verification, password readiness, and access state are managed from this profile.</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Academics</p>
+                <p className="mt-2 text-sm text-gray-700 dark-text-primary">
+                  {user.role === 'student'
+                    ? 'Student access is derived from section enrollment, which unlocks subjects, timetable, and attendance.'
+                    : user.role === 'faculty'
+                      ? 'Faculty access is derived from teaching assignments, which scope timetable and attendance control.'
+                      : 'Operational roles can support academic workflows without requiring section enrollment.'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Support</p>
+                <p className="mt-2 text-sm text-gray-700 dark-text-primary">Recent tickets and notifications show the user’s connected helpdesk and platform activity.</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link to="/users" className="btn-secondary">Identity & Access</Link>
+              <Link to="/approvals" className="btn-secondary">Identity Alerts</Link>
+              <Link to="/academics" className="btn-secondary">Academic Structure</Link>
+              <Link to="/tickets" className="btn-secondary">Tickets</Link>
             </div>
           </div>
 
@@ -433,47 +524,19 @@ export default function UserDetailPage() {
           <div className="card p-6">
             <button
               type="button"
-              onClick={() => setAvatarExpanded((current) => !current)}
+              onClick={() => setAvatarPickerOpen(true)}
               className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-left transition hover:border-gray-200 hover:bg-white dark-surface-subtle"
             >
               <div className="flex items-center gap-3">
                 <FiImage size={16} className="text-gray-500" />
                 <div>
                   <h3 className="font-display text-base font-bold text-gray-900 dark-text-primary">Avatar & Profile Image</h3>
-                  <p className="mt-0.5 text-sm text-gray-500 dark-text-muted">Click to {avatarExpanded ? 'hide' : 'manage'} uploaded and preset avatars.</p>
+                  <p className="mt-0.5 text-sm text-gray-500 dark-text-muted">Open the floating picker to upload or choose an avatar.</p>
                 </div>
               </div>
-              <span className="text-sm font-semibold text-blue-600">{avatarExpanded ? 'Hide' : 'Manage'}</span>
+              <span className="text-sm font-semibold text-blue-600">Manage</span>
             </button>
-
-            {avatarExpanded ? (
-              <>
-                <p className="mt-4 text-sm text-gray-500 dark-text-muted">Priority order: uploaded photo, selected in-app avatar, then generated initials.</p>
-
-                <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-200 hover:bg-blue-50">
-                  <FiUpload size={14} />
-                  {savingAvatar ? 'Uploading...' : 'Upload image'}
-                  <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} disabled={savingAvatar} />
-                </label>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  {AVATAR_OPTIONS.map((avatarChoice) => (
-                    <button
-                      key={avatarChoice}
-                      type="button"
-                      disabled={savingAvatar}
-                      onClick={() => selectAvatar(avatarChoice)}
-                      className={`rounded-2xl border p-3 transition ${user.avatarChoice === avatarChoice ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
-                    >
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 shadow-sm">
-                        <img src={getAvatarPresetUrl(avatarChoice)} alt="Preset avatar" className="h-full w-full rounded-full object-contain" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs text-gray-400 dark-text-muted">Icons made by Freepik from www.flaticon.com</p>
-              </>
-            ) : null}
+            <p className="mt-4 text-sm text-gray-500 dark-text-muted">Priority order: uploaded photo, selected local avatar, then generated initials.</p>
           </div>
         </div>
       </div>

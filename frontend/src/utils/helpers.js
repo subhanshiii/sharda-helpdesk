@@ -1,4 +1,5 @@
 import { formatDistanceToNow, format } from 'date-fns';
+import { getAvatarUrl, getDefaultAvatarFilename } from '../constants/avatarOptions';
 
 export const normalizeUserRole = (role) => {
   if (role === 'agent') return 'staff';
@@ -33,6 +34,18 @@ export const getRoleLabel = (role) => {
     student: 'Student',
   };
   return labels[normalizedRole] || normalizedRole;
+};
+
+export const getAdminTierLabel = (tier) => {
+  const labels = {
+    super_admin: 'Super Admin',
+    admin: 'Admin',
+    college_admin: 'College Admin',
+    department_admin: 'Department Admin',
+    program_coordinator: 'Program Coordinator',
+    section_moderator: 'Section Moderator',
+  };
+  return labels[tier] || tier;
 };
 
 export const formatDate = (date) => {
@@ -110,8 +123,12 @@ export const getInitials = (name = '') => {
 };
 
 export const getAvatarPresetUrl = (avatarChoice) => {
-  if (!avatarChoice) return '';
-  return avatarChoice.startsWith('/avatars/') ? avatarChoice : `/avatars/${avatarChoice}`;
+  if (!avatarChoice) return getAvatarUrl(getDefaultAvatarFilename());
+  if (avatarChoice.startsWith('/avatars/')) {
+    const filename = decodeURIComponent(avatarChoice.replace('/avatars/', ''));
+    return getAvatarUrl(filename);
+  }
+  return getAvatarUrl(avatarChoice);
 };
 
 export const getAvatarSource = (user = {}) => {

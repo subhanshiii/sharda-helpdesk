@@ -187,6 +187,60 @@
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 
+.avatar-picker-card {
+  animation: avatarPickerIn 180ms ease-out;
+}
+
+.modal-backdrop {
+  background: rgba(255, 255, 255, 0.01);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.modal-panel {
+  animation: modalIn 180ms ease-out;
+}
+
+.avatar-picker-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+}
+
+.avatar-picker-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.avatar-picker-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.avatar-picker-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+}
+
+@keyframes avatarPickerIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .sidebar-bg {
   background: linear-gradient(170deg, #0c1654 0%, #1a2d7a 35%, #1e3a8a 65%, #1e40af 100%);
 }

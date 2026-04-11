@@ -9,23 +9,32 @@ const emptyPermissions = {
   canSendFiles: false,
   canCreateTickets: false,
   canHandleTickets: false,
+  canManageSections: false,
   canSubmitAssignments: false,
   canManageAssignments: false,
   canManageAcademics: false,
   canManageTimetable: false,
   canMarkAttendance: false,
   canManageUsers: false,
+  canManageAdmins: false,
   canManageGroups: false,
   canPostNotice: false,
   canViewAnalytics: false,
+  canViewReports: false,
   canManagePermissions: false,
 };
+
+const buildEmptyPermissions = (keys = Object.keys(emptyPermissions)) => keys.reduce((acc, key) => {
+  acc[key] = false;
+  return acc;
+}, {});
 
 export function PermissionProvider({ children }) {
   const { token, user } = useAuth();
   const [permissions, setPermissions] = useState(emptyPermissions);
   const [rolePermissions, setRolePermissions] = useState([]);
   const [availablePermissions, setAvailablePermissions] = useState(Object.keys(emptyPermissions));
+  const [permissionDefinitions, setPermissionDefinitions] = useState([]);
   const [loading, setLoading] = useState(Boolean(token));
 
   const loadPermissions = useCallback(async () => {
@@ -33,6 +42,7 @@ export function PermissionProvider({ children }) {
       setPermissions(emptyPermissions);
       setRolePermissions([]);
       setAvailablePermissions(Object.keys(emptyPermissions));
+      setPermissionDefinitions([]);
       setLoading(false);
       return;
     }
@@ -41,12 +51,16 @@ export function PermissionProvider({ children }) {
     try {
       const res = await API.get('/permissions');
       const data = res.data?.data || {};
-      setPermissions({ ...emptyPermissions, ...(data.currentPermissions || {}) });
+      const nextAvailablePermissions = data.availablePermissions || Object.keys(emptyPermissions);
+      const nextEmptyPermissions = buildEmptyPermissions(nextAvailablePermissions);
+      setPermissions({ ...nextEmptyPermissions, ...(data.currentPermissions || {}) });
       setRolePermissions(data.roles || []);
-      setAvailablePermissions(data.availablePermissions || Object.keys(emptyPermissions));
+      setAvailablePermissions(nextAvailablePermissions);
+      setPermissionDefinitions(data.permissionDefinitions || []);
     } catch {
       setPermissions(emptyPermissions);
       setRolePermissions([]);
+      setPermissionDefinitions([]);
     } finally {
       setLoading(false);
     }
@@ -74,23 +88,24 @@ export function PermissionProvider({ children }) {
       });
 
       if (user?.role === role) {
-        setPermissions({ ...emptyPermissions, ...updatedRole.permissions });
+        setPermissions({ ...buildEmptyPermissions(availablePermissions), ...updatedRole.permissions });
       }
     }
 
     return updatedRole;
-  }, [user]);
+  }, [availablePermissions, user]);
 
   const value = useMemo(() => ({
     permissions,
     rolePermissions,
     availablePermissions,
+    permissionDefinitions,
     loading,
     isSuperAdmin: user?.role === 'admin' && user?.adminTier === 'super_admin',
     hasPermission,
     refreshPermissions: loadPermissions,
     updateRolePermissions,
-  }), [permissions, rolePermissions, availablePermissions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
+  }), [permissions, rolePermissions, availablePermissions, permissionDefinitions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
 
   return (
     <PermissionContext.Provider value={value}>

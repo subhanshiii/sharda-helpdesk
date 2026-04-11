@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import { PageHeader, Alert, Avatar } from '../components/ui';
-import { getAvatarPresetUrl, getRoleColor, formatDate } from '../utils/helpers';
-import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck, FiUpload, FiImage } from 'react-icons/fi';
-import { AVATAR_OPTIONS } from '../constants/avatarOptions';
+import { getRoleColor, formatDate } from '../utils/helpers';
+import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck, FiImage } from 'react-icons/fi';
+import { fetchAvatarOptions } from '../constants/avatarOptions';
+import AvatarPickerPopover from '../components/AvatarPickerPopover';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
@@ -25,7 +26,22 @@ export default function ProfilePage() {
   const [profileError,   setProfileError]   = useState('');
   const [passError,      setPassError]      = useState('');
   const [avatarLoading,  setAvatarLoading]  = useState(false);
-  const [avatarExpanded, setAvatarExpanded] = useState(false);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarOptions, setAvatarOptions] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    fetchAvatarOptions()
+      .then((avatars) => {
+        if (active) setAvatarOptions(avatars);
+      })
+      .catch(() => {
+        if (active) setAvatarOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -104,6 +120,18 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      <AvatarPickerPopover
+        open={avatarPickerOpen}
+        title="Profile picture & avatar"
+        subtitle="Choose a preset avatar or upload your own image without leaving your profile."
+        avatars={avatarOptions}
+        selectedAvatar={user?.avatarChoice || ''}
+        loading={avatarLoading}
+        onClose={() => setAvatarPickerOpen(false)}
+        onSelect={handleAvatarChoice}
+        onUpload={handleAvatarUpload}
+      />
+
       <PageHeader title="My Profile" subtitle="Manage your account details" />
 
       {/* Profile card */}
@@ -126,45 +154,18 @@ export default function ProfilePage() {
         <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4">
           <button
             type="button"
-            onClick={() => setAvatarExpanded((current) => !current)}
+            onClick={() => setAvatarPickerOpen(true)}
             className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-left transition hover:border-gray-200 hover:bg-gray-50"
           >
             <div className="flex items-center gap-3">
               <FiImage size={15} className="text-gray-500" />
               <div>
                 <div className="text-sm font-semibold text-gray-900">Profile picture & avatar</div>
-                <p className="mt-0.5 text-sm text-gray-500">Click to {avatarExpanded ? 'hide' : 'manage'} uploaded and preset avatars.</p>
+                <p className="mt-0.5 text-sm text-gray-500">Open the floating picker to upload or choose an avatar.</p>
               </div>
             </div>
-            <span className="text-sm font-semibold text-blue-600">{avatarExpanded ? 'Hide' : 'Manage'}</span>
+            <span className="text-sm font-semibold text-blue-600">Manage</span>
           </button>
-
-          {avatarExpanded ? (
-            <>
-              <p className="mt-4 text-sm text-gray-500">Priority order: uploaded image, selected avatar, then generated initials.</p>
-              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-blue-200 hover:bg-blue-50">
-                <FiUpload size={14} />
-                {avatarLoading ? 'Uploading...' : 'Upload image'}
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarLoading} />
-              </label>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {AVATAR_OPTIONS.map((avatarChoice) => (
-                  <button
-                    key={avatarChoice}
-                    type="button"
-                    disabled={avatarLoading}
-                    onClick={() => handleAvatarChoice(avatarChoice)}
-                    className={`rounded-2xl border p-3 transition ${user?.avatarChoice === avatarChoice ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                  >
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white p-1.5 shadow-sm">
-                      <img src={getAvatarPresetUrl(avatarChoice)} alt="Preset avatar" className="h-full w-full rounded-full object-contain" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-4 text-xs text-gray-400">Icons made by Freepik from www.flaticon.com</p>
-            </>
-          ) : null}
         </div>
 
         {/* Stats */}

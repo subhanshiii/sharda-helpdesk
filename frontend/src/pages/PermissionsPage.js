@@ -11,33 +11,34 @@ const ROLE_LABELS = {
   admin: 'Admin',
 };
 
-const PERMISSION_LABELS = {
-  canViewChat: 'Chat',
-  canSendFiles: 'Files',
-  canCreateTickets: 'Create Tickets',
-  canHandleTickets: 'Handle Tickets',
-  canSubmitAssignments: 'Submit Work',
-  canManageAssignments: 'Manage Work',
-  canManageUsers: 'Users',
-  canManageGroups: 'Groups',
-  canPostNotice: 'Notice Board',
-  canViewAnalytics: 'Analytics',
-  canManagePermissions: 'Permissions',
-};
-
 const isLockedPermission = (role, permissionKey) => (
   role === 'admin' && ['canManagePermissions', 'canManageUsers'].includes(permissionKey)
 );
 
 export default function PermissionsPage() {
-  const { rolePermissions, availablePermissions, loading, updateRolePermissions, isSuperAdmin } = usePermissions();
+  const { rolePermissions, availablePermissions, permissionDefinitions, loading, updateRolePermissions, isSuperAdmin } = usePermissions();
   const [drafts, setDrafts] = useState({});
   const [savingRole, setSavingRole] = useState('');
 
-  const orderedPermissions = useMemo(
-    () => availablePermissions.filter((key) => PERMISSION_LABELS[key]),
-    [availablePermissions]
+  const permissionMetaMap = useMemo(
+    () => permissionDefinitions.reduce((acc, definition) => {
+      acc[definition.key] = definition;
+      return acc;
+    }, {}),
+    [permissionDefinitions]
   );
+
+  const orderedPermissions = useMemo(() => {
+    const fallbackDefinitions = availablePermissions.map((key) => ({
+      key,
+      label: key.replace(/^can/, '').replace(/([A-Z])/g, ' $1').trim(),
+      description: '',
+      group: 'Other',
+    }));
+    const source = permissionDefinitions.length ? permissionDefinitions : fallbackDefinitions;
+    const visibleKeys = new Set(availablePermissions);
+    return source.filter((definition) => visibleKeys.has(definition.key));
+  }, [availablePermissions, permissionDefinitions]);
 
   const getDraft = (role, basePermissions) => drafts[role] || basePermissions;
 
@@ -101,9 +102,9 @@ export default function PermissionsPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
-                {orderedPermissions.map((permissionKey) => (
-                  <th key={permissionKey} className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    {PERMISSION_LABELS[permissionKey]}
+                {orderedPermissions.map((permission) => (
+                  <th key={permission.key} className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {permission.label}
                   </th>
                 ))}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Save</th>
@@ -128,25 +129,25 @@ export default function PermissionsPage() {
                         </div>
                       </div>
                     </td>
-                    {orderedPermissions.map((permissionKey) => (
-                      <td key={permissionKey} className="px-4 py-4 text-center">
+                    {orderedPermissions.map((permission) => (
+                      <td key={permission.key} className="px-4 py-4 text-center">
                         <label className="inline-flex items-center justify-center cursor-pointer">
                           <input
                             type="checkbox"
                             className="sr-only"
-                            checked={Boolean(draft[permissionKey])}
-                            disabled={isLockedPermission(role, permissionKey) || !isSuperAdmin}
-                            onChange={() => handleToggle(role, permissionKey, permissions)}
+                            checked={Boolean(draft[permission.key])}
+                            disabled={isLockedPermission(role, permission.key) || !isSuperAdmin}
+                            onChange={() => handleToggle(role, permission.key, permissions)}
                           />
                           <span
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              draft[permissionKey] ? 'bg-blue-600' : 'bg-gray-300'
+                              draft[permission.key] ? 'bg-blue-600' : 'bg-gray-300'
                             }`}
-                            title={isLockedPermission(role, permissionKey) ? 'System admin access is always kept enabled.' : ''}
+                            title={isLockedPermission(role, permission.key) ? 'System admin access is always kept enabled.' : permissionMetaMap[permission.key]?.description || ''}
                           >
                             <span
                               className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                                draft[permissionKey] ? 'translate-x-5' : 'translate-x-1'
+                                draft[permission.key] ? 'translate-x-5' : 'translate-x-1'
                               }`}
                             />
                           </span>

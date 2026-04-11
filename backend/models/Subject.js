@@ -31,9 +31,9 @@ const subjectSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
-    academicYear: {
+    academicSession: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'AcademicYear',
+      ref: 'AcademicSession',
       required: true,
       index: true,
     },
@@ -51,6 +51,6 @@ const subjectSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-subjectSchema.index({ program: 1, academicYear: 1, code: 1 }, { unique: true });
+subjectSchema.index({ program: 1, academicSession: 1, code: 1 }, { unique: true });
 
 module.exports = mongoose.model('Subject', subjectSchema);

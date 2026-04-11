@@ -3,17 +3,24 @@ const {
   ROLE_ORDER,
   PERMISSION_KEYS,
   DEFAULT_ROLE_PERMISSIONS,
+  buildAdminTierPermissions,
   sanitizePermissions,
 } = require('../utils/permissionDefaults');
+const { FEATURE_REGISTRY } = require('../utils/featureRegistry');
 const { normalizeRole } = require('../utils/roleHelpers');
 
 const getRolePayload = async (role) => {
-  const permissionDoc = await Permission.getRolePermissions(role);
   const resolvedRole = normalizeRole(role);
+  const permissionDoc = resolvedRole === 'admin' ? null : await Permission.getRolePermissions(role);
 
   return {
     role: resolvedRole,
-    permissions: sanitizePermissions(resolvedRole, permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[resolvedRole]),
+    permissions: sanitizePermissions(
+      resolvedRole,
+      resolvedRole === 'admin'
+        ? buildAdminTierPermissions('admin')
+        : permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[resolvedRole]
+    ),
     updatedAt: permissionDoc?.updatedAt || null,
   };
 };
@@ -24,16 +31,20 @@ const getRolePayload = async (role) => {
 exports.getPermissions = async (req, res, next) => {
   try {
     const currentRole = normalizeRole(req.user.role);
-    const currentPermissionsDoc = await Permission.getRolePermissions(currentRole);
+    const currentPermissionsDoc = currentRole === 'admin' ? null : await Permission.getRolePermissions(currentRole);
     const currentPermissions = sanitizePermissions(
       currentRole,
-      currentPermissionsDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[currentRole]
+      currentRole === 'admin'
+        ? buildAdminTierPermissions(req.user.adminTier)
+        : currentPermissionsDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[currentRole]
     );
 
     const response = {
       currentRole,
+      currentAdminTier: req.user.adminTier || null,
       currentPermissions,
       availablePermissions: PERMISSION_KEYS,
+      permissionDefinitions: FEATURE_REGISTRY,
     };
 
     if (req.user?.adminTier === 'super_admin' || currentPermissions.canManagePermissions) {
@@ -69,8 +80,7 @@ exports.updateRolePermissions = async (req, res, next) => {
 
     // Keep the system recoverable even if an admin edits permissions aggressively.
     if (role === 'admin') {
-      permissions.canManagePermissions = true;
-      permissions.canManageUsers = true;
+      Object.assign(permissions, sanitizePermissions(role, buildAdminTierPermissions('admin')));
     }
     const permissionDoc = await Permission.findOneAndUpdate(
       { role },

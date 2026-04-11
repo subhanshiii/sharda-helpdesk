@@ -14,20 +14,20 @@ const enrollmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    academicYear: {
+    academicSession: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'AcademicYear',
+      ref: 'AcademicSession',
       required: true,
       index: true,
     },
     semester: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     status: {
       type: String,
-      enum: ['active', 'completed', 'withdrawn'],
+      enum: ['active', 'inactive', 'completed', 'withdrawn'],
       default: 'active',
       index: true,
     },

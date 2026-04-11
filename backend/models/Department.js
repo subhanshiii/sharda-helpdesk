@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 
 const departmentSchema = new mongoose.Schema(
   {
+    college: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'College',
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -23,6 +29,6 @@ const departmentSchema = new mongoose.Schema(
 );
 
 departmentSchema.index({ code: 1 }, { unique: true });
-departmentSchema.index({ name: 1 }, { unique: true });
+departmentSchema.index({ college: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Department', departmentSchema);
