@@ -2,7 +2,6 @@ const express  = require('express');
 const router   = express.Router();
 const { chat, categorize, preTicket, summarize, getFAQs, getSuggestions } = require('../controllers/chatController');
 const { protect, permissionMiddleware } = require('../middleware/auth');
-const { generalLimiter }     = require('../middleware/security');
 const rateLimit = require('express-rate-limit');
 
 // Stricter rate limit for AI endpoint — 30 requests per hour per user

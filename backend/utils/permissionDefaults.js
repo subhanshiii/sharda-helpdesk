@@ -31,6 +31,13 @@ const resolveEffectiveTier = (role, adminTier) => {
   return normalizeRole(role) === 'admin' ? 'admin' : null;
 };
 
+/** Full platform admins (not college/department scoped tiers). */
+const isPlatformAdmin = (user) => {
+  if (!user) return false;
+  const tier = resolveEffectiveTier(user.role, user.adminTier);
+  return tier === 'super_admin' || tier === 'admin';
+};
+
 const buildAdminTierPermissions = (adminTier = 'admin') => {
   const base = {
     canViewChat: true,
@@ -154,5 +161,6 @@ module.exports = {
   sanitizePermissions,
   tierHasMinimumAccess,
   resolveEffectiveTier,
+  isPlatformAdmin,
   buildResolvedPermissions,
 };

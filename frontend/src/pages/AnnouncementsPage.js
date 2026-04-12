@@ -8,6 +8,7 @@ import {
   FiDownload,
   FiFilter,
   FiPlus,
+  FiCalendar,
   FiSearch,
   FiTrash2,
 } from 'react-icons/fi';
@@ -272,9 +273,18 @@ export default function AnnouncementsPage() {
           title="Notice Board"
           subtitle="Important university updates, arranged for fast scanning."
           action={canManage ? (
-            <button onClick={() => navigate('/notice-board/new')} className="btn-primary">
-              <FiPlus size={15} /> Publish Notice
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => navigate('/notice-board/new')} className="btn-primary">
+                <FiPlus size={15} /> Publish Notice
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/academic-calendar/manage')}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <FiCalendar size={15} /> Academic calendar
+              </button>
+            </div>
           ) : null}
         />
 

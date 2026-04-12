@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
-const jwt  = require('jsonwebtoken');
+const { loadAuthenticatedUser } = require('../middleware/auth');
+const { isPlatformAdmin } = require('../utils/permissionDefaults');
 const User = require('../models/User');
 const Group = require('../models/Group');
 
@@ -25,18 +26,20 @@ const initSocket = (server) => {
           .find(c => c.trim().startsWith('token='))
           ?.split('=')[1];
       if (!token) return next(new Error('Authentication required'));
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user    = await User.findById(decoded.id).select('-password');
-      if (!user || !user.isActive) return next(new Error('User not found'));
+      const user = await loadAuthenticatedUser(token);
       socket.user = user;
       next();
     } catch (err) {
+      if (err.name === 'TokenExpiredError') return next(new Error('Session expired. Please log in again.'));
+      if (err.statusCode === 403 && err.message) return next(new Error(err.message));
+      if (err.statusCode === 401 && err.message) return next(new Error(err.message));
       next(new Error('Invalid token'));
     }
   });
 
   io.on('connection', (socket) => {
     const user = socket.user;
+    socket.allowedTicketRooms = new Set();
     console.log(`🔌 ${user.name} (${user.role}) connected`);
     onlineUsers.set(user._id.toString(), socket.id);
     io.emit('online_count', onlineUsers.size);
@@ -60,11 +63,38 @@ const initSocket = (server) => {
       });
     };
 
-    // ── Ticket events ──
-    socket.on('join_ticket',   (ticketId) => { socket.join(`ticket:${ticketId}`); });
-    socket.on('leave_ticket',  (ticketId) => { socket.leave(`ticket:${ticketId}`); });
-    socket.on('typing_start',  ({ ticketId }) => socket.to(`ticket:${ticketId}`).emit('user_typing', { userId: user._id, userName: user.name, role: user.role }));
-    socket.on('typing_stop',   ({ ticketId }) => socket.to(`ticket:${ticketId}`).emit('user_stopped_typing', { userId: user._id }));
+    // ── Ticket events (same access as GET /api/tickets/:id) ──
+    socket.on('join_ticket', async (ticketId) => {
+      try {
+        if (!ticketId) return;
+        const tid = String(ticketId);
+        const ticketService = require('../services/ticketService');
+        await ticketService.getTicketById(tid, user);
+        socket.join(`ticket:${tid}`);
+        socket.allowedTicketRooms.add(tid);
+        socket.emit('ticket:joined', { ticketId: tid });
+      } catch (err) {
+        socket.emit('ticket:error', {
+          ticketId: String(ticketId || ''),
+          message: err.statusCode === 404 ? 'Ticket not found' : (err.message || 'Not authorized'),
+        });
+      }
+    });
+    socket.on('leave_ticket', (ticketId) => {
+      const tid = String(ticketId || '');
+      socket.leave(`ticket:${tid}`);
+      socket.allowedTicketRooms?.delete(tid);
+    });
+    socket.on('typing_start', ({ ticketId }) => {
+      const tid = String(ticketId || '');
+      if (!socket.allowedTicketRooms?.has(tid)) return;
+      socket.to(`ticket:${tid}`).emit('user_typing', { userId: user._id, userName: user.name, role: user.role });
+    });
+    socket.on('typing_stop', ({ ticketId }) => {
+      const tid = String(ticketId || '');
+      if (!socket.allowedTicketRooms?.has(tid)) return;
+      socket.to(`ticket:${tid}`).emit('user_stopped_typing', { userId: user._id });
+    });
 
     // ── Group chat events ──
     socket.on('group:join', async ({ groupId }) => {
@@ -72,7 +102,7 @@ const initSocket = (server) => {
         const group = await Group.findById(groupId).select('members.user isActive');
         const isMember = group?.members.some((member) => member.user.toString() === user._id.toString());
 
-        if (!group?.isActive || (!isMember && user.role !== 'admin')) {
+        if (!group?.isActive || (!isMember && !isPlatformAdmin(user))) {
           socket.emit('group:error', { message: 'Not authorized for this group' });
           return;
         }
@@ -115,6 +145,7 @@ const initSocket = (server) => {
 
     socket.on('disconnect', () => {
       console.log(`🔌 ${user.name} disconnected`);
+      socket.allowedTicketRooms?.clear?.();
       onlineUsers.delete(user._id.toString());
       io.emit('online_count', onlineUsers.size);
     });

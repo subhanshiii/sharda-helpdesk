@@ -55,6 +55,38 @@ const getTicketAccessSnapshot = async (user) => {
   };
 };
 
+/** Same scope rules as getTicketById: owner, scoped user list, or full super_admin/admin. */
+const assertTicketDeletableByUser = (user, ticket, access, scopedUserIds) => {
+  const ownerId = ticket.user?._id ? ticket.user._id.toString() : ticket.user.toString();
+  if (ownerId === String(user.id)) return;
+
+  if (Array.isArray(scopedUserIds)) {
+    if (!scopedUserIds.some((id) => String(id) === ownerId)) {
+      const err = new Error('Not authorized to delete this ticket');
+      err.statusCode = 403;
+      throw err;
+    }
+    return;
+  }
+
+  if (['super_admin', 'admin'].includes(access.effectiveTier)) return;
+
+  const err = new Error('Only the ticket owner or an authorized administrator can delete this ticket');
+  err.statusCode = 403;
+  throw err;
+};
+
+/** Same scoped-institution check as getTicketById (lines using getScopedUserIdsForTickets). */
+const assertTicketScopedAccess = async (user, ticket) => {
+  const scopedUserIds = await getScopedUserIdsForTickets(user);
+  const ownerId = ticket.user?._id ? ticket.user._id.toString() : ticket.user.toString();
+  if (Array.isArray(scopedUserIds) && !scopedUserIds.some((id) => String(id) === ownerId)) {
+    const err = new Error('Not authorized to access this ticket');
+    err.statusCode = 403;
+    throw err;
+  }
+};
+
 const pickBestAssignee = async (category) => {
   const routingDepartment = CATEGORY_ROUTING[category] || 'Student Services';
   const roleQuery = { role: { $in: getAssignableRoles() }, isActive: true };
@@ -285,6 +317,8 @@ const updateTicket = async (ticketId, updates, user, io) => {
     return ticket;
   }
 
+  await assertTicketScopedAccess(user, ticket);
+
   const oldStatus     = ticket.status;
   const oldAssignedTo = ticket.assignedTo?.toString();
 
@@ -322,17 +356,35 @@ const updateTicket = async (ticketId, updates, user, io) => {
 
       // Queue assignment email
       if (isNewAssignment) {
+        const base = process.env.FRONTEND_URL || 'http://localhost:3000';
         queueTicketAssignedEmail({
           toEmail:     assignee.email,
           agentName:   assignee.name,
           ticketId:    ticket.ticketId,
           ticketTitle: ticket.title,
+          ticketLink:  `${base}/tickets/${ticket._id}`,
         }).catch(() => {});
       }
     }
   }
 
   await ticket.save();
+
+  if (oldStatus !== ticket.status) {
+    const owner = await User.findById(ticket.user).select('email name').lean();
+    if (owner?.email) {
+      const base = process.env.FRONTEND_URL || 'http://localhost:3000';
+      queueTicketUpdatedEmail({
+        toEmail: owner.email,
+        userName: owner.name,
+        ticketId: ticket.ticketId,
+        ticketTitle: ticket.title,
+        ticketLink: `${base}/tickets/${ticket._id}`,
+        oldStatus,
+        newStatus: ticket.status,
+      }).catch(() => {});
+    }
+  }
 
   const updated = await Ticket.findById(ticket._id)
     .populate('user',           'name email role enrollmentId')
@@ -370,6 +422,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
 // ── Delete ticket ──────────────────────────────────────
 const deleteTicket = async (ticketId, user, io) => {
   const access = await getTicketAccessSnapshot(user);
+  const scopedUserIds = await getScopedUserIdsForTickets(user);
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) {
     const err = new Error('Ticket not found');
@@ -377,11 +430,7 @@ const deleteTicket = async (ticketId, user, io) => {
     throw err;
   }
 
-  if (!access.effectiveTier && ticket.user.toString() !== user.id) {
-    const err = new Error('Only the ticket owner or an admin can delete this ticket');
-    err.statusCode = 403;
-    throw err;
-  }
+  assertTicketDeletableByUser(user, ticket, access, scopedUserIds);
 
   await ticket.deleteOne();
   logger.info('Ticket deleted', { ticketId });
@@ -391,13 +440,11 @@ const deleteTicket = async (ticketId, user, io) => {
 
 const bulkDeleteTickets = async (ticketIds, user, io) => {
   const access = await getTicketAccessSnapshot(user);
+  const scopedUserIds = await getScopedUserIdsForTickets(user);
   const tickets = await Ticket.find({ _id: { $in: ticketIds } }).select('_id user');
 
-  const forbidden = tickets.some((ticket) => !access.effectiveTier && ticket.user.toString() !== user.id);
-  if (forbidden) {
-    const err = new Error('You can only bulk delete your own tickets');
-    err.statusCode = 403;
-    throw err;
+  for (const ticket of tickets) {
+    assertTicketDeletableByUser(user, ticket, access, scopedUserIds);
   }
 
   await Ticket.deleteMany({ _id: { $in: tickets.map((ticket) => ticket._id) } });
@@ -424,6 +471,8 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     err.statusCode = 403;
     throw err;
   }
+
+  await assertTicketScopedAccess(user, ticket);
 
   if (ticket.status === 'Closed') {
     const err = new Error('Cannot reply to a closed ticket');

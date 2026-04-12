@@ -418,6 +418,7 @@ const gradeSubmission = async (assignmentId, submissionId, body, user) => {
 module.exports = {
   listAssignments,
   getAssignmentById,
+  getAssignmentAccess,
   createAssignment,
   updateAssignment,
   deleteAssignment,

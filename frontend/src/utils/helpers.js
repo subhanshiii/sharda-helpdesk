@@ -15,6 +15,21 @@ export const getAssetUrl = (assetPath) => {
   const normalizedPath = assetPath.startsWith('/') ? assetPath : `/${assetPath}`;
   const url = new URL(`${originBase}${normalizedPath}`, window.location.origin);
 
+  // Legacy /uploads/... URLs are no longer served as static files; route through authenticated API
+  if (normalizedPath.startsWith('/uploads/')) {
+    const rest = normalizedPath.replace(/^\/uploads\//, '');
+    const token = localStorage.getItem('token');
+    if (rest.startsWith('chat/')) {
+      const chatFile = rest.replace(/^chat\//, '');
+      const apiUrl = new URL(`${originBase}/api/files/chat/${chatFile}`, window.location.origin);
+      if (token) apiUrl.searchParams.set('token', token);
+      return apiUrl.toString();
+    }
+    const apiUrl = new URL(`${originBase}/api/files/general/${rest}`, window.location.origin);
+    if (token) apiUrl.searchParams.set('token', token);
+    return apiUrl.toString();
+  }
+
   if (normalizedPath.startsWith('/api/files/')) {
     const token = localStorage.getItem('token');
     if (token) {

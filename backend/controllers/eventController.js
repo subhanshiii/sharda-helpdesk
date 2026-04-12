@@ -1,4 +1,5 @@
 const Event = require('../models/Event');
+const { isPlatformAdmin } = require('../utils/permissionDefaults');
 const path  = require('path');
 
 // @desc    Get all events
@@ -108,7 +109,7 @@ exports.updateEvent = async (req, res, next) => {
     let event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
-    if (req.user.role !== 'admin' && event.postedBy.toString() !== req.user.id) {
+    if (!isPlatformAdmin(req.user) && event.postedBy.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
@@ -131,7 +132,7 @@ exports.deleteEvent = async (req, res, next) => {
     const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
-    if (req.user.role !== 'admin' && event.postedBy.toString() !== req.user.id) {
+    if (!isPlatformAdmin(req.user) && event.postedBy.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 

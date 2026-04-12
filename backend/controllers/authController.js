@@ -432,7 +432,7 @@ exports.uploadProfileAvatar = async (req, res, next) => {
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { profileImage: `/uploads/${req.file.filename}` },
+      { profileImage: `/api/files/general/${req.file.filename}` },
       { new: true, runValidators: true }
     );
 

@@ -34,6 +34,7 @@ const AcademicStructurePage = lazy(() => import('./pages/AcademicStructurePage')
 const AdvancedAcademicOperationsPage = lazy(() => import('./pages/AdvancedAcademicOperationsPage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
 const AnnouncementsPage    = lazy(() => import('./pages/AnnouncementsPage'));
+const AcademicCalendarPage = lazy(() => import('./pages/AcademicCalendarPage'));
 const OpportunitiesPage    = lazy(() => import('./pages/OpportunitiesPage'));
 const EventsPage           = lazy(() => import('./pages/EventsPage'));
 const AIAssistant          = lazy(() => import('./pages/AIAssistant'));
@@ -83,7 +84,8 @@ function AppRoutes() {
         <Route path="/attendance/:id/edit" element={<ProtectedRoute roles={['faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><CreateAttendancePage /></Suspense></ProtectedRoute>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
         <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
-        <Route path="/notice-board/new"  element={<Suspense fallback={<FullPageSpinner />}><CreateNoticePage /></Suspense>} />
+        <Route path="/notice-board/new"  element={<ProtectedRoute permission="canPostNotice"><Suspense fallback={<FullPageSpinner />}><CreateNoticePage /></Suspense></ProtectedRoute>} />
+        <Route path="/academic-calendar/manage" element={<ProtectedRoute permission="canPostNotice"><Suspense fallback={<FullPageSpinner />}><AcademicCalendarPage /></Suspense></ProtectedRoute>} />
         <Route path="/announcements"     element={<Navigate to="/notice-board" replace />} />
         <Route path="/opportunities"     element={<Suspense fallback={<FullPageSpinner />}><OpportunitiesPage /></Suspense>} />
         <Route path="/events"            element={<Suspense fallback={<FullPageSpinner />}><EventsPage /></Suspense>} />

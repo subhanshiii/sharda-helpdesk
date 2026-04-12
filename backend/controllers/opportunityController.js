@@ -1,4 +1,5 @@
 const Opportunity = require('../models/Opportunity');
+const { isPlatformAdmin } = require('../utils/permissionDefaults');
 
 // @desc    Get all opportunities
 // @route   GET /api/opportunities
@@ -92,7 +93,7 @@ exports.updateOpportunity = async (req, res, next) => {
     let opp = await Opportunity.findById(req.params.id);
     if (!opp) return res.status(404).json({ success: false, message: 'Not found' });
 
-    if (req.user.role !== 'admin' && opp.postedBy.toString() !== req.user.id) {
+    if (!isPlatformAdmin(req.user) && opp.postedBy.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
@@ -111,7 +112,7 @@ exports.deleteOpportunity = async (req, res, next) => {
     const opp = await Opportunity.findById(req.params.id);
     if (!opp) return res.status(404).json({ success: false, message: 'Not found' });
 
-    if (req.user.role !== 'admin' && opp.postedBy.toString() !== req.user.id) {
+    if (!isPlatformAdmin(req.user) && opp.postedBy.toString() !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 

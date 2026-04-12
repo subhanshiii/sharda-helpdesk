@@ -239,7 +239,7 @@ export default function UserFormPage() {
             ? (form.programId ? [form.programId] : [])
             : form.adminScopeIds;
 
-      if (savedUser?._id) {
+      if (isSuperAdmin && savedUser?._id) {
         await API.post('/admin-scope', {
           userId: savedUser._id,
           scopes: scopedTierType ? scopeIds.map((scopeId) => ({ scopeType: scopedTierType, scopeId })) : [],

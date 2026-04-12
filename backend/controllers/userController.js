@@ -707,7 +707,7 @@ exports.uploadUserAvatar = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Only image files can be used for profile avatars' });
     }
 
-    user.profileImage = `/uploads/${req.file.filename}`;
+    user.profileImage = `/api/files/general/${req.file.filename}`;
     await user.save({ validateBeforeSave: false });
     await invalidateUserCaches(String(user._id));
 

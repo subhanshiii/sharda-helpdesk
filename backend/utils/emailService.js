@@ -1,7 +1,6 @@
-const { Resend } = require('resend');
 const logger = require('./logger');
 
-// FIXED: support SMTP for Gmail delivery while keeping Resend as a fallback.
+// Outbound mail uses SMTP only (see EMAIL_USER / EMAIL_PASS / EMAIL_HOST in .env).
 let nodemailer = null;
 try {
   // FIXED: load nodemailer only when available so local installs without it do not crash at require time.
@@ -10,10 +9,9 @@ try {
   nodemailer = null;
 }
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const getEmailUser = () => String(process.env.EMAIL_USER || '').trim();
 const getEmailPass = () => String(process.env.EMAIL_PASS || '').replace(/\s+/g, '').trim();
-const getFromEmail = () => String(process.env.FROM_EMAIL || process.env.EMAIL_FROM || getEmailUser() || 'onboarding@resend.dev').trim();
+const getFromEmail = () => String(process.env.FROM_EMAIL || process.env.EMAIL_FROM || getEmailUser() || 'noreply@localhost').trim();
 const APP_NAME = 'Sharda University Helpdesk';
 
 const getSmtpConfig = () => {
@@ -65,7 +63,6 @@ const sendEmail = async ({ to, subject, html }) => {
     smtpUser: smtpConfig ? getEmailUser() : null,
     smtpPasswordPresent: Boolean(getEmailPass()),
     fromEmail: getFromEmail(),
-    resendConfigured: Boolean(resend),
     nodemailerAvailable: Boolean(nodemailer),
   });
 
@@ -92,28 +89,9 @@ const sendEmail = async ({ to, subject, html }) => {
     }
   }
 
-  if (resend) {
-    // FIXED: keep Resend as a working fallback when SMTP is not configured.
-    const response = await resend.emails.send({
-      from: getFromEmail(),
-      to,
-      subject,
-      html,
-    });
-    if (response?.error) {
-      logger.error('Resend email failed', {
-        to,
-        subject,
-        error: response.error,
-      });
-      throw new Error(response.error.message || 'Resend failed to deliver the email');
-    }
-
-    logger.info('Email sent via Resend', { to, subject, messageId: response?.data?.id });
-    return { success: true, provider: 'resend', messageId: response?.data?.id || null };
-  }
-
-  throw new Error('No email provider configured');
+  throw new Error(
+    'SMTP is not configured. Set EMAIL_USER and EMAIL_PASS (and optionally EMAIL_HOST, EMAIL_PORT, FROM_EMAIL) in your environment.'
+  );
 };
 
 exports.sendEmailVerificationEmail = async ({ toEmail, userName, verificationLink }) => {
@@ -254,6 +232,100 @@ exports.sendTicketCreatedEmail = async ({ toEmail, userName, ticketId, ticketTit
                   <div style="text-align:center;margin:28px 0;">
                     <a href="${ticketLink}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#2563eb);color:white;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;">View Ticket →</a>
                   </div>
+                </td></tr>
+                <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body></html>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+exports.sendTicketUpdatedEmail = async ({
+  toEmail,
+  userName,
+  ticketId,
+  ticketTitle,
+  ticketLink,
+  oldStatus,
+  newStatus,
+}) => {
+  try {
+    await sendEmail({
+      to: toEmail,
+      subject: `Ticket ${ticketId} updated — ${APP_NAME}`,
+      html: `
+        <!DOCTYPE html><html><body style="margin:0;padding:0;background:#f0f4ff;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
+                <tr><td style="background:linear-gradient(135deg,#0c1654,#1e3a8a);padding:28px 40px;text-align:center;">
+                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">Sharda University Helpdesk</h1>
+                </td></tr>
+                <tr><td style="padding:36px 40px;">
+                  <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px;">Ticket status updated</h2>
+                  <p style="color:#64748b;font-size:14px;line-height:1.6;">Hi <strong>${userName}</strong>, your ticket <strong>${ticketId}</strong> has a new status.</p>
+                  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
+                    <p style="margin:0 0 4px;color:#1e40af;font-weight:700;font-size:13px;">${ticketTitle}</p>
+                    <p style="margin:0;color:#64748b;font-size:14px;">${oldStatus} → <strong>${newStatus}</strong></p>
+                  </div>
+                  <div style="text-align:center;margin:28px 0;">
+                    <a href="${ticketLink}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#2563eb);color:white;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;">View ticket</a>
+                  </div>
+                </td></tr>
+                <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body></html>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+exports.sendTicketAssignedEmail = async ({
+  toEmail,
+  agentName,
+  ticketId,
+  ticketTitle,
+  ticketLink,
+}) => {
+  try {
+    const linkBlock = ticketLink
+      ? `<div style="text-align:center;margin:28px 0;">
+          <a href="${ticketLink}" style="display:inline-block;background:linear-gradient(135deg,#1e40af,#2563eb);color:white;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;">Open ticket</a>
+        </div>`
+      : '';
+    await sendEmail({
+      to: toEmail,
+      subject: `Ticket ${ticketId} assigned to you — ${APP_NAME}`,
+      html: `
+        <!DOCTYPE html><html><body style="margin:0;padding:0;background:#f0f4ff;font-family:'Segoe UI',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
+                <tr><td style="background:linear-gradient(135deg,#0c1654,#1e3a8a);padding:28px 40px;text-align:center;">
+                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">Sharda University Helpdesk</h1>
+                </td></tr>
+                <tr><td style="padding:36px 40px;">
+                  <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px;">New assignment</h2>
+                  <p style="color:#64748b;font-size:14px;line-height:1.6;">Hi <strong>${agentName}</strong>, you have been assigned ticket <strong>${ticketId}</strong>.</p>
+                  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
+                    <p style="margin:0;color:#1e293b;font-size:15px;font-weight:600;">${ticketTitle}</p>
+                  </div>
+                  ${linkBlock}
                 </td></tr>
                 <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
                   <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>

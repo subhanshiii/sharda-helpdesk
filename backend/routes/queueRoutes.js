@@ -1,3 +1,6 @@
+/**
+ * Admin monitoring for Bull email queue (jobs send via SMTP in workers).
+ */
 const express = require('express');
 const router  = express.Router();
 const { getQueueStats, emailQueue } = require('../queues/emailQueue');

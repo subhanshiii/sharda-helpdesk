@@ -42,7 +42,7 @@ try {
 
 dotenv.config();
 
-// Redis (optional)
+// Redis (optional — caching, chat, Bull email queue)
 try {
   const { getRedisClient } = require('./config/redis');
   const redis = getRedisClient();
@@ -66,15 +66,23 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(cookieParser());
+try {
+  const requestLogger = require('./middleware/requestLogger');
+  app.use(requestLogger);
+} catch {}
 app.use(mongoSanitize);
 app.use(hppProtection);
 
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
-// Static files — serve uploads
-app.use('/uploads',      express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/chat', express.static(path.join(__dirname, 'uploads/chat')));
-app.use('/avatars',      express.static(path.join(__dirname, '../frontend/public/avatars')));
+// Uploads are not served publicly — use GET /api/files/general|chat/:filename (+ JWT or ?token=)
+app.use('/uploads', (req, res) => {
+  res.status(403).json({
+    success: false,
+    message: 'Use /api/files/general/… or /api/files/chat/… with authentication.',
+  });
+});
+app.use('/avatars', express.static(path.join(__dirname, '../frontend/public/avatars')));
 
 app.use(trackRequest);
 

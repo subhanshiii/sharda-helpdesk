@@ -71,9 +71,15 @@ export const useTicketSocket = (ticketId, callbacks) => {
   useEffect(() => {
     if (!socket || !ticketId) return;
 
-    // Join this ticket's room
+    const onTicketError = (data) => {
+      if (data?.ticketId === ticketId) {
+        console.warn('Ticket realtime:', data.message || 'Not authorized');
+      }
+    };
+    socket.on('ticket:error', onTicketError);
+
+    // Join this ticket's room (server validates access like GET /api/tickets/:id)
     socket.emit('join_ticket', ticketId);
-    console.log(`📋 Joined ticket room: ${ticketId}`);
 
     // Listen for new replies
     if (callbacks.onNewReply) {
@@ -98,6 +104,7 @@ export const useTicketSocket = (ticketId, callbacks) => {
     // Cleanup: leave room when component unmounts
     return () => {
       socket.emit('leave_ticket', ticketId);
+      socket.off('ticket:error', onTicketError);
       socket.off('ticket:new_reply');
       socket.off('ticket:updated');
       socket.off('user_typing');

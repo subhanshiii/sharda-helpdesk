@@ -3,6 +3,7 @@
  * Uses real AI (OpenAI) with fallback to keyword matching
  */
 const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket, suggestPreTicketSupport } = require('../services/aiService');
+const ticketService = require('../services/ticketService');
 const { withCache, TTL, KEYS } = require('../config/cache');
 const faqData = require('../data/faq.json');
 
@@ -15,12 +16,6 @@ exports.chat = async (req, res, next) => {
     if (!message?.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
-
-    // Rate limit AI calls per user (in addition to global rate limit)
-    // Each user gets 30 AI messages per hour — stored in cache
-    const rateLimitKey = `ai_rate:${req.user.id}`;
-    const { withCache: cacheHelper, get, set } = require('../config/cache');
-    const { getRedisClient } = require('../config/redis');
 
     const result = await chatWithAI(message.trim(), conversationHistory);
 
@@ -82,11 +77,7 @@ exports.preTicket = async (req, res, next) => {
 // @access  Private (roles with ticket-handling permission)
 exports.summarize = async (req, res, next) => {
   try {
-    const Ticket = require('../models/Ticket');
-    const ticket = await Ticket.findById(req.params.ticketId)
-      .populate('replies.author', 'name role');
-
-    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    const ticket = await ticketService.getTicketById(req.params.ticketId, req.user);
 
     const summary = await summarizeTicket(ticket);
 

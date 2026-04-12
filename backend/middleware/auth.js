@@ -7,9 +7,8 @@ const isSuperAdmin = (user) => resolveEffectiveTier(user?.role, user?.adminTier)
 const normalizeTier = (role, tier) => resolveEffectiveTier(role, tier) || 'none';
 const tierRank = (tier) => ADMIN_TIER_ORDER.indexOf(tier || 'none');
 
-// ── protect: verify JWT from httpOnly cookie OR Bearer header ──
-// We support BOTH so existing clients still work during migration
-const attachAuthenticatedUser = async (req, token) => {
+// ── Shared JWT → user resolution (HTTP protect + Socket.IO) ──
+const loadAuthenticatedUser = async (token) => {
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findById(decoded.id).select('-password');
 
@@ -49,6 +48,13 @@ const attachAuthenticatedUser = async (req, token) => {
     throw error;
   }
 
+  return user;
+};
+
+// ── protect: verify JWT from httpOnly cookie OR Bearer header ──
+// We support BOTH so existing clients still work during migration
+const attachAuthenticatedUser = async (req, token) => {
+  const user = await loadAuthenticatedUser(token);
   req.user = user;
   req.isSuperAdmin = isSuperAdmin(user);
 };
@@ -74,12 +80,18 @@ const buildUnauthorizedResponse = (res, err) => {
     return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
   }
 
+  if (err?.statusCode === 403 && err.message) {
+    return res.status(403).json({ success: false, message: err.message });
+  }
+
   if (err?.statusCode === 401 && err.message) {
     return res.status(401).json({ success: false, message: err.message });
   }
 
   return res.status(401).json({ success: false, message: 'Invalid token. Please log in again.' });
 };
+
+exports.loadAuthenticatedUser = loadAuthenticatedUser;
 
 exports.protect = async (req, res, next) => {
   const token = getAuthToken(req);

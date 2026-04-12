@@ -9,7 +9,12 @@ const Message = require('../models/Message');
 const User    = require('../models/User');
 const Permission = require('../models/Permission');
 const logger  = require('../utils/logger');
-const { sanitizePermissions, DEFAULT_ROLE_PERMISSIONS } = require('../utils/permissionDefaults');
+const {
+  buildResolvedPermissions,
+  DEFAULT_ROLE_PERMISSIONS,
+  resolveEffectiveTier,
+  isPlatformAdmin,
+} = require('../utils/permissionDefaults');
 const { normalizeRole } = require('../utils/roleHelpers');
 
 const GROUP_MEMBER_ROLES = ['student', 'faculty', 'staff', 'agent', 'admin'];
@@ -25,7 +30,7 @@ const isGroupManager = (group, userId) => group.members.some(
 );
 
 const canManageGroup = async (groupId, userId) => {
-  const requester = await User.findById(userId).select('role');
+  const requester = await User.findById(userId).select('role adminTier');
   if (!requester) {
     const err = new Error('User not found');
     err.statusCode = 404;
@@ -40,7 +45,7 @@ const canManageGroup = async (groupId, userId) => {
   }
 
   const isManager = isGroupManager(group, userId);
-  if (!isManager && requester.role !== 'admin') {
+  if (!isManager && !isPlatformAdmin(requester)) {
     const err = new Error('Only group admins can manage this group');
     err.statusCode = 403;
     throw err;
@@ -50,7 +55,7 @@ const canManageGroup = async (groupId, userId) => {
 };
 
 const canCreateGroup = async (userId) => {
-  const requester = await User.findById(userId).select('role');
+  const requester = await User.findById(userId).select('role adminTier');
   if (!requester) {
     const err = new Error('User not found');
     err.statusCode = 404;
@@ -59,9 +64,10 @@ const canCreateGroup = async (userId) => {
 
   const normalizedRole = normalizeRole(requester.role);
   const permissionDoc = await Permission.getRolePermissions(normalizedRole);
-  const permissions = sanitizePermissions(
+  const permissions = buildResolvedPermissions(
     normalizedRole,
-    permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[normalizedRole]
+    permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[normalizedRole],
+    requester.adminTier
   );
 
   if (!permissions?.canManageGroups) {
@@ -74,7 +80,7 @@ const canCreateGroup = async (userId) => {
 };
 
 const canAccessGroup = async (groupId, userId) => {
-  const user = await User.findById(userId).select('role');
+  const user = await User.findById(userId).select('role adminTier');
   if (!user) {
     const err = new Error('User not found');
     err.statusCode = 404;
@@ -92,7 +98,7 @@ const canAccessGroup = async (groupId, userId) => {
     (member) => member.user.toString() === userId.toString()
   );
 
-  if (!isMember && user.role !== 'admin') {
+  if (!isMember && !isPlatformAdmin(user)) {
     const err = new Error('You are not a member of this group');
     err.statusCode = 403;
     throw err;
@@ -249,10 +255,10 @@ const getGroup = async (groupId, userId) => {
     throw err;
   }
 
-  const requester = await User.findById(userId).select('role');
+  const requester = await User.findById(userId).select('role adminTier');
   const isMember = group.members.some((m) => m.user._id.toString() === userId.toString());
 
-  if (!isMember && requester?.role !== 'admin') {
+  if (!isMember && !isPlatformAdmin(requester)) {
     const err = new Error('You are not a member of this group');
     err.statusCode = 403;
     throw err;
@@ -364,13 +370,13 @@ const removeMember = async (groupId, userId, requesterId) => {
     throw err;
   }
 
-  const requester     = await User.findById(requesterId);
+  const requester     = await User.findById(requesterId).select('role adminTier');
   const isGroupAdmin  = group.members.some(
     (m) => m.user.toString() === requesterId.toString() && m.role === 'admin'
   );
   const isSelfLeaving = userId === requesterId;
 
-  if (!isGroupAdmin && requester.role !== 'admin' && !isSelfLeaving) {
+  if (!isGroupAdmin && !isPlatformAdmin(requester) && !isSelfLeaving) {
     const err = new Error('Not authorized to remove members');
     err.statusCode = 403;
     throw err;
@@ -577,14 +583,14 @@ const deleteMessage = async (messageId, userId) => {
   }
 
   const group = await Group.findById(message.group);
-  const requester = await User.findById(userId).select('role');
+  const requester = await User.findById(userId).select('role adminTier');
   const isManager = group ? isGroupManager(group, userId) : false;
 
-  // Sender, group admin, or system admin can delete the message
+  // Sender, group admin, or platform admin can delete the message
   if (
     message.sender.toString() !== userId.toString() &&
     !isManager &&
-    requester?.role !== 'admin'
+    !isPlatformAdmin(requester)
   ) {
     const err = new Error('You are not authorized to delete this message');
     err.statusCode = 403;
@@ -604,4 +610,5 @@ module.exports = {
   createGroup, getUserGroups, getGroup, getAllGroups, deleteGroup,
   addMembers, updateMemberRole, removeMember,
   updateGroup, getMessages, saveMessage, deleteMessage,
+  canAccessGroup,
 };
