@@ -31,6 +31,7 @@ const UserImportReviewPage = lazy(() => import('./pages/UserImportReviewPage'));
 const UserDetailPage       = lazy(() => import('./pages/UserDetailPage'));
 const AccountApprovalsPage = lazy(() => import('./pages/AccountApprovalsPage'));
 const AcademicStructurePage = lazy(() => import('./pages/AcademicStructurePage'));
+const AdvancedAcademicOperationsPage = lazy(() => import('./pages/AdvancedAcademicOperationsPage'));
 const ProfilePage          = lazy(() => import('./pages/ProfilePage'));
 const AnnouncementsPage    = lazy(() => import('./pages/AnnouncementsPage'));
 const OpportunitiesPage    = lazy(() => import('./pages/OpportunitiesPage'));
@@ -98,6 +99,7 @@ function AppRoutes() {
         <Route path="/users/:systemId/edit" element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><UserFormPage /></Suspense></ProtectedRoute>} />
         <Route path="/approvals"         element={<ProtectedRoute permission="canManageUsers"><Suspense fallback={<FullPageSpinner />}><AccountApprovalsPage /></Suspense></ProtectedRoute>} />
         <Route path="/academics"         element={<ProtectedRoute permission="canManageAcademics"><Suspense fallback={<FullPageSpinner />}><AcademicStructurePage /></Suspense></ProtectedRoute>} />
+        <Route path="/academics/advanced" element={<ProtectedRoute permission="canManageAcademics"><Suspense fallback={<FullPageSpinner />}><AdvancedAcademicOperationsPage /></Suspense></ProtectedRoute>} />
         <Route path="/permissions"       element={<ProtectedRoute permission="canManagePermissions"><Suspense fallback={<FullPageSpinner />}><PermissionsPage /></Suspense></ProtectedRoute>} />
       </Route>
 

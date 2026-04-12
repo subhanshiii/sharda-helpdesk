@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import API from '../utils/api';
 import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
-import { PageHeader, FullPageSpinner, EmptyState, Alert } from '../components/ui';
+import { PageHeader, FullPageSpinner, EmptyState, Alert, ConfirmDialog } from '../components/ui';
 import { formatDate, getAssetUrl } from '../utils/helpers';
 import {
   FiPlus, FiSearch, FiX, FiCalendar, FiMapPin,
@@ -332,6 +332,7 @@ export default function EventsPage() {
   const [activeFilter,   setActiveFilter]   = useState('upcoming');
   const [search,     setSearch]     = useState('');
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
+  const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
 
   const canPost = hasPermission('canPostNotice');
 
@@ -371,17 +372,31 @@ export default function EventsPage() {
     } catch (requestError) { toast.error(requestError.response?.data?.message || 'Failed to update interest'); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this event?')) return;
+  const handleDelete = async () => {
+    if (!deleteState.id) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/events/${id}`);
+      await API.delete(`/events/${deleteState.id}`);
       toast.success('Event deleted');
-      setEvents(prev => prev.filter(e => e._id !== id));
-    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Delete failed'); }
+      setEvents(prev => prev.filter(e => e._id !== deleteState.id));
+      setDeleteState({ open: false, id: '', loading: false });
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Delete failed');
+      setDeleteState((current) => ({ ...current, loading: false }));
+    }
   };
 
   return (
     <div>
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete event"
+        description="Are you sure you want to delete this event?"
+        confirmLabel="Delete"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, id: '', loading: false })}
+      />
       {showModal && (
         <EventModal
           onClose={() => setShowModal(false)}
@@ -474,7 +489,7 @@ export default function EventsPage() {
                 event={event}
                 onInterest={handleInterest}
                 canDelete={canPost}
-                onDelete={handleDelete}
+                onDelete={(id) => setDeleteState({ open: true, id, loading: false })}
               />
             ))}
           </div>

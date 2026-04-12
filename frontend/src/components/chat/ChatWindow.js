@@ -5,6 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useGroupChat } from '../../hooks/useGroupChat';
 import MessageBubble, { DateSeparator } from './MessageBubble';
 import toast from 'react-hot-toast';
+import { ConfirmDialog } from '../ui';
 import {
   FiSend, FiPaperclip, FiInfo, FiX,
   FiChevronUp, FiWifi, FiWifiOff,
@@ -61,6 +62,7 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
   const [inputText,       setInputText]        = useState('');
   const [uploading,       setUploading]        = useState(false);
   const [selectedFile,    setSelectedFile]     = useState(null);
+  const [deleteState,     setDeleteState]      = useState({ open: false, messageId: '', loading: false });
 
   // Real-time hook
   const {
@@ -155,12 +157,17 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
   }, [startTyping, stopTyping]);
 
   // ── Delete message ─────────────────────────────────────
-  const handleDelete = useCallback(async (messageId) => {
-    if (!window.confirm('Delete this message?')) return;
+  const handleDelete = useCallback(async () => {
+    if (!deleteState.messageId) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/chat-groups/messages/${messageId}`);
-    } catch { toast.error('Failed to delete message'); }
-  }, []);
+      await API.delete(`/chat-groups/messages/${deleteState.messageId}`);
+      setDeleteState({ open: false, messageId: '', loading: false });
+    } catch {
+      toast.error('Failed to delete message');
+      setDeleteState((current) => ({ ...current, loading: false }));
+    }
+  }, [deleteState.messageId]);
 
   // ── File selection ─────────────────────────────────────
   const handleFileSelect = useCallback((e) => {
@@ -177,6 +184,15 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
 
   return (
     <div className={`flex flex-col h-full ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete message"
+        description="Are you sure you want to delete this message?"
+        confirmLabel="Delete"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, messageId: '', loading: false })}
+      />
       {/* ── Header ── */}
       <div className={`px-5 py-3.5 flex items-center justify-between shadow-sm flex-shrink-0 ${
         isDark ? 'bg-slate-900 border-b border-slate-800' : 'bg-white border-b border-gray-100'
@@ -251,7 +267,7 @@ export default function ChatWindow({ group, onGroupInfoClick }) {
                   message={message}
                   isOwn={isMine(message)}
                   showAvatar={showAvatar}
-                  onDelete={isMine(message) || canModerateGroup ? handleDelete : null}
+                  onDelete={isMine(message) || canModerateGroup ? ((messageId) => setDeleteState({ open: true, messageId, loading: false })) : null}
                 />
               </React.Fragment>
             );

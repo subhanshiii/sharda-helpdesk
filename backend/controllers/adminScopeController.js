@@ -1,6 +1,6 @@
 const AdminScope = require('../models/AdminScope');
 const User = require('../models/User');
-const { normalizeRole } = require('../utils/roleHelpers');
+const { resolveEffectiveTier } = require('../utils/permissionDefaults');
 
 exports.upsertAdminScopes = async (req, res, next) => {
   try {
@@ -16,12 +16,9 @@ exports.upsertAdminScopes = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (normalizeRole(user.role) !== 'admin') {
-      return res.status(400).json({ success: false, message: 'Scopes can only be saved for admin users' });
-    }
-
     const scopedTiers = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
-    if (!scopedTiers.includes(user.adminTier)) {
+    const effectiveTier = resolveEffectiveTier(user.role, user.adminTier);
+    if (!scopedTiers.includes(effectiveTier)) {
       await AdminScope.deleteMany({ userId: user._id });
       return res.status(200).json({ success: true, data: [] });
     }
@@ -31,7 +28,7 @@ exports.upsertAdminScopes = async (req, res, next) => {
       department_admin: 'department',
       program_coordinator: 'program',
       section_moderator: 'section',
-    }[user.adminTier];
+    }[effectiveTier];
 
     const normalizedScopes = scopes
       .map((scope) => ({

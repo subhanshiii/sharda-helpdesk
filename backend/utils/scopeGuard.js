@@ -5,11 +5,14 @@ const Program = require('../models/Program');
 const Course = require('../models/Course');
 const Section = require('../models/Section');
 const User = require('../models/User');
+const { resolveEffectiveTier } = require('./permissionDefaults');
 
 const toObjectIds = (values = []) => values.map((value) => new mongoose.Types.ObjectId(value));
+const SCOPED_TIERS = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
 
 const getUserScopes = async (user) => {
-  if (!user?._id || user.role !== 'admin') return [];
+  const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
+  if (!user?._id || !SCOPED_TIERS.includes(effectiveTier)) return [];
   return AdminScope.find({ userId: user._id }).lean();
 };
 
@@ -68,7 +71,8 @@ const getScopedSectionIds = async (scopes, adminTier) => {
 };
 
 const getScopeFilter = async (user, resource = 'departments') => {
-  if (!user || user.role !== 'admin' || ['super_admin', 'admin', null, undefined].includes(user.adminTier)) {
+  const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
+  if (!user || ['super_admin', 'admin', null, undefined].includes(effectiveTier)) {
     return {};
   }
 
@@ -78,41 +82,41 @@ const getScopeFilter = async (user, resource = 'departments') => {
   }
 
   if (resource === 'colleges') {
-    if (user.adminTier === 'college_admin') {
+    if (effectiveTier === 'college_admin') {
       return { _id: { $in: toObjectIds(mapScopeIds(scopes, 'college')) } };
     }
-    const departmentIds = await getScopedDepartmentIds(scopes, user.adminTier);
+    const departmentIds = await getScopedDepartmentIds(scopes, effectiveTier);
     const departments = await Department.find({ _id: { $in: toObjectIds(departmentIds) } }).select('college').lean();
     return { _id: { $in: toObjectIds([...new Set(departments.map((department) => String(department.college)).filter(Boolean))]) } };
   }
 
   if (resource === 'departments') {
-    const departmentIds = await getScopedDepartmentIds(scopes, user.adminTier);
+    const departmentIds = await getScopedDepartmentIds(scopes, effectiveTier);
     return { _id: { $in: toObjectIds(departmentIds) } };
   }
 
   if (resource === 'programs') {
-    const programIds = await getScopedProgramIds(scopes, user.adminTier);
+    const programIds = await getScopedProgramIds(scopes, effectiveTier);
     return { _id: { $in: toObjectIds(programIds) } };
   }
 
   if (resource === 'courses') {
-    const programIds = await getScopedProgramIds(scopes, user.adminTier);
+    const programIds = await getScopedProgramIds(scopes, effectiveTier);
     return { program: { $in: toObjectIds(programIds) } };
   }
 
   if (resource === 'sections') {
-    const sectionIds = await getScopedSectionIds(scopes, user.adminTier);
+    const sectionIds = await getScopedSectionIds(scopes, effectiveTier);
     return { _id: { $in: toObjectIds(sectionIds) } };
   }
 
   if (resource === 'subjects') {
-    const programIds = await getScopedProgramIds(scopes, user.adminTier);
+    const programIds = await getScopedProgramIds(scopes, effectiveTier);
     return { program: { $in: toObjectIds(programIds) } };
   }
 
   if (resource === 'section-subjects' || resource === 'enrollments') {
-    const sectionIds = await getScopedSectionIds(scopes, user.adminTier);
+    const sectionIds = await getScopedSectionIds(scopes, effectiveTier);
     return { section: { $in: toObjectIds(sectionIds) } };
   }
 
@@ -120,26 +124,27 @@ const getScopeFilter = async (user, resource = 'departments') => {
 };
 
 const getScopedUserIdsForTickets = async (user) => {
-  if (!user || user.role !== 'admin' || ['super_admin', 'admin', null, undefined].includes(user.adminTier)) {
+  const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
+  if (!user || ['super_admin', 'admin', null, undefined].includes(effectiveTier)) {
     return null;
   }
 
   const scopes = await getUserScopes(user);
   if (!scopes.length) return [];
 
-  if (user.adminTier === 'college_admin') {
+  if (effectiveTier === 'college_admin') {
     const collegeIds = mapScopeIds(scopes, 'college');
     const users = await User.find({ collegeId: { $in: toObjectIds(collegeIds) } }).select('_id').lean();
     return users.map((entry) => entry._id);
   }
 
-  if (user.adminTier === 'department_admin') {
+  if (effectiveTier === 'department_admin') {
     const departmentIds = mapScopeIds(scopes, 'department');
     const users = await User.find({ departmentId: { $in: toObjectIds(departmentIds) } }).select('_id').lean();
     return users.map((entry) => entry._id);
   }
 
-  if (user.adminTier === 'program_coordinator') {
+  if (effectiveTier === 'program_coordinator') {
     const programIds = mapScopeIds(scopes, 'program');
     const users = await User.find({ programId: { $in: toObjectIds(programIds) } }).select('_id').lean();
     return users.map((entry) => entry._id);

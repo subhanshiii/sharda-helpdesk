@@ -8,8 +8,10 @@ const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 
 const parseValues = (value) => {
   if (!value) return [];
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  return String(value).split(',').map((item) => item.trim()).filter(Boolean);
+  const values = Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : String(value).split(',').map((item) => item.trim()).filter(Boolean);
+  return [...new Set(values)];
 };
 
 const normalizeValue = (value) => String(value ?? '').trim().toLowerCase();

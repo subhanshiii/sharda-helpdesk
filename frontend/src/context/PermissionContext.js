@@ -35,6 +35,7 @@ export function PermissionProvider({ children }) {
   const [rolePermissions, setRolePermissions] = useState([]);
   const [availablePermissions, setAvailablePermissions] = useState(Object.keys(emptyPermissions));
   const [permissionDefinitions, setPermissionDefinitions] = useState([]);
+  const [adminTierDefinitions, setAdminTierDefinitions] = useState([]);
   const [loading, setLoading] = useState(Boolean(token));
 
   const loadPermissions = useCallback(async () => {
@@ -43,6 +44,7 @@ export function PermissionProvider({ children }) {
       setRolePermissions([]);
       setAvailablePermissions(Object.keys(emptyPermissions));
       setPermissionDefinitions([]);
+      setAdminTierDefinitions([]);
       setLoading(false);
       return;
     }
@@ -57,10 +59,12 @@ export function PermissionProvider({ children }) {
       setRolePermissions(data.roles || []);
       setAvailablePermissions(nextAvailablePermissions);
       setPermissionDefinitions(data.permissionDefinitions || []);
+      setAdminTierDefinitions(data.adminTierDefinitions || []);
     } catch {
       setPermissions(emptyPermissions);
       setRolePermissions([]);
       setPermissionDefinitions([]);
+      setAdminTierDefinitions([]);
     } finally {
       setLoading(false);
     }
@@ -100,12 +104,13 @@ export function PermissionProvider({ children }) {
     rolePermissions,
     availablePermissions,
     permissionDefinitions,
+    adminTierDefinitions,
     loading,
-    isSuperAdmin: user?.role === 'admin' && user?.adminTier === 'super_admin',
+    isSuperAdmin: user?.adminTier === 'super_admin',
     hasPermission,
     refreshPermissions: loadPermissions,
     updateRolePermissions,
-  }), [permissions, rolePermissions, availablePermissions, permissionDefinitions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
+  }), [permissions, rolePermissions, availablePermissions, permissionDefinitions, adminTierDefinitions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
 
   return (
     <PermissionContext.Provider value={value}>

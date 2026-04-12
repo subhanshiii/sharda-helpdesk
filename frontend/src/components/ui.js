@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { FiHelpCircle } from 'react-icons/fi';
 import { getAvatarSource, getAvatarTone, getCategoryIcon, getInitials } from '../utils/helpers';
 import { getAvatarUrl, getDefaultAvatarFilename } from '../constants/avatarOptions';
 
@@ -163,6 +164,35 @@ export const Alert = ({ type = 'error', message }) => {
     <div className={`border rounded-xl px-4 py-3 text-sm flex items-start gap-2 ${map[type]}`}>
       <span>{icons[type]}</span>
       <span>{message}</span>
+    </div>
+  );
+};
+
+export const HelpTooltip = ({ title = 'How this works', items = [], className = '' }) => {
+  const normalizedItems = Array.isArray(items) ? items.filter(Boolean) : [];
+
+  if (!normalizedItems.length) return null;
+
+  return (
+    <div className={`group relative inline-flex ${className}`}>
+      <button
+        type="button"
+        aria-label={title}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+      >
+        <FiHelpCircle size={15} />
+      </button>
+      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-80 origin-top-right rounded-2xl border border-slate-200 bg-white p-4 text-left opacity-0 shadow-xl transition duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 dark:border-slate-700 dark:bg-slate-900">
+        <p className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">{title}</p>
+        <div className="mt-3 space-y-3">
+          {normalizedItems.map((item, index) => (
+            <div key={`${item.label}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-800/80">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.label}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

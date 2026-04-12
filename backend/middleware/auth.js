@@ -1,11 +1,11 @@
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
 const Permission = require('../models/Permission');
-const { DEFAULT_ROLE_PERMISSIONS, ADMIN_TIER_ORDER, buildAdminTierPermissions, sanitizePermissions } = require('../utils/permissionDefaults');
+const { DEFAULT_ROLE_PERMISSIONS, ADMIN_TIER_ORDER, buildResolvedPermissions, resolveEffectiveTier } = require('../utils/permissionDefaults');
 
-const isSuperAdmin = (user) => user?.role === 'admin' && user?.adminTier === 'super_admin';
-const normalizeTier = (tier) => tier || 'admin';
-const tierRank = (tier) => ADMIN_TIER_ORDER.indexOf(normalizeTier(tier));
+const isSuperAdmin = (user) => resolveEffectiveTier(user?.role, user?.adminTier) === 'super_admin';
+const normalizeTier = (role, tier) => resolveEffectiveTier(role, tier) || 'none';
+const tierRank = (tier) => ADMIN_TIER_ORDER.indexOf(tier || 'none');
 
 // ── protect: verify JWT from httpOnly cookie OR Bearer header ──
 // We support BOTH so existing clients still work during migration
@@ -128,21 +128,11 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
-    if (req.user.role === 'admin') {
-      req.permissions = sanitizePermissions('admin', buildAdminTierPermissions(req.user.adminTier));
-      if (!req.permissions[permissionKey]) {
-        return res.status(403).json({
-          success: false,
-          message: `Access denied. Missing permission: ${permissionKey}`,
-        });
-      }
-      return next();
-    }
-
     const permissionDoc = await Permission.getRolePermissions(req.user.role);
-    const permissions = sanitizePermissions(
+    const permissions = buildResolvedPermissions(
       req.user.role,
-      permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[req.user.role]
+      permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[req.user.role],
+      req.user.adminTier
     );
 
     req.permissions = permissions;
@@ -161,11 +151,9 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
 };
 
 exports.requireAdminTier = (...tiers) => (req, res, next) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Admin access required' });
-  }
+  const effectiveTier = resolveEffectiveTier(req.user?.role, req.user?.adminTier);
 
-  if (!tiers.includes(normalizeTier(req.user.adminTier))) {
+  if (!effectiveTier || !tiers.includes(effectiveTier)) {
     return res.status(403).json({ success: false, message: 'Your admin tier cannot access this action' });
   }
 
@@ -173,11 +161,8 @@ exports.requireAdminTier = (...tiers) => (req, res, next) => {
 };
 
 exports.requireMinTier = (tier) => (req, res, next) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Admin access required' });
-  }
-
-  const requesterRank = tierRank(req.user.adminTier);
+  const effectiveTier = resolveEffectiveTier(req.user?.role, req.user?.adminTier);
+  const requesterRank = tierRank(effectiveTier);
   const requiredRank = tierRank(tier);
 
   if (requesterRank === -1 || requiredRank === -1 || requesterRank < requiredRank) {

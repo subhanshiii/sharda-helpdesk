@@ -1,8 +1,35 @@
 const { normalizeRole } = require('./roleHelpers');
 const { FEATURE_REGISTRY } = require('./featureRegistry');
+const { ADMIN_TIER_ORDER } = require('./adminTierRegistry');
 
 const ROLE_ORDER = ['student', 'faculty', 'staff', 'admin'];
-const ADMIN_TIER_ORDER = ['section_moderator', 'program_coordinator', 'department_admin', 'college_admin', 'admin', 'super_admin'];
+
+const ADMIN_TIER_PERMISSION_RULES = {
+  canViewReports: 'section_moderator',
+  canManageSections: 'section_moderator',
+  canMarkAttendance: 'section_moderator',
+  canManageTimetable: 'section_moderator',
+  canManageAssignments: 'program_coordinator',
+  canCreateTickets: 'department_admin',
+  canManageGroups: 'department_admin',
+  canManageAcademics: 'department_admin',
+  canPostNotice: 'department_admin',
+  canHandleTickets: 'department_admin',
+  canManageUsers: 'admin',
+  canViewAnalytics: 'admin',
+  canManagePermissions: 'super_admin',
+  canManageAdmins: 'super_admin',
+};
+
+const tierHasMinimumAccess = (adminTier, requiredTier) => {
+  const tier = adminTier || 'admin';
+  return ADMIN_TIER_ORDER.indexOf(tier) >= ADMIN_TIER_ORDER.indexOf(requiredTier);
+};
+
+const resolveEffectiveTier = (role, adminTier) => {
+  if (adminTier) return adminTier;
+  return normalizeRole(role) === 'admin' ? 'admin' : null;
+};
 
 const buildAdminTierPermissions = (adminTier = 'admin') => {
   const base = {
@@ -25,35 +52,9 @@ const buildAdminTierPermissions = (adminTier = 'admin') => {
     canManagePermissions: false,
   };
 
-  const tier = adminTier || 'admin';
-
-  if (['super_admin', 'admin', 'college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(tier)) {
-    base.canViewReports = true;
-    base.canManageSections = true;
-    base.canMarkAttendance = true;
-    base.canManageTimetable = true;
-  }
-  if (['super_admin', 'admin', 'college_admin', 'department_admin'].includes(tier)) {
-    base.canCreateTickets = true;
-    base.canManageGroups = true;
-  }
-  if (['super_admin', 'admin', 'department_admin', 'program_coordinator'].includes(tier)) {
-    base.canManageAssignments = true;
-  }
-  if (['super_admin', 'admin', 'college_admin', 'department_admin'].includes(tier)) {
-    base.canManageAcademics = true;
-    base.canPostNotice = true;
-    base.canHandleTickets = true;
-  }
-  if (['super_admin', 'admin'].includes(tier)) {
-    base.canManageUsers = true;
-    base.canViewAnalytics = true;
-  }
-  if (tier === 'super_admin') {
-    base.canManagePermissions = true;
-    base.canManageAdmins = true;
-    base.canViewAnalytics = true;
-  }
+  Object.entries(ADMIN_TIER_PERMISSION_RULES).forEach(([permissionKey, requiredTier]) => {
+    base[permissionKey] = tierHasMinimumAccess(adminTier, requiredTier);
+  });
 
   return base;
 };
@@ -130,6 +131,20 @@ const sanitizePermissions = (role, permissions = {}) => {
   }, {});
 };
 
+const buildResolvedPermissions = (role, rolePermissions = {}, adminTier = null) => {
+  const basePermissions = sanitizePermissions(role, rolePermissions);
+  const effectiveTier = resolveEffectiveTier(role, adminTier);
+  if (!effectiveTier) {
+    return basePermissions;
+  }
+
+  const tierPermissions = sanitizePermissions('admin', buildAdminTierPermissions(effectiveTier));
+  return PERMISSION_KEYS.reduce((acc, key) => {
+    acc[key] = Boolean(basePermissions[key] || tierPermissions[key]);
+    return acc;
+  }, {});
+};
+
 module.exports = {
   ROLE_ORDER,
   ADMIN_TIER_ORDER,
@@ -137,4 +152,7 @@ module.exports = {
   DEFAULT_ROLE_PERMISSIONS,
   buildAdminTierPermissions,
   sanitizePermissions,
+  tierHasMinimumAccess,
+  resolveEffectiveTier,
+  buildResolvedPermissions,
 };

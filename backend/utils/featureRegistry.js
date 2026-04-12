@@ -26,7 +26,7 @@ const FEATURE_REGISTRY = [
   {
     key: 'canManageSections',
     label: 'Section Management',
-    description: 'Manage section-level academic delivery and section-scoped operations.',
+    description: 'Manage section-level academic delivery and section-scoped operations. Included from Section Moderator upward.',
     group: 'Academics',
   },
   {
@@ -38,13 +38,13 @@ const FEATURE_REGISTRY = [
   {
     key: 'canManageAssignments',
     label: 'Manage Assignments',
-    description: 'Create, grade, and oversee assignment workflows.',
+    description: 'Create, grade, and oversee assignment workflows. Included from Program Coordinator upward.',
     group: 'Academics',
   },
   {
     key: 'canManageAcademics',
     label: 'Academic Structure',
-    description: 'Manage departments, programs, courses, sections, and enrollments.',
+    description: 'Manage departments, programs, courses, sections, and enrollments. Included from Department Admin upward.',
     group: 'Academics',
   },
   {
@@ -56,25 +56,25 @@ const FEATURE_REGISTRY = [
   {
     key: 'canMarkAttendance',
     label: 'Attendance',
-    description: 'Create and update attendance sessions.',
+    description: 'Create and update attendance sessions. Included from Section Moderator upward.',
     group: 'Academics',
   },
   {
     key: 'canManageUsers',
     label: 'Identity & Access',
-    description: 'Provision users, manage lifecycle state, and review identity alerts.',
+    description: 'Provision users, manage lifecycle state, and review identity alerts. Included for Admin and Super Admin only.',
     group: 'Governance',
   },
   {
     key: 'canManageAdmins',
     label: 'Admin Governance',
-    description: 'Create and govern administrator identities and privileged scope assignments.',
+    description: 'Create and govern administrator identities and privileged scope assignments. Super Admin only.',
     group: 'Governance',
   },
   {
     key: 'canViewReports',
     label: 'Reports',
-    description: 'View scoped academic and institutional reporting surfaces.',
+    description: 'View scoped academic and institutional reporting surfaces. Included for all admin tiers.',
     group: 'Governance',
   },
   {
@@ -86,19 +86,19 @@ const FEATURE_REGISTRY = [
   {
     key: 'canPostNotice',
     label: 'Notices & Broadcasts',
-    description: 'Publish notices, events, opportunities, and academic broadcasts.',
+    description: 'Publish notices, events, opportunities, and academic broadcasts. Included from Department Admin upward.',
     group: 'Communication',
   },
   {
     key: 'canViewAnalytics',
     label: 'Analytics',
-    description: 'View institutional metrics and reporting dashboards.',
+    description: 'View institutional metrics and reporting dashboards. Included for Admin and Super Admin only.',
     group: 'Governance',
   },
   {
     key: 'canManagePermissions',
     label: 'Permissions',
-    description: 'Change role-based access policy across the platform.',
+    description: 'Change role-based access policy across the platform. Super Admin only.',
     group: 'Governance',
   },
 ];

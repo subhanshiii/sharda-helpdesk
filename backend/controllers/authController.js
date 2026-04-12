@@ -612,10 +612,10 @@ exports.updateApprovalStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (user.role === 'admin' && req.user?.adminTier !== 'super_admin') {
+    if (user.adminTier && req.user?.adminTier !== 'super_admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only the super admin can change admin account state',
+        message: 'Only the super admin can change elevated-tier account state',
       });
     }
 

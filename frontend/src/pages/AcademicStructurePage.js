@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  FiArrowLeft,
   FiBookOpen,
-  FiChevronDown,
   FiChevronRight,
   FiEdit2,
   FiGitBranch,
@@ -14,19 +15,7 @@ import {
   FiX,
 } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, ConfirmDialog, EmptyState, FullPageSpinner, Modal, PageHeader } from '../components/ui';
-
-const ADVANCED_RESOURCES = [
-  { key: 'subjects', label: 'Subjects', fields: ['code', 'name', 'department', 'program', 'course', 'academicSession', 'credits'] },
-  { key: 'section-subjects', label: 'Teaching Assignments', fields: ['section', 'subject', 'faculty', 'semester'] },
-  { key: 'enrollments', label: 'Enrollments', fields: ['student', 'section', 'academicSession', 'semester', 'status'] },
-];
-
-const ADVANCED_DEFAULT_FORMS = {
-  subjects: { code: '', name: '', department: '', program: '', course: '', academicSession: '', credits: 0 },
-  'section-subjects': { section: '', subject: '', faculty: '', semester: '' },
-  enrollments: { student: '', section: '', academicSession: '', semester: '', status: 'active' },
-};
+import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, HelpTooltip, Modal, PageHeader } from '../components/ui';
 
 const TREE_ACTIONS = {
   college: ['department'],
@@ -64,286 +53,128 @@ const emptyInlineForm = {
   values: {},
 };
 
-const getFieldLabel = (field) => ({
-  code: 'Code',
-  name: 'Name',
-  college: 'College',
-  department: 'Department',
-  durationYears: 'Duration (years)',
-  program: 'Program',
-  yearNumber: 'Study Year',
-  label: 'Academic Session Label',
-  academicSession: 'Academic Session',
-  course: 'Course',
-  capacity: 'Capacity',
-  subject: 'Subject',
-  faculty: 'Faculty',
-  semester: 'Semester',
-  student: 'Student',
-  status: 'Status',
-  credits: 'Credits',
-}[field] || field);
-
 const formatEntityName = (entity) => {
   if (!entity) return '—';
   if (entity.name && entity.code) return `${entity.name} (${entity.code})`;
   return entity.name || entity.label || entity.code || entity.email || entity.systemId || entity._id;
 };
 
-const makeExpandableKey = (type, id) => `${type}:${id}`;
+const getColumnMeta = (type, item) => {
+  if (!item) return '—';
+  if (type === 'college') return `${(item.departments || []).length} departments`;
+  if (type === 'department') return `${(item.programs || []).length} programs`;
+  if (type === 'program') return `${(item.courses || []).length} courses`;
+  if (type === 'course') return `${(item.sections || []).length} sections`;
+  if (type === 'section') {
+    return [item.academicSession?.label, `Year ${item.studyYear || '—'}`, `Capacity ${item.capacity || 0}`].filter(Boolean).join(' · ');
+  }
+  return '—';
+};
 
-function StructureNode({
+const WORKSPACE_HELP_ITEMS = [
+  {
+    label: 'Start at College',
+    description: 'Each selection narrows the next column so the structure always feels connected and scoped.',
+  },
+  {
+    label: 'Sections Drive Delivery',
+    description: 'Sections are the operational unit that connect students, faculty, timetable, attendance, and assignments.',
+  },
+  {
+    label: 'Detail Flows Stay In Context',
+    description: 'Section, subject, and faculty views all open inside this workspace so the academic flow stays intuitive.',
+  },
+];
+
+function DrilldownColumn({
+  title,
+  items,
   type,
-  item,
-  level = 0,
-  selectedSectionId,
-  expandedKeys,
-  onToggle,
+  selectedId,
+  onSelect,
   onAdd,
   onEdit,
   onDelete,
-  onSelectSection,
+  emptyLabel,
 }) {
-  const children = type === 'college'
-    ? item.departments || []
-    : type === 'department'
-      ? item.programs || []
-      : type === 'program'
-        ? item.courses || []
-        : type === 'course'
-          ? item.sections || []
-          : [];
-
-  const hasChildren = children.length > 0;
-  const expandableKey = makeExpandableKey(type, item._id);
-  const isExpanded = expandedKeys.has(expandableKey);
-
-  const renderSubtitle = () => {
-    if (type === 'college') return `${(item.departments || []).length} department${(item.departments || []).length === 1 ? '' : 's'}`;
-    if (type === 'department') return `${(item.programs || []).length} program${(item.programs || []).length === 1 ? '' : 's'}`;
-    if (type === 'program') return `${(item.courses || []).length} course${(item.courses || []).length === 1 ? '' : 's'}`;
-    if (type === 'course') return `${(item.sections || []).length} section${(item.sections || []).length === 1 ? '' : 's'}`;
-    return `Capacity ${item.capacity || 0}`;
-  };
-
-  const renderMeta = () => {
-    if (type === 'section') return `${item.academicSession?.label || 'Academic Session'} · Year ${item.studyYear || '—'} · Capacity ${item.capacity || 0}`;
-    return null;
-  };
-
-  const isSelectedSection = type === 'section' && String(selectedSectionId || '') === String(item._id);
-
   return (
-    <div className="space-y-3">
-      <div
-        className={`rounded-2xl border px-4 py-4 shadow-sm transition ${isSelectedSection ? 'border-blue-200 bg-blue-50/60' : 'border-gray-100 bg-white'}`}
-        style={{ marginLeft: `${level * 20}px` }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <button
-              type="button"
-              onClick={() => hasChildren && onToggle(expandableKey)}
-              className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl border ${hasChildren ? 'border-gray-200 bg-gray-50 text-gray-600' : 'border-transparent bg-transparent text-gray-300'}`}
+    <div className="flex min-h-[440px] min-w-[240px] flex-1 flex-col border-r border-gray-100 last:border-r-0 xl:min-w-0">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/95 px-4 py-3 backdrop-blur">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">{title}</span>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+        >
+          <FiPlus size={14} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto py-2">
+        {items.length ? items.map((item) => {
+          const isSelected = String(selectedId || '') === String(item._id);
+          return (
+            <div
+              key={item._id}
+              className={`group border-l-4 px-4 py-3 transition ${isSelected ? 'border-blue-500 bg-blue-50/70' : 'border-transparent hover:bg-gray-50'}`}
             >
-              {hasChildren ? (isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />) : <FiGitBranch size={14} />}
-            </button>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold text-gray-900">{formatEntityName(item)}</p>
-                <span className="badge bg-slate-100 text-slate-700 capitalize">{type}</span>
-                {renderMeta() ? <span className="badge bg-blue-100 text-blue-700">{renderMeta()}</span> : null}
-              </div>
-              <p className="mt-1 text-sm text-gray-500">{renderSubtitle()}</p>
-              {type === 'section' ? (
+              <button
+                type="button"
+                onClick={() => onSelect(item)}
+                className="flex w-full items-start gap-3 text-left"
+              >
+                <div className={`mt-1 h-2.5 w-2.5 rounded-full ${isSelected ? 'bg-blue-600' : 'bg-gray-300 group-hover:bg-blue-300'}`} />
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm font-semibold leading-5 ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>{formatEntityName(item)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{getColumnMeta(type, item)}</p>
+                </div>
+              </button>
+              <div className="mt-3 flex flex-wrap items-center gap-2 pl-[22px]">
+                {(TREE_ACTIONS[type] || []).map((childResource) => (
+                  <button
+                    key={childResource}
+                    type="button"
+                    onClick={() => onAdd(item, childResource)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                  >
+                    Add {childResource === 'session' ? 'Session' : childResource}
+                  </button>
+                ))}
                 <button
                   type="button"
-                  onClick={() => onSelectSection(item)}
-                  className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                  onClick={() => onEdit(item)}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50"
                 >
-                  {isSelectedSection ? 'Selected Section' : 'View Subjects'}
+                  Edit
                 </button>
-              ) : null}
+                <button
+                  type="button"
+                  onClick={() => onDelete(item)}
+                  className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:bg-red-100"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
+          );
+        }) : (
+          <div className="flex h-full min-h-[120px] items-center justify-center px-4 text-center text-sm text-gray-400">
+            {emptyLabel}
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {(TREE_ACTIONS[type] || []).map((childResource) => (
-              <button
-                key={childResource}
-                type="button"
-                onClick={() => onAdd(childResource, type, item)}
-                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <FiPlus className="mr-1 inline" size={12} />
-                Add {childResource === 'session' ? 'Academic Session' : childResource.charAt(0).toUpperCase() + childResource.slice(1)}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => onEdit(type, item)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
-            >
-              <FiEdit2 className="mr-1 inline" size={12} />
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(type, item)}
-              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-            >
-              <FiTrash2 className="mr-1 inline" size={12} />
-              Delete
-            </button>
-          </div>
-        </div>
+        )}
       </div>
-
-      {hasChildren && isExpanded ? (
-        <div className="space-y-3">
-          {children.map((child) => (
-            <StructureNode
-              key={child._id}
-              type={type === 'college' ? 'department' : type === 'department' ? 'program' : type === 'program' ? 'course' : 'section'}
-              item={child}
-              level={level + 1}
-              selectedSectionId={selectedSectionId}
-              expandedKeys={expandedKeys}
-              onToggle={onToggle}
-              onAdd={onAdd}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onSelectSection={onSelectSection}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
 
-function AdvancedResourceSection({ resource, items, options, onCreate, onDelete }) {
-  const [form, setForm] = useState(ADVANCED_DEFAULT_FORMS[resource.key]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    setForm(ADVANCED_DEFAULT_FORMS[resource.key]);
-    setError('');
-  }, [resource.key]);
-
-  const fieldOptions = {
-    college: options.colleges || [],
-    department: options.departments || [],
-    program: options.programs || [],
-    course: options.courses || [],
-    academicSession: options.academicSessions || [],
-    section: options.sections || [],
-    subject: options.subjects || [],
-    faculty: options.faculty || [],
-    student: options.students || [],
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError('');
-    try {
-      await onCreate(resource.key, form);
-      setForm(ADVANCED_DEFAULT_FORMS[resource.key]);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Failed to save record');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <section className="card p-5">
-      <div className="mb-4">
-        <h3 className="font-display text-lg font-bold text-gray-900">{resource.label}</h3>
-        <p className="mt-1 text-sm text-gray-500">Advanced academic relationships that build on the structure tree.</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {resource.fields.map((field) => {
-          const selectOptions = fieldOptions[field];
-          if (selectOptions) {
-            return (
-              <select
-                key={field}
-                className="input"
-                value={form[field]}
-                onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
-                required
-              >
-                <option value="">Select {getFieldLabel(field)}</option>
-                {selectOptions.map((item) => (
-                  <option key={item._id || item.systemId} value={item._id || item.systemId}>{formatEntityName(item)}</option>
-                ))}
-              </select>
-            );
-          }
-
-          if (field === 'status') {
-            return (
-              <select
-                key={field}
-                className="input"
-                value={form[field]}
-                onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="completed">Completed</option>
-                <option value="withdrawn">Withdrawn</option>
-              </select>
-            );
-          }
-
-          return (
-            <input
-              key={field}
-              className="input"
-              placeholder={getFieldLabel(field)}
-              value={form[field]}
-              onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
-              required
-            />
-          );
-        })}
-        <button type="submit" disabled={submitting} className="btn-primary justify-center xl:col-span-3">
-          <FiPlus size={15} />
-          {submitting ? 'Saving...' : `Add ${resource.label.slice(0, -1)}`}
-        </button>
-      </form>
-
-      {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-
-      <div className="mt-4 space-y-2">
-        {items.length ? items.slice(0, 6).map((item) => (
-          <div key={item._id} className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div>
-              <p className="font-medium text-gray-900">{formatEntityName(item)}</p>
-              <p className="mt-1 text-xs text-gray-500">{item.semester || item.label || item.email || item.status || 'Mapped record'}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onDelete(resource.key, item)}
-              className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
-            >
-              <FiTrash2 size={14} />
-            </button>
-          </div>
-        )) : (
-          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-4 text-sm text-gray-400">No {resource.label.toLowerCase()} yet.</div>
-        )}
-      </div>
-    </section>
-  );
-}
+const DetailPill = ({ label, value }) => (
+  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
+    <p className="mt-2 text-sm font-semibold text-gray-900">{value || '—'}</p>
+  </div>
+);
 
 export default function AcademicStructurePage() {
+  const navigate = useNavigate();
   const [treeData, setTreeData] = useState([]);
   const [options, setOptions] = useState({
     colleges: [],
@@ -360,17 +191,23 @@ export default function AcademicStructurePage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [expandedKeys, setExpandedKeys] = useState(new Set());
   const [quickSetupOpen, setQuickSetupOpen] = useState(false);
   const [quickSetupForm, setQuickSetupForm] = useState(emptyQuickSetup);
   const [quickSetupSaving, setQuickSetupSaving] = useState(false);
   const [inlineForm, setInlineForm] = useState(emptyInlineForm);
   const [inlineSaving, setInlineSaving] = useState(false);
   const [inlineError, setInlineError] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, resource: '', item: null, loading: false });
   const [selectedSection, setSelectedSection] = useState(null);
   const [assignmentRowId, setAssignmentRowId] = useState('');
+  const [activeScreen, setActiveScreen] = useState('structure');
+  const [previousScreen, setPreviousScreen] = useState('structure');
+  const [facultySubjectsTab, setFacultySubjectsTab] = useState('subjects');
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedCollegeId, setSelectedCollegeId] = useState('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
+  const [selectedProgramId, setSelectedProgramId] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
 
   const loadAcademicWorkspace = useCallback(async () => {
     setLoading(true);
@@ -429,6 +266,39 @@ export default function AcademicStructurePage() {
     loadAcademicWorkspace();
   }, [loadAcademicWorkspace]);
 
+  useEffect(() => {
+    if (!treeData.length) {
+      setSelectedCollegeId('');
+      setSelectedDepartmentId('');
+      setSelectedProgramId('');
+      setSelectedCourseId('');
+      return;
+    }
+
+    const selectedCollege = treeData.find((college) => String(college._id) === String(selectedCollegeId)) || treeData[0];
+    if (String(selectedCollegeId) !== String(selectedCollege?._id || '')) {
+      setSelectedCollegeId(selectedCollege?._id || '');
+    }
+
+    const departments = selectedCollege?.departments || [];
+    const selectedDepartment = departments.find((department) => String(department._id) === String(selectedDepartmentId)) || departments[0] || null;
+    if (String(selectedDepartmentId) !== String(selectedDepartment?._id || '')) {
+      setSelectedDepartmentId(selectedDepartment?._id || '');
+    }
+
+    const programs = selectedDepartment?.programs || [];
+    const selectedProgram = programs.find((program) => String(program._id) === String(selectedProgramId)) || programs[0] || null;
+    if (String(selectedProgramId) !== String(selectedProgram?._id || '')) {
+      setSelectedProgramId(selectedProgram?._id || '');
+    }
+
+    const courses = selectedProgram?.courses || [];
+    const selectedCourse = courses.find((course) => String(course._id) === String(selectedCourseId)) || courses[0] || null;
+    if (String(selectedCourseId) !== String(selectedCourse?._id || '')) {
+      setSelectedCourseId(selectedCourse?._id || '');
+    }
+  }, [treeData, selectedCollegeId, selectedDepartmentId, selectedProgramId, selectedCourseId]);
+
   const summaryCards = useMemo(() => {
     const sectionCount = options.sections.length;
     return [
@@ -441,13 +311,30 @@ export default function AcademicStructurePage() {
     ];
   }, [options]);
 
-  const toggleExpanded = (key) => {
-    setExpandedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const selectedCollege = useMemo(
+    () => treeData.find((college) => String(college._id) === String(selectedCollegeId)) || null,
+    [treeData, selectedCollegeId]
+  );
+  const selectedDepartment = useMemo(
+    () => (selectedCollege?.departments || []).find((department) => String(department._id) === String(selectedDepartmentId)) || null,
+    [selectedCollege, selectedDepartmentId]
+  );
+  const selectedProgram = useMemo(
+    () => (selectedDepartment?.programs || []).find((program) => String(program._id) === String(selectedProgramId)) || null,
+    [selectedDepartment, selectedProgramId]
+  );
+  const selectedCourse = useMemo(
+    () => (selectedProgram?.courses || []).find((course) => String(course._id) === String(selectedCourseId)) || null,
+    [selectedProgram, selectedCourseId]
+  );
+
+  const goScreen = (screen) => {
+    setPreviousScreen(activeScreen);
+    setActiveScreen(screen);
+  };
+
+  const goBack = () => {
+    setActiveScreen(previousScreen || 'structure');
   };
 
   const openCreateForm = (resource, parentType = '', parentItem = null) => {
@@ -609,19 +496,13 @@ export default function AcademicStructurePage() {
     }
   };
 
-  const handleAdvancedCreate = async (resource, payload) => {
-    const response = await API.post(`/academics/${resource}`, payload);
-    toast.success('Saved successfully');
-    await loadAcademicWorkspace();
-    return response;
-  };
-
   const sectionAssignments = useMemo(() => {
     if (!selectedSection?._id) return [];
     return (options['section-subjects'] || []).filter(
       (entry) => String(entry.section?._id || entry.section) === String(selectedSection._id)
     );
   }, [options, selectedSection]);
+  const sectionSubjectOptions = useMemo(() => options['section-subjects'] || [], [options]);
 
   const handleFacultyAssignment = async (sectionSubjectId, facultyId) => {
     try {
@@ -633,6 +514,58 @@ export default function AcademicStructurePage() {
       toast.error(requestError.response?.data?.message || 'Failed to update faculty assignment');
     }
   };
+
+  const filteredSubjects = useMemo(() => {
+    return (options.subjects || []).filter((subject) => {
+      if (selectedProgramId && String(subject.program?._id || subject.program) !== String(selectedProgramId)) return false;
+      if (selectedCourseId && String(subject.course?._id || subject.course) !== String(selectedCourseId)) return false;
+      return true;
+    });
+  }, [options.subjects, selectedProgramId, selectedCourseId]);
+
+  const facultyCards = useMemo(() => {
+    return (options.faculty || []).map((faculty) => {
+      const assignments = sectionSubjectOptions.filter(
+        (entry) => String(entry.faculty?._id || entry.faculty) === String(faculty._id)
+      );
+      return { faculty, assignments };
+    });
+  }, [options.faculty, sectionSubjectOptions]);
+
+  const selectedSubjectAssignments = useMemo(() => {
+    if (!selectedSubject?._id) return [];
+    return (options['section-subjects'] || []).filter(
+      (entry) => String(entry.subject?._id || entry.subject) === String(selectedSubject._id)
+    );
+  }, [options, selectedSubject]);
+
+  const openSectionDetail = (section) => {
+    setSelectedSection(section);
+    goScreen('sectionDetail');
+  };
+
+  const openSubjectDetail = (subject) => {
+    setSelectedSubject(subject);
+    goScreen('subjectDetail');
+  };
+
+  const openFacultySubjects = () => {
+    setFacultySubjectsTab('subjects');
+    goScreen('facultySubjects');
+  };
+
+  const handleFacultyOpen = (faculty) => {
+    navigate(`/admin/users/${faculty.systemId}`);
+  };
+
+  const getDeleteResource = (type) => ({
+    college: 'colleges',
+    department: 'departments',
+    program: 'programs',
+    course: 'courses',
+    session: 'academic-sessions',
+    section: 'sections',
+  }[type]);
 
   if (loading) return <FullPageSpinner />;
 
@@ -647,6 +580,110 @@ export default function AcademicStructurePage() {
         onConfirm={handleDelete}
         onClose={() => setConfirmDelete({ open: false, resource: '', item: null, loading: false })}
       />
+
+      <Modal
+        open={Boolean(inlineForm.resource)}
+        onClose={() => setInlineForm(emptyInlineForm)}
+        panelClassName="max-w-2xl"
+      >
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-bold text-gray-900">
+                {inlineForm.mode === 'edit'
+                  ? `Edit ${inlineForm.resource === 'session' ? 'Academic Session' : inlineForm.resource}`
+                  : `Add ${inlineForm.resource === 'session' ? 'Academic Session' : inlineForm.resource}`}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {inlineForm.parentLabel
+                  ? `This record will be connected under ${inlineForm.parentLabel}.`
+                  : 'Use the same managed flow without leaving the structure workspace.'}
+              </p>
+            </div>
+            <button type="button" onClick={() => setInlineForm(emptyInlineForm)} className="rounded-2xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+              <FiX size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleInlineSave} className="mt-6 space-y-4">
+            {inlineForm.resource === 'college' ? (
+              <div className="grid gap-4">
+                <input className="input" placeholder="College Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
+                <input className="input" placeholder="College Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
+                <textarea className="input min-h-[96px]" placeholder="Description" value={inlineForm.values.description || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, description: e.target.value } }))} />
+              </div>
+            ) : null}
+
+            {inlineForm.resource === 'department' ? (
+              <div className="grid gap-4">
+                <select className="input" value={inlineForm.values.college || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, college: e.target.value } }))} required>
+                  <option value="">Select College</option>
+                  {options.colleges.map((college) => <option key={college._id} value={college._id}>{formatEntityName(college)}</option>)}
+                </select>
+                <input className="input" placeholder="Department Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
+                <input className="input" placeholder="Department Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
+              </div>
+            ) : null}
+
+            {inlineForm.resource === 'program' ? (
+              <div className="grid gap-4">
+                <input className="input" placeholder="Program Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
+                <input className="input" placeholder="Program Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
+                <input className="input" type="number" min="1" max="10" placeholder="Duration Years" value={inlineForm.values.durationYears || 4} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, durationYears: Number(e.target.value) || 4 } }))} />
+              </div>
+            ) : null}
+
+            {inlineForm.resource === 'course' ? (
+              <div className="grid gap-4">
+                <input className="input" placeholder="Course Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
+                <input className="input" placeholder="Course Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
+              </div>
+            ) : null}
+
+            {inlineForm.resource === 'session' ? (
+              <div className="grid gap-4">
+                <input className="input" type="number" min="1" max="10" placeholder="Study Year" value={inlineForm.values.yearNumber || 1} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, yearNumber: Number(e.target.value) || 1 } }))} required />
+                <input className="input" placeholder="Academic Session Label" value={inlineForm.values.label || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, label: e.target.value } }))} required />
+              </div>
+            ) : null}
+
+            {inlineForm.resource === 'section' ? (
+              <div className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <select className="input" value={inlineForm.values.course || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, course: e.target.value } }))} required>
+                    <option value="">Select Course</option>
+                    {options.courses
+                      .filter((course) => !inlineForm.values.program || String(course.program?._id || course.program) === String(inlineForm.values.program))
+                      .map((course) => <option key={course._id} value={course._id}>{formatEntityName(course)}</option>)}
+                  </select>
+                  <select className="input" value={inlineForm.values.academicSession || ''} onChange={(e) => {
+                    const selectedSession = options.academicSessions.find((session) => String(session._id) === String(e.target.value));
+                    setInlineForm((c) => ({ ...c, values: { ...c.values, academicSession: e.target.value, studyYear: selectedSession?.yearNumber || c.values.studyYear || 1 } }));
+                  }} required>
+                    <option value="">Select Academic Session</option>
+                    {options.academicSessions
+                      .filter((session) => !inlineForm.values.program || String(session.program?._id || session.program) === String(inlineForm.values.program))
+                      .map((session) => <option key={session._id} value={session._id}>{session.label} · Year {session.yearNumber}</option>)}
+                  </select>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <input className="input" placeholder="Section Name (A, B...)" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value.toUpperCase() } }))} required />
+                  <input className="input" type="number" min="1" placeholder="Capacity" value={inlineForm.values.capacity || 60} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, capacity: Number(e.target.value) || 60 } }))} required />
+                </div>
+              </div>
+            ) : null}
+
+            {inlineError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inlineError}</div> : null}
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setInlineForm(emptyInlineForm)} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={inlineSaving} className="btn-primary">
+                {inlineSaving ? 'Saving...' : inlineForm.mode === 'edit' ? 'Save Changes' : 'Create Record'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
 
       <Modal open={quickSetupOpen} onClose={() => setQuickSetupOpen(false)} panelClassName="max-w-3xl">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
@@ -742,26 +779,47 @@ export default function AcademicStructurePage() {
 
       <PageHeader
         title="Academic Setup & Structure"
-        description="Build the university hierarchy from one connected workspace. College, department, program, course, academic session, and section now live in one guided structure."
-        meta={[
-          'Section-driven architecture',
-          'Tree view for hierarchy',
-          'Quick setup for full structure creation',
-        ]}
+        description={activeScreen === 'structure'
+          ? 'Build the university hierarchy in one guided workspace.'
+          : activeScreen === 'facultySubjects'
+            ? 'Browse subjects and faculty in one connected academic workspace without leaving this module.'
+            : activeScreen === 'sectionDetail'
+              ? 'Review a section like an ERP detail screen: metadata up top, then related academic blocks below.'
+              : 'Open subject details with related faculty and section assignments from the same academic workspace.'}
         action={(
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={() => openCreateForm('college')} className="btn-secondary">
-              <FiPlus size={15} />
-              Add College
-            </button>
-            <button type="button" onClick={() => setQuickSetupOpen(true)} className="btn-primary">
-              <FiLayers size={15} />
-              Quick Setup
-            </button>
-            <button type="button" onClick={loadAcademicWorkspace} className="btn-secondary">
-              <FiRefreshCw size={15} />
-              Refresh
-            </button>
+            {activeScreen === 'structure' ? (
+              <>
+                <HelpTooltip title="Academic workspace help" items={WORKSPACE_HELP_ITEMS} />
+                <button type="button" onClick={openFacultySubjects} className="btn-primary">
+                  <FiBookOpen size={15} />
+                  View Faculty & Subjects
+                </button>
+                <button type="button" onClick={() => navigate('/academics/advanced')} className="btn-secondary">
+                  <FiLayers size={15} />
+                  Advanced Operations
+                </button>
+                <button type="button" onClick={() => setQuickSetupOpen(true)} className="btn-secondary">
+                  <FiLayers size={15} />
+                  Quick Setup
+                </button>
+                <button type="button" onClick={loadAcademicWorkspace} className="btn-secondary">
+                  <FiRefreshCw size={15} />
+                  Refresh
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={goBack} className="btn-secondary">
+                  <FiArrowLeft size={15} />
+                  Back
+                </button>
+                <button type="button" onClick={loadAcademicWorkspace} className="btn-secondary">
+                  <FiRefreshCw size={15} />
+                  Refresh
+                </button>
+              </>
+            )}
           </div>
         )}
       />
@@ -782,75 +840,150 @@ export default function AcademicStructurePage() {
         ))}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_360px]">
-        <div className="space-y-5">
-          <div className="card p-5">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-display text-xl font-bold text-gray-900">Structure Tree</h2>
-                <p className="mt-1 text-sm text-gray-500">College → Department → Program → Course → Sections</p>
+      {activeScreen === 'structure' ? (
+        <div className="space-y-6">
+          <div className="card overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <div className="flex min-h-[520px] min-w-[1200px] flex-col xl:min-w-0 xl:flex-row">
+              <DrilldownColumn
+                title="Colleges"
+                type="college"
+                items={treeData}
+                selectedId={selectedCollegeId}
+                onSelect={(college) => {
+                  setSelectedCollegeId(college._id);
+                  setSelectedDepartmentId('');
+                  setSelectedProgramId('');
+                  setSelectedCourseId('');
+                }}
+                onAdd={(parentItem, childResource) => {
+                  if (childResource) openCreateForm(childResource, 'college', parentItem);
+                  else openCreateForm('college');
+                }}
+                onEdit={(item) => openEditForm('college', item)}
+                onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('college'), item, loading: false })}
+                emptyLabel="Add the first college to start the structure."
+              />
+              <DrilldownColumn
+                title="Departments"
+                type="department"
+                items={selectedCollege?.departments || []}
+                selectedId={selectedDepartmentId}
+                onSelect={(department) => {
+                  setSelectedDepartmentId(department._id);
+                  setSelectedProgramId('');
+                  setSelectedCourseId('');
+                }}
+                onAdd={(parentItem, childResource) => {
+                  if (childResource) openCreateForm(childResource, 'department', parentItem);
+                  else openCreateForm('department', 'college', selectedCollege);
+                }}
+                onEdit={(item) => openEditForm('department', item)}
+                onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('department'), item, loading: false })}
+                emptyLabel={selectedCollege ? 'No departments under this college yet.' : 'Select a college first.'}
+              />
+              <DrilldownColumn
+                title="Programs"
+                type="program"
+                items={selectedDepartment?.programs || []}
+                selectedId={selectedProgramId}
+                onSelect={(program) => {
+                  setSelectedProgramId(program._id);
+                  setSelectedCourseId('');
+                }}
+                onAdd={(parentItem, childResource) => {
+                  if (childResource) openCreateForm(childResource, 'program', parentItem);
+                  else openCreateForm('program', 'department', selectedDepartment);
+                }}
+                onEdit={(item) => openEditForm('program', item)}
+                onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('program'), item, loading: false })}
+                emptyLabel={selectedDepartment ? 'No programs under this department yet.' : 'Select a department first.'}
+              />
+              <DrilldownColumn
+                title="Courses"
+                type="course"
+                items={selectedProgram?.courses || []}
+                selectedId={selectedCourseId}
+                onSelect={(course) => setSelectedCourseId(course._id)}
+                onAdd={(parentItem, childResource) => {
+                  if (childResource) openCreateForm(childResource, 'course', parentItem);
+                  else openCreateForm('course', 'program', selectedProgram);
+                }}
+                onEdit={(item) => openEditForm('course', item)}
+                onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('course'), item, loading: false })}
+                emptyLabel={selectedProgram ? 'No courses under this program yet.' : 'Select a program first.'}
+              />
+              <DrilldownColumn
+                title="Sections"
+                type="section"
+                items={selectedCourse?.sections || []}
+                selectedId={selectedSection?._id}
+                onSelect={openSectionDetail}
+                onAdd={() => openCreateForm('section', 'course', selectedCourse)}
+                onEdit={(item) => openEditForm('section', item)}
+                onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('section'), item, loading: false })}
+                emptyLabel={selectedCourse ? 'No sections under this course yet.' : 'Select a course first.'}
+              />
               </div>
-              <button
-                type="button"
-                onClick={() => setExpandedKeys(new Set(treeData.flatMap((college) => [
-                  makeExpandableKey('college', college._id),
-                  ...(college.departments || []).map((department) => makeExpandableKey('department', department._id)),
-                  ...(college.departments || []).flatMap((department) => (department.programs || []).map((program) => makeExpandableKey('program', program._id))),
-                  ...(college.departments || []).flatMap((department) => (department.programs || []).flatMap((program) => (program.courses || []).map((course) => makeExpandableKey('course', course._id)))),
-                ])))}
-                className="btn-secondary text-xs"
-              >
-                Expand Key Levels
-              </button>
             </div>
+            <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+              Click through the columns to drill down. Use the section column to open a full section detail view.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-            {treeData.length === 0 ? (
-              <EmptyState icon="🏫" title="No academic structure yet" description="Start with Quick Setup or add the first college manually." />
-            ) : (
-              <div className="space-y-4">
-                {treeData.map((college) => (
-                  <StructureNode
-                    key={college._id}
-                    type="college"
-                    item={college}
-                    selectedSectionId={selectedSection?._id}
-                    expandedKeys={expandedKeys}
-                    onToggle={toggleExpanded}
-                    onAdd={openCreateForm}
-                    onEdit={openEditForm}
-                    onSelectSection={setSelectedSection}
-                    onDelete={(type, item) => {
-                      const resourceMap = {
-                        college: 'colleges',
-                        department: 'departments',
-                        program: 'programs',
-                        course: 'courses',
-                        session: 'academic-sessions',
-                        section: 'sections',
-                      };
-                      setConfirmDelete({ open: true, resource: resourceMap[type], item, loading: false });
-                    }}
-                  />
-                ))}
+      {activeScreen === 'sectionDetail' && selectedSection ? (
+        <div className="space-y-6">
+          <div className="card p-6">
+            <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800">
+              <FiArrowLeft size={15} />
+              Back to structure
+            </button>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+              <span>{selectedCollege?.name || selectedSection.department?.college?.name || 'College'}</span>
+              <FiChevronRight size={12} />
+              <span>{selectedDepartment?.name || selectedSection.department?.name || 'Department'}</span>
+              <FiChevronRight size={12} />
+              <span>{selectedProgram?.name || selectedSection.program?.name || 'Program'}</span>
+              <FiChevronRight size={12} />
+              <span>{selectedCourse?.name || selectedSection.course?.name || 'Course'}</span>
+              <FiChevronRight size={12} />
+              <span className="text-gray-900">{selectedSection.name}</span>
+            </div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-bold text-gray-900">Section {selectedSection.name}</h2>
+                <p className="mt-1 text-sm text-gray-500">Review section metadata first, then manage related teaching assignments below.</p>
               </div>
-            )}
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={() => openEditForm('section', selectedSection)} className="btn-secondary">
+                  <FiEdit2 size={15} />
+                  Edit Section
+                </button>
+                <button type="button" onClick={() => setConfirmDelete({ open: true, resource: 'sections', item: selectedSection, loading: false })} className="btn-secondary text-red-600 hover:text-red-700">
+                  <FiTrash2 size={15} />
+                  Delete
+                </button>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <DetailPill label="Course" value={selectedSection.course?.name} />
+              <DetailPill label="Academic Session" value={selectedSection.academicSession?.label} />
+              <DetailPill label="Study Year" value={selectedSection.studyYear ? `Year ${selectedSection.studyYear}` : '—'} />
+              <DetailPill label="Capacity" value={selectedSection.capacity} />
+            </div>
           </div>
 
-          {selectedSection ? (
-            <div className="card p-5">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_340px]">
+            <div className="card p-6">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-xl font-bold text-gray-900">Section Subjects</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {[
-                      selectedSection.course?.name,
-                      selectedSection.academicSession?.label,
-                      selectedSection.name ? `Section ${selectedSection.name}` : null,
-                    ].filter(Boolean).join(' · ')}
-                  </p>
+                  <h3 className="font-display text-xl font-bold text-gray-900">Section Subjects</h3>
+                  <p className="mt-1 text-sm text-gray-500">Assign faculty inside the section context so the academic ownership is always visible.</p>
                 </div>
-                <button type="button" onClick={() => setSelectedSection(null)} className="btn-secondary text-xs">
-                  Clear
+                <button type="button" onClick={() => setAssignmentRowId('')} className="btn-secondary text-xs">
+                  Reset Assigners
                 </button>
               </div>
 
@@ -860,12 +993,21 @@ export default function AcademicStructurePage() {
                     <div key={assignment._id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                          <p className="font-semibold text-gray-900">{assignment.subject?.name || 'Subject'}</p>
+                          <button type="button" onClick={() => openSubjectDetail(assignment.subject)} className="text-left">
+                            <p className="font-semibold text-gray-900 transition hover:text-blue-700">{assignment.subject?.name || 'Subject'}</p>
+                          </button>
                           <p className="mt-1 text-sm text-gray-500">
                             {(assignment.subject?.code || 'No subject code')}{assignment.semester ? ` · ${assignment.semester}` : ''}
                           </p>
                           <p className="mt-2 text-sm text-gray-700">
-                            Faculty: <span className="font-medium">{assignment.faculty?.name || 'Unassigned'}</span>
+                            Faculty:{' '}
+                            {assignment.faculty?.systemId ? (
+                              <button type="button" onClick={() => handleFacultyOpen(assignment.faculty)} className="font-medium text-blue-700 transition hover:underline">
+                                {assignment.faculty.name}
+                              </button>
+                            ) : (
+                              <span className="font-medium">Unassigned</span>
+                            )}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
@@ -899,159 +1041,189 @@ export default function AcademicStructurePage() {
                 </div>
               )}
             </div>
-          ) : null}
 
-          <div className="card p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="font-display text-xl font-bold text-gray-900">Advanced Academic Operations</h2>
-                <p className="mt-1 text-sm text-gray-500">Subjects, teaching assignments, and enrollments stay available here without breaking existing workflows.</p>
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-bold text-gray-900">Section Context</h3>
+              <div className="mt-4 space-y-3 text-sm text-gray-600">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  <p className="font-semibold text-gray-900">Student Access</p>
+                  <p className="mt-1">Students attached to this section inherit their timetable, attendance scope, and subject list from these mappings.</p>
+                </div>
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  <p className="font-semibold text-gray-900">Faculty Scope</p>
+                  <p className="mt-1">Faculty linked here become the teaching owners for the section’s subject delivery and attendance workflows.</p>
+                </div>
               </div>
-              <button type="button" onClick={() => setAdvancedOpen((current) => !current)} className="btn-secondary text-xs">
-                {advancedOpen ? 'Hide' : 'Show'}
-              </button>
             </div>
+          </div>
+        </div>
+      ) : null}
 
-            {advancedOpen ? (
-              <div className="space-y-5">
-                {ADVANCED_RESOURCES.map((resource) => (
-                  <AdvancedResourceSection
-                    key={resource.key}
-                    resource={resource}
-                    items={options[resource.key] || []}
-                    options={options}
-                    onCreate={handleAdvancedCreate}
-                    onDelete={(resourceKey, item) => setConfirmDelete({ open: true, resource: resourceKey, item, loading: false })}
-                  />
+      {activeScreen === 'facultySubjects' ? (
+        <div className="space-y-6">
+          <div className="card overflow-hidden p-0">
+            <div className="border-b border-gray-100 px-6 pt-4">
+              <div className="flex gap-2">
+                {[
+                  { key: 'subjects', label: 'Subjects' },
+                  { key: 'faculty', label: 'Faculty' },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setFacultySubjectsTab(tab.key)}
+                    className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${facultySubjectsTab === tab.key ? 'border-blue-500 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                Open this section when you need to manage subjects, teaching assignments, or enrollments.
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        <div className="space-y-5">
-          <div className="card p-5">
-            <h3 className="font-display text-lg font-bold text-gray-900">How This Works</h3>
-            <div className="mt-4 space-y-3 text-sm text-gray-600">
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-                <p className="font-semibold text-gray-900">1. Structure First</p>
-                <p className="mt-1">Create colleges, departments, programs, courses, academic sessions, and sections in one hierarchy.</p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-                <p className="font-semibold text-gray-900">2. Section-Driven ERP</p>
-                <p className="mt-1">Students inherit academics through section enrollment, and faculty scope comes from section-subject assignments.</p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-                <p className="font-semibold text-gray-900">3. Downstream Modules</p>
-                <p className="mt-1">Timetable, attendance, assignments, and user visibility all depend on this structure being correct.</p>
-              </div>
+            <div className="p-6">
+              {facultySubjectsTab === 'subjects' ? (
+                <div className="space-y-5">
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => navigate('/academics/advanced')} className="btn-secondary text-xs">
+                      Subject Operations
+                    </button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {filteredSubjects.length ? filteredSubjects.map((subject) => {
+                      const assignments = (options['section-subjects'] || []).filter(
+                        (entry) => String(entry.subject?._id || entry.subject) === String(subject._id)
+                      );
+                      return (
+                        <button
+                          key={subject._id}
+                          type="button"
+                          onClick={() => openSubjectDetail(subject)}
+                          className="card group p-5 text-left transition hover:border-blue-200 hover:shadow-md"
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">{subject.code}</p>
+                          <p className="mt-2 text-base font-bold text-gray-900 group-hover:text-blue-700">{subject.name}</p>
+                          <p className="mt-2 text-sm text-gray-500">{subject.credits ? `${subject.credits} credits` : 'Credits not set'} · {subject.academicSession?.label || 'Session'}</p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {assignments.length ? assignments.slice(0, 3).map((assignment) => (
+                              <span key={assignment._id} className="badge bg-slate-100 text-slate-700">
+                                {assignment.faculty?.name || 'Unassigned'}
+                              </span>
+                            )) : <span className="badge bg-amber-100 text-amber-700">No faculty assigned</span>}
+                          </div>
+                        </button>
+                      );
+                    }) : (
+                      <div className="md:col-span-2 xl:col-span-3">
+                        <EmptyState icon="📚" title="No subjects available" description="Subjects will appear here based on the current academic structure and filters." />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {facultyCards.length ? facultyCards.map(({ faculty, assignments }) => (
+                    <button
+                      key={faculty._id}
+                      type="button"
+                      onClick={() => handleFacultyOpen(faculty)}
+                      className="card group p-5 text-left transition hover:border-blue-200 hover:shadow-md"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar user={faculty} size="md" />
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-bold text-gray-900 group-hover:text-blue-700">{faculty.name}</p>
+                          <p className="text-sm text-gray-500">{faculty.systemId}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        {assignments.length ? assignments.slice(0, 4).map((assignment) => (
+                          <div key={assignment._id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                            <span className="font-semibold text-gray-800">{assignment.subject?.code || 'SUBJ'}</span>
+                            {' · '}
+                            {assignment.subject?.name || 'Subject'}
+                          </div>
+                        )) : (
+                          <div className="rounded-xl border border-dashed border-gray-200 px-3 py-3 text-xs text-gray-400">
+                            No assigned subjects yet.
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="md:col-span-2 xl:col-span-3">
+                      <EmptyState icon="👩‍🏫" title="No faculty accounts available" description="Faculty users will appear here as soon as they are provisioned." />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="card p-5">
-            <div className="flex items-center justify-between gap-3">
+        </div>
+      ) : null}
+
+      {activeScreen === 'subjectDetail' && selectedSubject ? (
+        <div className="space-y-6">
+          <div className="card p-6">
+            <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800">
+              <FiArrowLeft size={15} />
+              Back to faculty & subjects
+            </button>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+              <span>Academic Workspace</span>
+              <FiChevronRight size={12} />
+              <span>Subjects</span>
+              <FiChevronRight size={12} />
+              <span className="text-gray-900">{selectedSubject.code}</span>
+            </div>
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <FiBookOpen size={20} />
+              </div>
               <div>
-                <h3 className="font-display text-lg font-bold text-gray-900">{inlineForm.mode === 'edit' ? 'Edit Structure Node' : 'Inline Setup'}</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {inlineForm.resource
-                    ? `Manage ${inlineForm.resource} ${inlineForm.parentLabel ? `for ${inlineForm.parentLabel}` : ''}`
-                    : 'Select an action from the tree to create or edit the next part of the hierarchy.'}
-                </p>
+                <h2 className="font-display text-2xl font-bold text-gray-900">{selectedSubject.name}</h2>
+                <p className="mt-1 text-sm text-gray-500">{selectedSubject.code} · {selectedSubject.academicSession?.label || 'Academic Session'}</p>
               </div>
-              {inlineForm.resource ? (
-                <button type="button" onClick={() => setInlineForm(emptyInlineForm)} className="rounded-2xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
-                  <FiX size={16} />
-                </button>
-              ) : null}
             </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-4">
+              <DetailPill label="Department" value={selectedSubject.department?.name} />
+              <DetailPill label="Program" value={selectedSubject.program?.name} />
+              <DetailPill label="Course" value={selectedSubject.course?.name} />
+              <DetailPill label="Credits" value={selectedSubject.credits ?? 0} />
+            </div>
+          </div>
 
-            {!inlineForm.resource ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                Use the tree actions like Add Department, Add Program, Add Course, Add Academic Session, or Add Section to keep the hierarchy guided.
-              </div>
-            ) : (
-              <form onSubmit={handleInlineSave} className="mt-5 space-y-4">
-                {inlineForm.resource === 'college' ? (
-                  <div className="grid gap-4">
-                    <input className="input" placeholder="College Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
-                    <input className="input" placeholder="College Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
-                    <textarea className="input min-h-[96px]" placeholder="Description" value={inlineForm.values.description || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, description: e.target.value } }))} />
+          <div className="card p-6">
+            <h3 className="font-display text-lg font-bold text-gray-900">Assigned Faculty & Sections</h3>
+            <p className="mt-1 text-sm text-gray-500">This shows where the subject is currently delivered and which faculty member is attached to each mapping.</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {selectedSubjectAssignments.length ? selectedSubjectAssignments.map((assignment) => (
+                <div key={assignment._id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Section {assignment.section?.name || '—'}</p>
+                  <p className="mt-1 text-xs text-gray-500">{assignment.section?.academicSession?.label || selectedSubject.academicSession?.label || 'Academic Session'} · {assignment.semester || 'Semester not set'}</p>
+                  <div className="mt-4">
+                    {assignment.faculty?.systemId ? (
+                      <button type="button" onClick={() => handleFacultyOpen(assignment.faculty)} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:bg-blue-50">
+                        <Avatar user={assignment.faculty} size="sm" />
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-gray-900">{assignment.faculty.name}</p>
+                          <p className="text-xs text-gray-500">Open faculty profile</p>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-gray-200 px-3 py-3 text-sm text-gray-400">No faculty assigned yet.</div>
+                    )}
                   </div>
-                ) : null}
-
-                {inlineForm.resource === 'department' ? (
-                  <div className="grid gap-4">
-                    <select className="input" value={inlineForm.values.college || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, college: e.target.value } }))} required>
-                      <option value="">Select College</option>
-                      {options.colleges.map((college) => <option key={college._id} value={college._id}>{formatEntityName(college)}</option>)}
-                    </select>
-                    <input className="input" placeholder="Department Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
-                    <input className="input" placeholder="Department Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
-                  </div>
-                ) : null}
-
-                {inlineForm.resource === 'program' ? (
-                  <div className="grid gap-4">
-                    <input className="input" placeholder="Program Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
-                    <input className="input" placeholder="Program Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
-                    <input className="input" type="number" min="1" max="10" placeholder="Duration Years" value={inlineForm.values.durationYears || 4} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, durationYears: Number(e.target.value) || 4 } }))} />
-                  </div>
-                ) : null}
-
-                {inlineForm.resource === 'course' ? (
-                  <div className="grid gap-4">
-                    <input className="input" placeholder="Course Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
-                    <input className="input" placeholder="Course Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
-                  </div>
-                ) : null}
-
-                {inlineForm.resource === 'session' ? (
-                  <div className="grid gap-4">
-                    <input className="input" type="number" min="1" max="10" placeholder="Study Year" value={inlineForm.values.yearNumber || 1} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, yearNumber: Number(e.target.value) || 1 } }))} required />
-                    <input className="input" placeholder="Academic Session Label" value={inlineForm.values.label || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, label: e.target.value } }))} required />
-                  </div>
-                ) : null}
-
-                {inlineForm.resource === 'section' ? (
-                  <div className="grid gap-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <select className="input" value={inlineForm.values.course || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, course: e.target.value } }))} required>
-                        <option value="">Select Course</option>
-                        {options.courses
-                          .filter((course) => !inlineForm.values.program || String(course.program?._id || course.program) === String(inlineForm.values.program))
-                          .map((course) => <option key={course._id} value={course._id}>{formatEntityName(course)}</option>)}
-                      </select>
-                      <select className="input" value={inlineForm.values.academicSession || ''} onChange={(e) => {
-                        const selectedSession = options.academicSessions.find((session) => String(session._id) === String(e.target.value));
-                        setInlineForm((c) => ({ ...c, values: { ...c.values, academicSession: e.target.value, studyYear: selectedSession?.yearNumber || c.values.studyYear || 1 } }));
-                      }} required>
-                        <option value="">Select Academic Session</option>
-                        {options.academicSessions
-                          .filter((session) => !inlineForm.values.program || String(session.program?._id || session.program) === String(inlineForm.values.program))
-                          .map((session) => <option key={session._id} value={session._id}>{session.label} · Year {session.yearNumber}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <input className="input" placeholder="Section Name (A, B...)" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value.toUpperCase() } }))} required />
-                      <input className="input" type="number" min="1" placeholder="Capacity" value={inlineForm.values.capacity || 60} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, capacity: Number(e.target.value) || 60 } }))} required />
-                    </div>
-                  </div>
-                ) : null}
-
-                {inlineError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inlineError}</div> : null}
-
-                <button type="submit" disabled={inlineSaving} className="btn-primary w-full justify-center">
-                  {inlineSaving ? 'Saving...' : inlineForm.mode === 'edit' ? 'Save Changes' : 'Create Record'}
-                </button>
-              </form>
-            )}
+                </div>
+              )) : (
+                <div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
+                  This subject is not linked to any section mappings yet.
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

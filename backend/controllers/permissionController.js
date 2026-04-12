@@ -4,9 +4,12 @@ const {
   PERMISSION_KEYS,
   DEFAULT_ROLE_PERMISSIONS,
   buildAdminTierPermissions,
+  buildResolvedPermissions,
+  resolveEffectiveTier,
   sanitizePermissions,
 } = require('../utils/permissionDefaults');
 const { FEATURE_REGISTRY } = require('../utils/featureRegistry');
+const { ADMIN_TIER_DEFINITIONS } = require('../utils/adminTierRegistry');
 const { normalizeRole } = require('../utils/roleHelpers');
 
 const getRolePayload = async (role) => {
@@ -31,23 +34,27 @@ const getRolePayload = async (role) => {
 exports.getPermissions = async (req, res, next) => {
   try {
     const currentRole = normalizeRole(req.user.role);
-    const currentPermissionsDoc = currentRole === 'admin' ? null : await Permission.getRolePermissions(currentRole);
-    const currentPermissions = sanitizePermissions(
+    const currentPermissionsDoc = await Permission.getRolePermissions(currentRole);
+    const currentPermissions = buildResolvedPermissions(
       currentRole,
-      currentRole === 'admin'
-        ? buildAdminTierPermissions(req.user.adminTier)
-        : currentPermissionsDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[currentRole]
+      currentPermissionsDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[currentRole],
+      req.user.adminTier
     );
+    const effectiveTier = resolveEffectiveTier(req.user.role, req.user.adminTier);
 
     const response = {
       currentRole,
-      currentAdminTier: req.user.adminTier || null,
+      currentAdminTier: effectiveTier,
       currentPermissions,
       availablePermissions: PERMISSION_KEYS,
       permissionDefinitions: FEATURE_REGISTRY,
+      adminTierDefinitions: ADMIN_TIER_DEFINITIONS.map((tier) => ({
+        ...tier,
+        permissions: sanitizePermissions('admin', buildAdminTierPermissions(tier.key)),
+      })),
     };
 
-    if (req.user?.adminTier === 'super_admin' || currentPermissions.canManagePermissions) {
+    if (effectiveTier === 'super_admin' || currentPermissions.canManagePermissions) {
       const roles = await Promise.all(ROLE_ORDER.map(getRolePayload));
       response.roles = roles;
     }

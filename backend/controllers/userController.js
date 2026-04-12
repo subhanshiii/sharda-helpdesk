@@ -15,12 +15,14 @@ const {
   findUserByIdentifier,
   isValidSystemId,
 } = require('../services/userProvisioningService');
+const { resolveEffectiveTier } = require('../utils/permissionDefaults');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MANAGED_ROLES = ['student', 'faculty', 'staff', 'admin'];
+const SCOPED_TIERS = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
 
 const sanitizeUserDoc = (user) => serializeManagedUser(user);
-const isSuperAdminRequest = (req) => req.user?.role === 'admin' && req.user?.adminTier === 'super_admin';
+const isSuperAdminRequest = (req) => resolveEffectiveTier(req.user?.role, req.user?.adminTier) === 'super_admin';
 
 const normalizeBooleanFilter = (value) => {
   if (value === undefined || value === null || value === '') return undefined;
@@ -31,12 +33,13 @@ const normalizeBooleanFilter = (value) => {
 
 const normalizeUserPayload = (body = {}) => {
   const normalizedRole = normalizeRole(body.role);
+  const normalizedTier = String(body.adminTier || '').trim();
   const payload = {
     name: body.name,
     email: body.email,
     password: body.password,
     role: normalizedRole,
-    adminTier: normalizedRole === 'admin' ? (body.adminTier || 'admin') : null,
+    adminTier: normalizedTier && normalizedTier !== 'none' ? normalizedTier : null,
     systemId: body.systemId,
     collegeId: body.collegeId || null,
     department: body.department || '',
@@ -179,6 +182,7 @@ const buildUserDetail = async (user) => {
     .lean();
 
   const adminScopes = normalizeRole(user.role) === 'admin'
+    || SCOPED_TIERS.includes(resolveEffectiveTier(user.role, user.adminTier))
     ? await AdminScope.find({ userId: user._id }).lean()
     : [];
 
@@ -425,8 +429,9 @@ exports.createUser = async (req, res, next) => {
     if (!MANAGED_ROLES.includes(normalizedRole)) {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
-    if (normalizedRole === 'admin' && !isSuperAdminRequest(req)) {
-      return res.status(403).json({ success: false, message: 'Only the super admin can create admin accounts' });
+    const requestedTier = resolveEffectiveTier(normalizedRole, req.body.adminTier);
+    if ((normalizedRole === 'admin' || requestedTier) && !isSuperAdminRequest(req)) {
+      return res.status(403).json({ success: false, message: 'Only the super admin can create privileged access accounts' });
     }
 
     const payload = normalizeUserPayload(req.body);
@@ -552,8 +557,10 @@ exports.updateUser = async (req, res, next) => {
     if (req.body.systemId && req.body.systemId !== user.systemId) {
       return res.status(400).json({ success: false, message: 'systemId cannot be updated' });
     }
-    if ((normalizeRole(user.role) === 'admin' || normalizeRole(req.body.role) === 'admin') && !isSuperAdminRequest(req)) {
-      return res.status(403).json({ success: false, message: 'Only the super admin can modify admin accounts' });
+    const existingTier = resolveEffectiveTier(user.role, user.adminTier);
+    const requestedTier = resolveEffectiveTier(req.body.role || user.role, req.body.adminTier);
+    if ((normalizeRole(user.role) === 'admin' || normalizeRole(req.body.role) === 'admin' || existingTier || requestedTier) && !isSuperAdminRequest(req)) {
+      return res.status(403).json({ success: false, message: 'Only the super admin can modify privileged access accounts' });
     }
 
     const previousSectionId = user.sectionId ? String(user.sectionId) : '';
@@ -619,8 +626,8 @@ exports.setUserPassword = async (req, res, next) => {
 
 exports.deleteUser = async (req, res, next) => {
   try {
-    if (normalizeRole(req.user.role) !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Only admins can delete user accounts' });
+    if (!req.permissions?.canManageUsers) {
+      return res.status(403).json({ success: false, message: 'Only authorized identities can delete user accounts' });
     }
 
     const user = await findUserByIdentifier(req.params.id);
@@ -638,8 +645,9 @@ exports.deleteUser = async (req, res, next) => {
     }
 
     const normalizedRole = normalizeRole(user.role);
-    if (normalizedRole === 'admin' && !isSuperAdminRequest(req)) {
-      return res.status(403).json({ success: false, message: 'Only the super admin can delete admin accounts' });
+    const targetTier = resolveEffectiveTier(user.role, user.adminTier);
+    if ((normalizedRole === 'admin' || targetTier) && !isSuperAdminRequest(req)) {
+      return res.status(403).json({ success: false, message: 'Only the super admin can delete privileged access accounts' });
     }
     if (normalizedRole === 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin', isActive: true });

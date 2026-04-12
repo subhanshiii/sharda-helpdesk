@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiCalendar, FiEdit2, FiMail, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
-import { formatDate, formatRelative, getRoleColor, getRoleLabel } from '../utils/helpers';
+import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, HelpTooltip, PageHeader } from '../components/ui';
+import { formatDate, formatRelative, getAdminTierDefinition, getAdminTierTone, getRoleColor, getRoleLabel } from '../utils/helpers';
 import { fetchAvatarOptions } from '../constants/avatarOptions';
 import AvatarPickerPopover from '../components/AvatarPickerPopover';
 import { usePermissions } from '../context/PermissionContext';
@@ -30,6 +30,63 @@ const lifecycleTone = {
   suspended: 'bg-red-100 text-red-700',
   inactive: 'bg-slate-200 text-slate-700',
   expired: 'bg-red-100 text-red-700',
+};
+
+const getProfilePageCopy = (user) => {
+  const roleLabel = getRoleLabel(user?.role || 'user');
+
+  if (user?.role === 'faculty') {
+    return {
+      title: 'Faculty Profile',
+      subtitle: `System ID ${user.systemId}`,
+      academicTitle: 'Faculty Academic Scope',
+      academicDescription: 'Teaching assignments, subject ownership, and section-linked academic scope for this faculty member.',
+      subjectsTitle: 'Assigned Subjects',
+      subjectsEmpty: 'No subjects are assigned to this faculty member yet.',
+    };
+  }
+
+  if (user?.role === 'student') {
+    return {
+      title: 'Student Profile',
+      subtitle: `System ID ${user.systemId}`,
+      academicTitle: 'Student Academic Mapping',
+      academicDescription: 'Section, course, and subject context used to drive timetable, attendance, and assignments.',
+      subjectsTitle: 'Enrolled Subjects',
+      subjectsEmpty: 'No subjects are mapped to this student yet.',
+    };
+  }
+
+  if (user?.role === 'staff') {
+    return {
+      title: 'Staff Profile',
+      subtitle: `System ID ${user.systemId}`,
+      academicTitle: 'Operational Context',
+      academicDescription: 'Operational context, academic visibility, and support access tied to this staff account.',
+      subjectsTitle: 'Academic Visibility',
+      subjectsEmpty: 'No direct subject mappings exist for this staff account.',
+    };
+  }
+
+  if (user?.role === 'admin') {
+    return {
+      title: user.adminTier === 'super_admin' ? 'Super Admin Profile' : 'Admin Profile',
+      subtitle: `System ID ${user.systemId}`,
+      academicTitle: 'Governance Context',
+      academicDescription: 'Administrative access, academic visibility, and platform governance scope connected to this account.',
+      subjectsTitle: 'Academic Visibility',
+      subjectsEmpty: 'No direct subject mappings exist for this admin account.',
+    };
+  }
+
+  return {
+    title: `${roleLabel} Profile`,
+    subtitle: `System ID ${user?.systemId || '—'}`,
+    academicTitle: 'Academic Mapping',
+    academicDescription: 'Academic context connected to this identity record.',
+    subjectsTitle: 'Subjects',
+    subjectsEmpty: 'No subjects mapped to this user yet.',
+  };
 };
 
 export default function UserDetailPage() {
@@ -128,6 +185,19 @@ export default function UserDetailPage() {
       user.sectionContext?.academicSession?.label,
       user.sectionContext?.name ? `Section ${user.sectionContext.name}` : null,
     ].filter(Boolean);
+  }, [user]);
+
+  const pageCopy = useMemo(() => getProfilePageCopy(user), [user]);
+  const adminTierDefinition = useMemo(() => getAdminTierDefinition(user?.adminTier), [user?.adminTier]);
+  const facultySubjectSummary = useMemo(() => {
+    if (user?.role !== 'faculty') return [];
+    return (user.teachingAssignments || []).map((assignment) => ({
+      id: assignment.id,
+      name: assignment.subject?.name || 'Subject',
+      code: assignment.subject?.code || '—',
+      semester: assignment.semester || '',
+      section: assignment.section?.name || '—',
+    }));
   }, [user]);
 
   const uploadAvatar = async (event) => {
@@ -249,8 +319,8 @@ export default function UserDetailPage() {
       />
 
       <PageHeader
-        title="User Details"
-        subtitle={`System ID ${user.systemId}`}
+        title={pageCopy.title}
+        subtitle={pageCopy.subtitle}
         action={(
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={() => navigate('/users')} className="btn-secondary">
@@ -280,7 +350,11 @@ export default function UserDetailPage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <h2 className="font-display text-2xl font-bold text-gray-900 dark-text-primary">{user.name}</h2>
                   <span className={`badge ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
-                  {user.adminTier === 'super_admin' ? <span className="badge bg-amber-100 text-amber-700">Super Admin</span> : null}
+                  {user.adminTier ? (
+                    <span className={`badge ${getAdminTierTone(user.adminTier)}`}>
+                      {adminTierDefinition?.label || user.adminTier}
+                    </span>
+                  ) : null}
                   <span className={`badge ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : user.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{user.status}</span>
                   <span className={`badge ${lifecycleTone[user.lifecycle?.overall] || 'bg-slate-100 text-slate-700'}`}>{String(user.lifecycle?.overall || 'pending').replace(/_/g, ' ')}</span>
                 </div>
@@ -295,8 +369,21 @@ export default function UserDetailPage() {
           </div>
 
           <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Lifecycle</h3>
-            <p className="mt-1 text-sm text-gray-500 dark-text-muted">Track exactly where this identity is in onboarding and operational readiness.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Lifecycle</h3>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Track exactly where this identity is in onboarding and operational readiness.</p>
+              </div>
+              {adminTierDefinition ? (
+                <HelpTooltip
+                  title={`${adminTierDefinition.label} access`}
+                  items={[
+                    { label: `Tier ${adminTierDefinition.level}`, description: `${adminTierDefinition.scopeLabel}. ${adminTierDefinition.description}` },
+                    { label: 'Inherited access', description: 'Higher admin tiers automatically inherit the permissions granted to lower tiers.' },
+                  ]}
+                />
+              ) : null}
+            </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {(user.lifecycle?.stages || []).map((stage) => (
                 <div key={stage.key} className={`rounded-2xl border px-4 py-4 ${stage.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
@@ -313,8 +400,8 @@ export default function UserDetailPage() {
           </div>
 
           <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Academic Mapping</h3>
-            <p className="mt-1 text-sm text-gray-500 dark-text-muted">Section, course, and subject context used to drive timetable, attendance, and assignments.</p>
+            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">{pageCopy.academicTitle}</h3>
+            <p className="mt-1 text-sm text-gray-500 dark-text-muted">{pageCopy.academicDescription}</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <MetaItem icon={FiBookOpen} label="Program" value={user.sectionContext?.program?.name || user.department || '—'} />
               <MetaItem icon={FiBookOpen} label="Course" value={user.sectionContext?.course?.name || '—'} />
@@ -323,7 +410,7 @@ export default function UserDetailPage() {
             </div>
 
             <div className="mt-5">
-              <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Subjects</h4>
+              <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">{pageCopy.subjectsTitle}</h4>
               <div className="mt-3 space-y-3">
                 {user.subjects?.length ? user.subjects.map((subject) => (
                   <div key={subject.id || `${subject.code}-${subject.semester}`} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark-surface-subtle">
@@ -337,10 +424,31 @@ export default function UserDetailPage() {
                     ) : null}
                   </div>
                 )) : (
-                  <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">No subjects mapped to this user yet.</div>
+                  <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">{pageCopy.subjectsEmpty}</div>
                 )}
               </div>
             </div>
+
+            {user.role === 'faculty' ? (
+              <div className="mt-5">
+                <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Teaching Summary</h4>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">This faculty member’s live teaching scope is derived from section-subject assignments in the academic structure.</p>
+                <div className="mt-3 space-y-3">
+                  {facultySubjectSummary.length ? facultySubjectSummary.map((assignment) => (
+                    <div key={assignment.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark-surface-subtle">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-gray-900 dark-text-primary">{assignment.name}</p>
+                        <span className="badge bg-slate-100 text-slate-700">{assignment.code}</span>
+                        {assignment.semester ? <span className="badge bg-blue-100 text-blue-700">{assignment.semester}</span> : null}
+                      </div>
+                      <p className="mt-2 text-sm text-gray-500 dark-text-muted">Assigned section: {assignment.section}</p>
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">No teaching assignments are connected to this faculty account yet.</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {user.teachingAssignments?.length ? (
               <div className="mt-5">

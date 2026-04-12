@@ -83,8 +83,6 @@ assignmentSchema.index({ createdBy: 1, dueDate: -1 });
 assignmentSchema.index({ dueDate: 1, isPublished: 1 });
 assignmentSchema.index({ sectionId: 1, dueDate: 1 });
 assignmentSchema.index({ subjectId: 1, dueDate: 1 });
-assignmentSchema.index({ 'targetAudience.departments': 1 });
-assignmentSchema.index({ 'targetAudience.years': 1 });
-assignmentSchema.index({ 'targetAudience.sections': 1 });
+assignmentSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Assignment', assignmentSchema);

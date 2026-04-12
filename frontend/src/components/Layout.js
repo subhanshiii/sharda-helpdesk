@@ -89,6 +89,7 @@ export default function Layout() {
     '/users':         'User Management',
     '/approvals':     'Identity Alerts',
     '/academics':     'Academic Structure',
+    '/academics/advanced': 'Advanced Academic Operations',
     '/users/new':     'Provision User',
     '/users/import':  'Import Users',
     '/profile':       'My Profile',

@@ -12,6 +12,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { ensureInitialAdmin } = require('./utils/bootstrapAdmin');
 const { backfillMissingSystemIds } = require('./services/userProvisioningService');
 const { backfillAcademicSessionRefs, migrateAcademicIndexes } = require('./utils/academicSetupService');
+const { migrateAssignmentIndexes } = require('./utils/assignmentMigration');
 const AcademicSession = require('./models/AcademicSession');
 
 // Load security middleware (graceful if packages missing)
@@ -124,6 +125,7 @@ const startServer = async () => {
   try {
     await connectDB();
     await migrateAcademicIndexes();
+    await migrateAssignmentIndexes();
     await backfillAcademicSessionRefs();
     await backfillMissingSystemIds();
     await ensureInitialAdmin(logger);

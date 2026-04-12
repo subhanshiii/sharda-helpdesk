@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
-import { PageHeader, FullPageSpinner, EmptyState, Avatar, ConfirmDialog } from '../components/ui';
-import { getRoleColor, getRoleLabel, getAdminTierLabel, formatDate } from '../utils/helpers';
+import { PageHeader, FullPageSpinner, EmptyState, Avatar, ConfirmDialog, HelpTooltip } from '../components/ui';
+import { getRoleColor, getRoleLabel, getAdminTierDefinition, getAdminTierLabel, getAdminTierTone, formatDate } from '../utils/helpers';
 import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiUpload, FiChevronRight } from 'react-icons/fi';
 
 const initialFilters = {
@@ -153,6 +153,14 @@ export default function UsersPage() {
         meta={`${pagination.total} managed identit${pagination.total === 1 ? 'y' : 'ies'}`}
         action={
           <div className="flex flex-wrap gap-3">
+            <HelpTooltip
+              title="Tier-based access"
+              items={[
+                { label: 'Roles define the base function', description: 'A user stays student, faculty, staff, or admin for their main workflow identity.' },
+                { label: 'Tiers add elevated authority', description: 'Any user can optionally inherit extra access from a selected tier.' },
+                { label: 'Scoped tiers stay limited', description: 'College, department, program, and section tiers only operate within their assigned scope.' },
+              ]}
+            />
             <Link to="/users/new" className="btn-primary">
               <FiPlus size={16} /> Provision User
             </Link>
@@ -225,7 +233,9 @@ export default function UsersPage() {
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {users.map((u) => (
+              {users.map((u) => {
+                const tierDefinition = getAdminTierDefinition(u.adminTier);
+                return (
                 <div
                   key={u.systemId}
                   role="button"
@@ -251,7 +261,14 @@ export default function UsersPage() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className={`badge ${getRoleColor(u.role)}`}>{getRoleLabel(u.role)}</span>
-                      {u.adminTier ? <span className={`badge ${u.adminTier === 'super_admin' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{getAdminTierLabel(u.adminTier)}</span> : null}
+                      {u.adminTier ? (
+                        <span
+                          className={`badge ${getAdminTierTone(u.adminTier)}`}
+                          title={tierDefinition ? `${tierDefinition.label} · Tier ${tierDefinition.level} · ${tierDefinition.scopeLabel}` : ''}
+                        >
+                          {getAdminTierLabel(u.adminTier)}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="mt-4 space-y-2 text-sm text-gray-500">
@@ -280,7 +297,8 @@ export default function UsersPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {pagination.totalPages > 1 ? (

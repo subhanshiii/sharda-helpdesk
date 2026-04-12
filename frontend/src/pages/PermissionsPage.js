@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FiSave, FiShield } from 'react-icons/fi';
-import { PageHeader, Alert, EmptyState, FullPageSpinner } from '../components/ui';
+import { FiCheckCircle, FiLock, FiSave, FiShield } from 'react-icons/fi';
+import { PageHeader, Alert, EmptyState, FullPageSpinner, HelpTooltip } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
+import { getAdminTierTone } from '../utils/helpers';
 
 const ROLE_LABELS = {
   student: 'Student',
@@ -11,12 +12,18 @@ const ROLE_LABELS = {
   admin: 'Admin',
 };
 
-const isLockedPermission = (role, permissionKey) => (
-  role === 'admin' && ['canManagePermissions', 'canManageUsers'].includes(permissionKey)
-);
+const SYSTEM_MANAGED_PERMISSIONS = new Set(['canManagePermissions', 'canManageUsers']);
 
 export default function PermissionsPage() {
-  const { rolePermissions, availablePermissions, permissionDefinitions, loading, updateRolePermissions, isSuperAdmin } = usePermissions();
+  const {
+    rolePermissions,
+    availablePermissions,
+    permissionDefinitions,
+    adminTierDefinitions,
+    loading,
+    updateRolePermissions,
+    isSuperAdmin,
+  } = usePermissions();
   const [drafts, setDrafts] = useState({});
   const [savingRole, setSavingRole] = useState('');
 
@@ -39,6 +46,20 @@ export default function PermissionsPage() {
     const visibleKeys = new Set(availablePermissions);
     return source.filter((definition) => visibleKeys.has(definition.key));
   }, [availablePermissions, permissionDefinitions]);
+
+  const nonAdminRolePermissions = useMemo(
+    () => rolePermissions.filter((entry) => entry.role !== 'admin'),
+    [rolePermissions]
+  );
+
+  const groupedTierDefinitions = useMemo(() => {
+    const source = adminTierDefinitions.length ? adminTierDefinitions : [];
+    return source.reduce((acc, tier) => {
+      const key = tier.group || 'Other';
+      acc[key] = [...(acc[key] || []), tier];
+      return acc;
+    }, {});
+  }, [adminTierDefinitions]);
 
   const getDraft = (role, basePermissions) => drafts[role] || basePermissions;
 
@@ -72,7 +93,7 @@ export default function PermissionsPage() {
 
   if (loading) return <FullPageSpinner />;
 
-  if (!rolePermissions.length) {
+  if (!rolePermissions.length && !adminTierDefinitions.length) {
     return (
       <EmptyState
         icon="🛡️"
@@ -83,20 +104,91 @@ export default function PermissionsPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Permissions"
-        subtitle={isSuperAdmin ? 'Control feature access for each role from the super admin console.' : 'View the role permission matrix managed by the super admin.'}
+        description={isSuperAdmin
+          ? 'Understand and govern the ERP access model from one place. Role permissions provide the base access, and optional tiers add inherited elevated authority.'
+          : 'Understand how access is granted across the ERP. Role permissions provide the base access, and optional tiers add inherited elevated authority.'}
+        action={<HelpTooltip title="Tier-based access model" items={[
+          { label: 'Roles define the base layer', description: 'Student, faculty, staff, and admin roles still define the default functional access for each identity.' },
+          { label: 'Tiers add inherited authority', description: 'Any user can optionally carry a tier. Higher tiers inherit the access of lower tiers automatically.' },
+          { label: 'Super Admin governs the model', description: 'Only the super admin can edit role policies or grant privileged admin governance access.' },
+        ]} />}
       />
 
       <Alert
         type="info"
         message={isSuperAdmin
-          ? 'These permissions are enforced on the backend. Super admin changes update the entire ERP access model.'
-          : 'These permissions are enforced on the backend. Only the super admin can change role access.'}
+          ? 'Tier permissions are fixed and inherited by level. Role policies remain editable for the base access layer.'
+          : 'Tier permissions are fixed by authority level. Role-policy editing is restricted to the super admin.'}
       />
 
-      <div className="card overflow-hidden mt-4">
+      <div className="card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-bold text-gray-900">Tier Access Model</h2>
+            <p className="mt-1 text-sm text-gray-500">Each tier maps to a predefined elevated access level. Higher tiers inherit the permissions of lower tiers automatically.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Authority order: Section Moderator → Program Coordinator → Department Admin → College Admin → Admin → Super Admin
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-5">
+          {Object.entries(groupedTierDefinitions).map(([group, tiers]) => (
+            <div key={group}>
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{group}</div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {tiers.map((tier) => {
+                  const includedPermissions = orderedPermissions.filter((permission) => tier.permissions?.[permission.key]);
+                  return (
+                    <div key={tier.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`badge ${getAdminTierTone(tier.key)}`}>{tier.label}</span>
+                            <span className="badge bg-slate-100 text-slate-600">Tier {tier.level}</span>
+                            <span className="badge bg-white text-slate-600 border border-slate-200">{tier.scopeLabel}</span>
+                          </div>
+                          <p className="mt-3 text-sm text-gray-600">{tier.description}</p>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                          {includedPermissions.length} inherited permissions
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {includedPermissions.map((permission) => (
+                          <span key={permission.key} className="badge bg-slate-100 text-slate-700" title={permission.description}>
+                            {permission.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-xl font-bold text-gray-900">Role Policy Matrix</h2>
+              <p className="mt-1 text-sm text-gray-500">Role permissions define the baseline access for every account. A tier, when assigned, adds inherited elevated access on top.</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="flex items-center gap-2 font-semibold">
+                <FiLock size={15} />
+                Tier access is system-managed and inherited
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -111,7 +203,7 @@ export default function PermissionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rolePermissions.map(({ role, permissions }) => {
+              {nonAdminRolePermissions.map(({ role, permissions }) => {
                 const draft = getDraft(role, permissions);
                 const isDirty = JSON.stringify(draft) !== JSON.stringify(permissions);
                 const isSaving = savingRole === role;
@@ -136,14 +228,16 @@ export default function PermissionsPage() {
                             type="checkbox"
                             className="sr-only"
                             checked={Boolean(draft[permission.key])}
-                            disabled={isLockedPermission(role, permission.key) || !isSuperAdmin}
+                            disabled={SYSTEM_MANAGED_PERMISSIONS.has(permission.key) || !isSuperAdmin}
                             onChange={() => handleToggle(role, permission.key, permissions)}
                           />
                           <span
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                               draft[permission.key] ? 'bg-blue-600' : 'bg-gray-300'
                             }`}
-                            title={isLockedPermission(role, permission.key) ? 'System admin access is always kept enabled.' : permissionMetaMap[permission.key]?.description || ''}
+                            title={SYSTEM_MANAGED_PERMISSIONS.has(permission.key)
+                              ? 'This permission is reserved for the tier-based admin model.'
+                              : permissionMetaMap[permission.key]?.description || ''}
                           >
                             <span
                               className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
@@ -174,6 +268,21 @@ export default function PermissionsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        {orderedPermissions.map((permission) => (
+          <div key={permission.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-base font-bold text-gray-900">{permission.label}</p>
+                <p className="mt-1 text-sm text-gray-500">{permission.description}</p>
+              </div>
+              <FiCheckCircle size={16} className="text-emerald-500" />
+            </div>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{permission.group}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

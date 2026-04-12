@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import API from '../utils/api';
 import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
-import { PageHeader, EmptyState, Alert } from '../components/ui';
+import { PageHeader, EmptyState, Alert, ConfirmDialog } from '../components/ui';
 import { OpportunitiesSkeleton } from '../components/skeletons/SkeletonComponents';
 import { useOptimisticUpdate } from '../hooks/useOptimisticUpdate';
 import { formatDate } from '../utils/helpers';
@@ -176,6 +176,7 @@ export default function OpportunitiesPage() {
   const [search, setSearch]       = useState('');
   const [error, setError]         = useState('');
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
+  const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
 
   // useOptimisticUpdate: bookmarks update instantly without waiting for server
   const { data: opportunities, setData: setOpportunities, optimisticUpdate } = useOptimisticUpdate([]);
@@ -228,19 +229,33 @@ export default function OpportunitiesPage() {
     }
   }, [optimisticUpdate, setOpportunities, showBookmarked]);
 
-  const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Delete this opportunity?')) return;
+  const handleDelete = useCallback(async () => {
+    if (!deleteState.id) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/opportunities/${id}`);
-      setOpportunities(prev => prev.filter(o => o._id !== id));
+      await API.delete(`/opportunities/${deleteState.id}`);
+      setOpportunities(prev => prev.filter(o => o._id !== deleteState.id));
+      setDeleteState({ open: false, id: '', loading: false });
       toast.success('Deleted');
-    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Delete failed'); }
-  }, [setOpportunities]);
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Delete failed');
+      setDeleteState((current) => ({ ...current, loading: false }));
+    }
+  }, [deleteState.id, setOpportunities]);
 
   const bookmarkedCount = opportunities.filter(o => o.isBookmarked).length;
 
   return (
     <div>
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete opportunity"
+        description="Are you sure you want to delete this opportunity?"
+        confirmLabel="Delete"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, id: '', loading: false })}
+      />
       {showModal && <OpportunityModal onClose={() => setShowModal(false)} onSaved={() => fetchOpps(1)} />}
 
       <PageHeader
@@ -300,7 +315,7 @@ export default function OpportunitiesPage() {
               <OpportunityCard key={opp._id} opp={opp}
                 onBookmark={handleBookmark}
                 canDelete={canPost}
-                onDelete={handleDelete}
+                onDelete={(id) => setDeleteState({ open: true, id, loading: false })}
               />
             ))}
           </div>

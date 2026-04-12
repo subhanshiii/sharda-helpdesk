@@ -13,12 +13,14 @@
 
 const Ticket = require('../models/Ticket');
 const User   = require('../models/User');
+const Permission = require('../models/Permission');
 const { emitToTicket, emitToUser, emitToAll } = require('../socket/socketManager');
 const { queueTicketCreatedEmail, queueTicketUpdatedEmail, queueTicketAssignedEmail } = require('../queues/emailQueue');
 const { invalidateStatsCache } = require('./statsService');
 const logger = require('../utils/logger');
 const { isSupportRole, getAssignableRoles } = require('../utils/roleHelpers');
 const { getScopedUserIdsForTickets } = require('../utils/scopeGuard');
+const { buildResolvedPermissions, DEFAULT_ROLE_PERMISSIONS, resolveEffectiveTier } = require('../utils/permissionDefaults');
 
 const CATEGORY_ROUTING = {
   'IT Support': 'IT',
@@ -36,6 +38,21 @@ const SLA_HOURS = {
   Medium: 48,
   High: 24,
   Critical: 8,
+};
+
+const getTicketAccessSnapshot = async (user) => {
+  const permissionDoc = await Permission.getRolePermissions(user.role);
+  const permissions = buildResolvedPermissions(
+    user.role,
+    permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[user.role],
+    user.adminTier
+  );
+
+  return {
+    permissions,
+    canHandleTickets: Boolean(permissions.canHandleTickets),
+    effectiveTier: resolveEffectiveTier(user.role, user.adminTier),
+  };
 };
 
 const pickBestAssignee = async (category) => {
@@ -78,17 +95,18 @@ const pickBestAssignee = async (category) => {
 // ── Query builder ──────────────────────────────────────
 const buildTicketQuery = async (user, filters = {}) => {
   let query = {};
+  const access = await getTicketAccessSnapshot(user);
+  const scopedUserIds = await getScopedUserIdsForTickets(user);
 
   // Role-based filtering
-  if (!isSupportRole(user.role)) {
+  if (!access.canHandleTickets && !isSupportRole(user.role)) {
     query.user = user.id;
-  } else if (user.role !== 'admin') {
-    query.$or = [{ assignedTo: user.id }, { assignedTo: null }];
+  } else if (['super_admin', 'admin'].includes(access.effectiveTier)) {
+    query = {};
+  } else if (Array.isArray(scopedUserIds)) {
+    query.user = { $in: scopedUserIds };
   } else {
-    const scopedUserIds = await getScopedUserIdsForTickets(user);
-    if (Array.isArray(scopedUserIds)) {
-      query.user = { $in: scopedUserIds };
-    }
+    query.$or = [{ assignedTo: user.id }, { assignedTo: null }];
   }
 
   // Apply filters
@@ -140,6 +158,7 @@ const getTickets = async (user, filters, pagination) => {
 
 // ── Get single ticket (with authorization) ─────────────
 const getTicketById = async (ticketId, user) => {
+  const access = await getTicketAccessSnapshot(user);
   const ticket = await Ticket.findById(ticketId)
     .populate('user',           'name email role enrollmentId department')
     .populate('assignedTo',     'name email role')
@@ -152,23 +171,21 @@ const getTicketById = async (ticketId, user) => {
   }
 
   // Students can only see own tickets
-  if (!isSupportRole(user.role) && ticket.user._id.toString() !== user.id) {
+  if (!access.canHandleTickets && !isSupportRole(user.role) && ticket.user._id.toString() !== user.id) {
     const err = new Error('Not authorized to view this ticket');
     err.statusCode = 403;
     throw err;
   }
 
-  if (user.role === 'admin') {
-    const scopedUserIds = await getScopedUserIdsForTickets(user);
-    if (Array.isArray(scopedUserIds) && !scopedUserIds.some((id) => String(id) === String(ticket.user?._id))) {
-      const err = new Error('Not authorized to view this ticket');
-      err.statusCode = 403;
-      throw err;
-    }
+  const scopedUserIds = await getScopedUserIdsForTickets(user);
+  if (Array.isArray(scopedUserIds) && !scopedUserIds.some((id) => String(id) === String(ticket.user?._id))) {
+    const err = new Error('Not authorized to view this ticket');
+    err.statusCode = 403;
+    throw err;
   }
 
   // Filter internal notes for students
-  if (!isSupportRole(user.role)) {
+  if (!access.canHandleTickets && !isSupportRole(user.role)) {
     ticket.replies = ticket.replies.filter(r => !r.isInternal);
   }
 
@@ -242,6 +259,7 @@ const createTicket = async (data, user, files, io, frontendUrl) => {
 
 // ── Update ticket ──────────────────────────────────────
 const updateTicket = async (ticketId, updates, user, io) => {
+  const access = await getTicketAccessSnapshot(user);
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) {
     const err = new Error('Ticket not found');
@@ -250,7 +268,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
   }
 
   // Student can only update own open tickets
-  if (!isSupportRole(user.role)) {
+  if (!access.canHandleTickets && !isSupportRole(user.role)) {
     if (ticket.user.toString() !== user.id) {
       const err = new Error('Not authorized');
       err.statusCode = 403;
@@ -351,6 +369,7 @@ const updateTicket = async (ticketId, updates, user, io) => {
 
 // ── Delete ticket ──────────────────────────────────────
 const deleteTicket = async (ticketId, user, io) => {
+  const access = await getTicketAccessSnapshot(user);
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) {
     const err = new Error('Ticket not found');
@@ -358,7 +377,7 @@ const deleteTicket = async (ticketId, user, io) => {
     throw err;
   }
 
-  if (user.role !== 'admin' && ticket.user.toString() !== user.id) {
+  if (!access.effectiveTier && ticket.user.toString() !== user.id) {
     const err = new Error('Only the ticket owner or an admin can delete this ticket');
     err.statusCode = 403;
     throw err;
@@ -371,9 +390,10 @@ const deleteTicket = async (ticketId, user, io) => {
 };
 
 const bulkDeleteTickets = async (ticketIds, user, io) => {
+  const access = await getTicketAccessSnapshot(user);
   const tickets = await Ticket.find({ _id: { $in: ticketIds } }).select('_id user');
 
-  const forbidden = tickets.some((ticket) => user.role !== 'admin' && ticket.user.toString() !== user.id);
+  const forbidden = tickets.some((ticket) => !access.effectiveTier && ticket.user.toString() !== user.id);
   if (forbidden) {
     const err = new Error('You can only bulk delete your own tickets');
     err.statusCode = 403;
@@ -391,6 +411,7 @@ const bulkDeleteTickets = async (ticketIds, user, io) => {
 
 // ── Add reply ──────────────────────────────────────────
 const addReply = async (ticketId, replyData, user, files, io) => {
+  const access = await getTicketAccessSnapshot(user);
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) {
     const err = new Error('Ticket not found');
@@ -398,7 +419,7 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     throw err;
   }
 
-  if (!isSupportRole(user.role) && ticket.user.toString() !== user.id) {
+  if (!access.canHandleTickets && !isSupportRole(user.role) && ticket.user.toString() !== user.id) {
     const err = new Error('Not authorized');
     err.statusCode = 403;
     throw err;
@@ -423,19 +444,19 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     author:     user.id,
     authorRole: user.role,
     attachments,
-    isInternal: isSupportRole(user.role) && replyData.isInternal === 'true',
+    isInternal: (isSupportRole(user.role) || access.canHandleTickets) && replyData.isInternal === 'true',
   };
 
-  if (!ticket.firstResponseAt && isSupportRole(user.role)) {
+  if (!ticket.firstResponseAt && (isSupportRole(user.role) || access.canHandleTickets)) {
     ticket.firstResponseAt = new Date();
   }
   ticket.replies.push(reply);
 
   // Business rules for status transitions
-  if (isSupportRole(user.role) && ticket.status === 'Open') {
+  if ((isSupportRole(user.role) || access.canHandleTickets) && ticket.status === 'Open') {
     ticket.status = 'In Progress';
   }
-  if (!isSupportRole(user.role) && ticket.status === 'Resolved') {
+  if (!access.canHandleTickets && !isSupportRole(user.role) && ticket.status === 'Resolved') {
     ticket.status = 'In Progress';
   }
 
@@ -457,7 +478,7 @@ const addReply = async (ticketId, replyData, user, files, io) => {
     });
 
     // Notify student if a support staff member replied (non-internal)
-    if (isSupportRole(user.role) && !reply.isInternal) {
+    if ((isSupportRole(user.role) || access.canHandleTickets) && !reply.isInternal) {
       emitToUser(io, ticket.user.toString(), 'notification:new_reply', {
         ticketId:    ticket._id,
         ticketTitle: ticket.title,

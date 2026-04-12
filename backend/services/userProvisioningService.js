@@ -9,6 +9,10 @@ const { buildLifecycleSnapshot } = require('../utils/userLifecycle');
 
 const SYSTEM_ID_REGEX = /^\d{10}$/;
 const RESEND_TEST_MODE_ERROR = 'You can only send testing emails to your own email address';
+const normalizeTierValue = (value) => {
+  const normalized = String(value || '').trim();
+  return normalized && normalized !== 'none' ? normalized : null;
+};
 
 const formatSystemId = (year, sequence) => `${year}${String(sequence).padStart(6, '0')}`;
 
@@ -134,7 +138,7 @@ const buildUserCreatePayload = async ({
   password: password || generateTemporaryPassword(),
   passwordNeedsSetup: passwordNeedsSetup !== undefined ? Boolean(passwordNeedsSetup) : !password,
   role,
-  adminTier: role === 'admin' ? (adminTier || 'admin') : null,
+  adminTier: normalizeTierValue(adminTier),
   systemId: await resolveSystemId(systemId),
   collegeId: collegeId || null,
   sectionId: sectionId || null,

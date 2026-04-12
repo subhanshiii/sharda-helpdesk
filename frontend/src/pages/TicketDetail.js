@@ -7,7 +7,7 @@ import { useTicketSocket } from '../hooks/useSocket';
 import toast from 'react-hot-toast';
 import {
   StatusBadge, PriorityBadge, CategoryBadge,
-  FullPageSpinner, Avatar, Alert,
+  FullPageSpinner, Avatar, Alert, ConfirmDialog,
 } from '../components/ui';
 import { formatDate, formatRelative, getAssetUrl, getRoleColor, getRoleLabel, STATUSES, PRIORITIES, CATEGORIES } from '../utils/helpers';
 import { FiSend, FiArrowLeft, FiEdit2, FiTrash2, FiPaperclip, FiLock, FiCheck, FiWifi } from 'react-icons/fi';
@@ -93,6 +93,7 @@ export default function TicketDetail() {
   const [error,      setError]      = useState('');
   const [typingUser, setTypingUser] = useState(null); // who is typing
   const [isLive,     setIsLive]     = useState(false); // socket connected?
+  const [deleteState, setDeleteState] = useState({ open: false, loading: false });
 
   // ── Real-time: join ticket room + listen to events ────
   const { emitTyping } = useTicketSocket(id, {
@@ -214,12 +215,15 @@ export default function TicketDetail() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this ticket permanently?')) return;
+    setDeleteState({ open: true, loading: true });
     try {
       await API.delete(`/tickets/${id}`);
       toast.success('Ticket deleted');
       navigate('/tickets');
-    } catch { toast.error('Delete failed'); }
+    } catch {
+      toast.error('Delete failed');
+      setDeleteState({ open: true, loading: false });
+    }
   };
 
   if (loading) return <FullPageSpinner />;
@@ -232,6 +236,15 @@ export default function TicketDetail() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete ticket"
+        description="Are you sure you want to delete this ticket permanently?"
+        confirmLabel="Delete"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, loading: false })}
+      />
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="btn-secondary p-2"><FiArrowLeft size={16}/></button>
@@ -253,7 +266,7 @@ export default function TicketDetail() {
               <FiEdit2 size={14}/> {editing ? 'Cancel' : 'Edit'}
             </button>
             {user?.role === 'admin' && (
-              <button onClick={handleDelete} className="btn-danger py-1.5 px-3"><FiTrash2 size={14}/></button>
+              <button onClick={() => setDeleteState({ open: true, loading: false })} className="btn-danger py-1.5 px-3"><FiTrash2 size={14}/></button>
             )}
           </div>
         )}

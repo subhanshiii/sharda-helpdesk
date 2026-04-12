@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { FiClock, FiEdit2, FiMapPin, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
+import { Alert, ConfirmDialog, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -178,6 +178,7 @@ export default function TimetablePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingEntry, setEditingEntry] = useState(null);
+  const [deleteState, setDeleteState] = useState({ open: false, entryId: '', loading: false });
 
   const canManage = ['faculty', 'admin'].includes(user?.role);
 
@@ -204,14 +205,17 @@ export default function TimetablePage() {
     items: entries.filter((entry) => entry.dayOfWeek === day),
   })), [entries]);
 
-  const handleDelete = async (entryId) => {
-    if (!window.confirm('Delete this timetable slot?')) return;
+  const handleDelete = async () => {
+    if (!deleteState.entryId) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/academics/timetable/${entryId}`);
+      await API.delete(`/academics/timetable/${deleteState.entryId}`);
       toast.success('Timetable entry deleted');
+      setDeleteState({ open: false, entryId: '', loading: false });
       loadTimetable();
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Delete failed');
+      setDeleteState((current) => ({ ...current, loading: false }));
     }
   };
 
@@ -219,6 +223,15 @@ export default function TimetablePage() {
 
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete timetable slot"
+        description="Are you sure you want to delete this timetable slot?"
+        confirmLabel="Delete"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, entryId: '', loading: false })}
+      />
       {editingEntry !== null ? (
         <TimetableModal
           item={editingEntry}
@@ -266,7 +279,7 @@ export default function TimetablePage() {
                       {canManage ? (
                         <div className="flex items-center gap-2">
                           <button onClick={() => setEditingEntry(entry)} className="rounded-lg p-2 text-gray-400 hover:bg-white hover:text-blue-700"><FiEdit2 size={15} /></button>
-                          <button onClick={() => handleDelete(entry._id)} className="rounded-lg p-2 text-gray-400 hover:bg-white hover:text-red-600"><FiTrash2 size={15} /></button>
+                          <button onClick={() => setDeleteState({ open: true, entryId: entry._id, loading: false })} className="rounded-lg p-2 text-gray-400 hover:bg-white hover:text-red-600"><FiTrash2 size={15} /></button>
                         </div>
                       ) : null}
                     </div>

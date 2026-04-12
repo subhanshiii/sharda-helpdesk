@@ -3,7 +3,7 @@ import API from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
-import { PageHeader, FullPageSpinner, EmptyState, Alert } from '../components/ui';
+import { PageHeader, FullPageSpinner, EmptyState, Alert, ConfirmDialog } from '../components/ui';
 import { FiPlus, FiTrash2, FiX, FiCalendar } from 'react-icons/fi';
 
 const TYPES = ['Exam','Holiday','Event','Deadline','Result','Registration','Other'];
@@ -97,6 +97,7 @@ export default function AcademicCalendarPage() {
   const [showModal, setShowModal] = useState(false);
   const [activeType, setActiveType] = useState('');
   const [error, setError] = useState('');
+  const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
 
   const canManage = hasPermission('canPostNotice');
 
@@ -114,13 +115,18 @@ export default function AcademicCalendarPage() {
 
   useEffect(() => { fetchEvents(); }, []);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this date?')) return;
+  const handleDelete = async () => {
+    if (!deleteState.id) return;
+    setDeleteState((current) => ({ ...current, loading: true }));
     try {
-      await API.delete(`/academic-calendar/${id}`);
+      await API.delete(`/academic-calendar/${deleteState.id}`);
       toast.success('Removed');
-      setEvents(prev => prev.filter(e => e._id !== id));
-    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Failed to remove date'); }
+      setEvents(prev => prev.filter(e => e._id !== deleteState.id));
+      setDeleteState({ open: false, id: '', loading: false });
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to remove date');
+      setDeleteState((current) => ({ ...current, loading: false }));
+    }
   };
 
   const filtered = activeType ? events.filter(e => e.type === activeType) : events;
@@ -129,6 +135,15 @@ export default function AcademicCalendarPage() {
 
   return (
     <div>
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Remove calendar date"
+        description="Are you sure you want to remove this date from the academic calendar?"
+        confirmLabel="Remove"
+        loading={deleteState.loading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteState({ open: false, id: '', loading: false })}
+      />
       {showModal && <AddModal onClose={() => setShowModal(false)} onSaved={fetchEvents} />}
 
       <PageHeader
@@ -199,7 +214,7 @@ export default function AcademicCalendarPage() {
                           {days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${days} days`}
                         </span>
                         {canManage && (
-                          <button onClick={() => handleDelete(item._id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <button onClick={() => setDeleteState({ open: true, id: item._id, loading: false })} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                             <FiTrash2 size={13}/>
                           </button>
                         )}
@@ -226,7 +241,7 @@ export default function AcademicCalendarPage() {
                       </div>
                       <span className={`badge text-xs ${cfg.bg} ${cfg.text}`}>{item.type}</span>
                       {canManage && (
-                        <button onClick={() => handleDelete(item._id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <button onClick={() => setDeleteState({ open: true, id: item._id, loading: false })} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                           <FiTrash2 size={13}/>
                         </button>
                       )}

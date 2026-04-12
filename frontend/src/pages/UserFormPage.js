@@ -3,11 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiCheck, FiUpload } from 'react-icons/fi';
 import API from '../utils/api';
-import { Alert, PageHeader } from '../components/ui';
+import { Alert, HelpTooltip, PageHeader } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
+import { ADMIN_TIER_DEFINITIONS, getAdminTierDefinition, getAdminTierTone } from '../utils/helpers';
 
 const ROLES = ['student', 'faculty', 'staff', 'admin'];
 const ADMIN_TIER_GROUPS = [
+  {
+    label: 'No Tier',
+    options: [
+      { value: '', label: 'No Tier' },
+    ],
+  },
   {
     label: 'System-level',
     options: [
@@ -32,7 +39,7 @@ const initialForm = {
   email: '',
   password: '',
   role: 'student',
-  adminTier: 'admin',
+  adminTier: '',
   collegeId: '',
   department: '',
   departmentId: '',
@@ -61,8 +68,8 @@ export default function UserFormPage() {
   const [programOptions, setProgramOptions] = useState([]);
   const [sectionOptions, setSectionOptions] = useState([]);
   const isStudent = form.role === 'student';
-  const isAdmin = form.role === 'admin';
   const { isSuperAdmin } = usePermissions();
+  const selectedTierDefinition = getAdminTierDefinition(form.adminTier);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -80,7 +87,7 @@ export default function UserFormPage() {
           email: user.email || '',
           password: '',
           role: user.role || 'student',
-          adminTier: user.adminTier || 'admin',
+          adminTier: user.adminTier || '',
           collegeId: user.collegeId?._id || user.collegeId || '',
           department: user.department || '',
           departmentId: user.departmentId?._id || user.departmentId || '',
@@ -147,29 +154,22 @@ export default function UserFormPage() {
         next.section = '';
         next.sectionId = '';
       }
-      if (name === 'role' && value !== 'admin') {
-        next.adminTier = 'admin';
-        next.adminScopeIds = [];
-      }
-      if (name === 'role' && value === 'admin') {
-        next.adminTier = current.adminTier || 'admin';
-      }
       if (name === 'adminTier') {
         next.adminScopeIds = [];
-        if (value === 'super_admin' || value === 'admin') {
+        if (!value || value === 'super_admin' || value === 'admin') {
           next.collegeId = '';
           next.departmentId = '';
           next.programId = '';
         }
       }
-      if (name === 'collegeId' && current.role === 'admin') {
+      if (name === 'collegeId' && ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(current.adminTier)) {
         next.departmentId = '';
         next.programId = '';
       }
-      if (name === 'departmentId' && current.role === 'admin') {
+      if (name === 'departmentId' && ['department_admin', 'program_coordinator', 'section_moderator'].includes(current.adminTier)) {
         next.programId = '';
       }
-      if (name === 'programId' && current.role === 'admin') {
+      if (name === 'programId' && ['program_coordinator', 'section_moderator'].includes(current.adminTier)) {
         next.adminScopeIds = [];
       }
       if (name === 'sectionId') {
@@ -192,7 +192,7 @@ export default function UserFormPage() {
     setError('');
     setVerificationLink('');
 
-    if (form.role === 'admin') {
+    if (form.adminTier) {
       const needsScope = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(form.adminTier);
       const hasScope = form.adminTier === 'college_admin'
         ? Boolean(form.collegeId)
@@ -202,7 +202,12 @@ export default function UserFormPage() {
             ? Boolean(form.programId)
             : form.adminScopeIds.length > 0;
       if (needsScope && !hasScope) {
-        setError('Please select the required scope for this admin tier');
+        setError('Please select the required scope for this access tier');
+        setSaving(false);
+        return;
+      }
+      if (!isSuperAdmin) {
+        setError('Only the super admin can assign or modify access tiers');
         setSaving(false);
         return;
       }
@@ -234,7 +239,7 @@ export default function UserFormPage() {
             ? (form.programId ? [form.programId] : [])
             : form.adminScopeIds;
 
-      if (form.role === 'admin' && savedUser?._id) {
+      if (savedUser?._id) {
         await API.post('/admin-scope', {
           userId: savedUser._id,
           scopes: scopedTierType ? scopeIds.map((scopeId) => ({ scopeType: scopedTierType, scopeId })) : [],
@@ -288,25 +293,62 @@ export default function UserFormPage() {
               </div>
             </div>
 
-            {isAdmin ? (
+            <div className="space-y-4 rounded-3xl border border-gray-100 bg-gray-50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <label className="label !mb-0">Access Tier</label>
+                    <HelpTooltip
+                      title="Tier-based access"
+                      items={ADMIN_TIER_DEFINITIONS.map((tier) => ({
+                        label: `${tier.label} · Tier ${tier.level}`,
+                        description: `${tier.scopeLabel}. ${tier.description}`,
+                      }))}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">Roles define the user’s base function. A tier is optional and adds elevated access on top of that role.</p>
+                </div>
+                {selectedTierDefinition ? (
+                  <div className={`badge ${getAdminTierTone(selectedTierDefinition.key)}`}>
+                    {selectedTierDefinition.label} · Tier {selectedTierDefinition.level}
+                  </div>
+                ) : (
+                  <div className="badge bg-slate-100 text-slate-600">No Tier</div>
+                )}
+              </div>
+
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className="label">Admin Tier</label>
-                  <select name="adminTier" value={form.adminTier} onChange={handleChange} className="input">
+                  <select name="adminTier" value={form.adminTier} onChange={handleChange} className="input" disabled={!isSuperAdmin}>
                     {ADMIN_TIER_GROUPS.map((group) => (
                       <optgroup key={group.label} label={group.label}>
                         {group.options.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option key={option.value || 'none'} value={option.value}>{option.label}</option>
                         ))}
                       </optgroup>
                     ))}
                   </select>
+                  {!isSuperAdmin ? <p className="mt-1 text-xs text-gray-500">Only the super admin can assign or change tiers.</p> : null}
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                  {selectedTierDefinition ? (
+                    <>
+                      <p className="font-semibold text-gray-900">{selectedTierDefinition.scopeLabel}</p>
+                      <p className="mt-1">{selectedTierDefinition.description}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-gray-900">No Tier</p>
+                      <p className="mt-1">This user will only receive the standard permissions that come from their role.</p>
+                    </>
+                  )}
                 </div>
 
                 {form.adminTier === 'college_admin' ? (
                   <div>
                     <label className="label">College Scope</label>
-                    <select name="collegeId" value={form.collegeId} onChange={handleChange} className="input" required>
+                    <select name="collegeId" value={form.collegeId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select College</option>
                       {collegeOptions.map((college) => <option key={college._id} value={college._id}>{college.name}</option>)}
                     </select>
@@ -316,7 +358,7 @@ export default function UserFormPage() {
                 {form.adminTier === 'department_admin' ? (
                   <div>
                     <label className="label">Department Scope</label>
-                    <select name="departmentId" value={form.departmentId} onChange={handleChange} className="input" required>
+                    <select name="departmentId" value={form.departmentId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select Department</option>
                       {departmentOptions
                         .filter((department) => !form.collegeId || String(department.college?._id || department.college) === String(form.collegeId))
@@ -328,7 +370,7 @@ export default function UserFormPage() {
                 {form.adminTier === 'program_coordinator' ? (
                   <div>
                     <label className="label">Program Scope</label>
-                    <select name="programId" value={form.programId} onChange={handleChange} className="input" required>
+                    <select name="programId" value={form.programId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select Program</option>
                       {programOptions
                         .filter((program) => !form.departmentId || String(program.department?._id || program.department) === String(form.departmentId))
@@ -337,7 +379,7 @@ export default function UserFormPage() {
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            </div>
 
             <div className="grid gap-5 md:grid-cols-2">
               <div>
@@ -400,7 +442,7 @@ export default function UserFormPage() {
               ) : null}
             </div>
 
-            {isAdmin && form.adminTier === 'section_moderator' ? (
+            {form.adminTier === 'section_moderator' ? (
               <div>
                 <label className="label">Section Scope</label>
                 <div className="grid max-h-56 gap-3 overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50/70 p-4 md:grid-cols-2">
@@ -411,6 +453,7 @@ export default function UserFormPage() {
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={!isSuperAdmin}
                           onChange={(event) => {
                             const value = String(sectionOption._id);
                             setForm((current) => ({
