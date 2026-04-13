@@ -12,6 +12,7 @@ const AttendanceSession = require('../models/AttendanceSession');
 const User = require('../models/User');
 const { normalizeRole } = require('../utils/roleHelpers');
 const { getScopeFilter } = require('../utils/scopeGuard');
+const { resolveEffectiveTier } = require('../utils/permissionDefaults');
 const { buildStructureTree, runQuickAcademicSetup } = require('../utils/academicSetupService');
 
 const normalizeString = (value) => String(value || '').trim();
@@ -243,6 +244,151 @@ const populateMap = {
 };
 
 const getModel = (resource) => modelMap[resource];
+const SCOPED_ADMIN_TIERS = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
+
+const countDocumentsForScope = async (Model, scope = {}, extra = {}) => (
+  Model.countDocuments({ ...scope, ...extra })
+);
+
+const ensureScopedMutationAccess = async (user, resource, source = {}) => {
+  const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
+  if (!SCOPED_ADMIN_TIERS.includes(effectiveTier)) {
+    return;
+  }
+
+  const ensureScopedParent = async (resourceKey, query) => {
+    const scope = await getScopeFilter(user, resourceKey);
+    const exists = await getModel(resourceKey).exists({ ...scope, ...query, isActive: { $ne: false } });
+    if (!exists) {
+      const error = new Error('This action is outside your assigned academic scope');
+      error.statusCode = 403;
+      throw error;
+    }
+  };
+
+  if (resource === 'colleges') {
+    const error = new Error('Only system-level admins can manage colleges');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (resource === 'departments') {
+    await ensureScopedParent('colleges', { _id: source.college });
+    return;
+  }
+
+  if (resource === 'programs') {
+    await ensureScopedParent('departments', { _id: source.department });
+    return;
+  }
+
+  if (resource === 'courses' || resource === 'academic-sessions' || resource === 'years') {
+    await ensureScopedParent('programs', { _id: source.program });
+    return;
+  }
+
+  if (resource === 'sections') {
+    await ensureScopedParent('programs', { _id: source.program });
+    return;
+  }
+
+  if (resource === 'subjects') {
+    await ensureScopedParent('programs', { _id: source.program });
+    return;
+  }
+
+  if (resource === 'section-subjects' || resource === 'enrollments') {
+    await ensureScopedParent('sections', { _id: source.section });
+  }
+};
+
+const cascadeDeleteSections = async (sectionIds = []) => {
+  if (!sectionIds.length) return;
+
+  await Promise.all([
+    SectionSubject.deleteMany({ section: { $in: sectionIds } }),
+    Enrollment.deleteMany({ section: { $in: sectionIds } }),
+    AttendanceSession.deleteMany({ sectionId: { $in: sectionIds } }),
+    User.updateMany(
+      { sectionId: { $in: sectionIds } },
+      {
+        $set: {
+          sectionId: null,
+          section: '',
+          year: '',
+        },
+      }
+    ),
+  ]);
+};
+
+const cascadeDeletePrograms = async (programIds = []) => {
+  if (!programIds.length) return;
+
+  const [courseIds, academicSessionIds, sectionIds, subjectIds] = await Promise.all([
+    Course.find({ program: { $in: programIds } }).distinct('_id'),
+    AcademicSession.find({ program: { $in: programIds } }).distinct('_id'),
+    Section.find({ program: { $in: programIds } }).distinct('_id'),
+    Subject.find({ program: { $in: programIds } }).distinct('_id'),
+  ]);
+
+  await cascadeDeleteSections(sectionIds);
+
+  await Promise.all([
+    SectionSubject.deleteMany({
+      $or: [
+        { section: { $in: sectionIds } },
+        { subject: { $in: subjectIds } },
+      ],
+    }),
+    Enrollment.deleteMany({
+      $or: [
+        { section: { $in: sectionIds } },
+        { academicSession: { $in: academicSessionIds } },
+      ],
+    }),
+    AttendanceSession.deleteMany({
+      $or: [
+        { sectionId: { $in: sectionIds } },
+        { subjectId: { $in: subjectIds } },
+      ],
+    }),
+    Subject.deleteMany({ program: { $in: programIds } }),
+    Section.deleteMany({ program: { $in: programIds } }),
+    Course.deleteMany({ program: { $in: programIds } }),
+    AcademicSession.deleteMany({ program: { $in: programIds } }),
+    User.updateMany(
+      {
+        $or: [
+          { programId: { $in: programIds } },
+          { sectionId: { $in: sectionIds } },
+        ],
+      },
+      {
+        $set: {
+          programId: null,
+          sectionId: null,
+          section: '',
+          year: '',
+        },
+      }
+    ),
+  ]);
+};
+
+const deactivateOtherActiveEnrollments = async (payload, excludeId = null) => {
+  if (!payload?.student || payload.status !== 'active') return;
+
+  const query = {
+    student: payload.student,
+    status: 'active',
+  };
+  if (excludeId) {
+    query._id = { $ne: excludeId };
+  }
+
+  await Enrollment.updateMany(query, { $set: { status: 'inactive' } });
+};
 
 exports.getProgramReport = async (req, res, next) => {
   try {
@@ -303,6 +449,57 @@ exports.getStructureTree = async (req, res, next) => {
   try {
     const data = await buildStructureTree(req.user);
     res.status(200).json({ success: true, count: data.length, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getWorkspaceSummary = async (req, res, next) => {
+  try {
+    const [collegeScope, departmentScope, programScope, courseScope, academicSessionScope, sectionScope, subjectScope, enrollmentScope] = await Promise.all([
+      getScopeFilter(req.user, 'colleges'),
+      getScopeFilter(req.user, 'departments'),
+      getScopeFilter(req.user, 'programs'),
+      getScopeFilter(req.user, 'courses'),
+      getScopeFilter(req.user, 'academic-sessions'),
+      getScopeFilter(req.user, 'sections'),
+      getScopeFilter(req.user, 'subjects'),
+      getScopeFilter(req.user, 'enrollments'),
+    ]);
+
+    const [
+      colleges,
+      departments,
+      programs,
+      courses,
+      academicSessions,
+      sections,
+      subjects,
+      activeEnrollments,
+    ] = await Promise.all([
+      countDocumentsForScope(College, collegeScope, { isActive: true }),
+      countDocumentsForScope(Department, departmentScope, { isActive: true }),
+      countDocumentsForScope(Program, programScope, { isActive: true }),
+      countDocumentsForScope(Course, courseScope, { isActive: true }),
+      countDocumentsForScope(AcademicSession, academicSessionScope, { isActive: true }),
+      countDocumentsForScope(Section, sectionScope, { isActive: true }),
+      countDocumentsForScope(Subject, subjectScope, { isActive: true }),
+      Enrollment.distinct('student', { ...enrollmentScope, status: 'active' }).then((rows) => rows.length),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        colleges,
+        departments,
+        programs,
+        courses,
+        academicSessions,
+        sections,
+        subjects,
+        students: activeEnrollments,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -393,6 +590,19 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
 
     if (req.params.studentId && req.params.studentId !== String(req.user.id) && !['faculty', 'staff', 'admin'].includes(requesterRole)) {
       return res.status(403).json({ success: false, message: 'You are not allowed to view this student overview' });
+    }
+
+    if (req.params.studentId && req.params.studentId !== String(req.user.id)) {
+      const scope = await getScopeFilter(req.user, 'sections');
+      if (Object.keys(scope).length) {
+        const activeEnrollment = await Enrollment.findOne({ student: studentId, status: 'active' }).select('section').lean();
+        const allowedSection = activeEnrollment?.section
+          ? await Section.exists({ ...scope, _id: activeEnrollment.section })
+          : false;
+        if (!allowedSection) {
+          return res.status(403).json({ success: false, message: 'This student is outside your assigned academic scope' });
+        }
+      }
     }
 
     const enrollment = await Enrollment.findOne({ student: studentId, status: 'active' })
@@ -490,8 +700,23 @@ exports.list = async (req, res, next) => {
     if (populateMap[req.params.resource]) {
       cursor = cursor.populate(populateMap[req.params.resource]);
     }
-    const data = await cursor.lean();
-    res.status(200).json({ success: true, count: data.length, data });
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 250, 1), 500);
+    if (req.query.paginate !== 'false') {
+      cursor = cursor.skip((page - 1) * limit).limit(limit);
+    }
+    const [data, total] = await Promise.all([
+      cursor.lean(),
+      model.countDocuments(query),
+    ]);
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      total,
+      page,
+      limit: req.query.paginate === 'false' ? total : limit,
+      data,
+    });
   } catch (error) {
     next(error);
   }
@@ -503,13 +728,10 @@ exports.create = async (req, res, next) => {
     if (!model) return res.status(404).json({ success: false, message: 'Academic resource not found' });
 
     const payload = await buildAcademicPayload(req.params.resource, req.body);
+    await ensureScopedMutationAccess(req.user, req.params.resource, payload);
 
     if (req.params.resource === 'enrollments') {
-      const existing = await Enrollment.findOne({ student: payload.student, status: 'active' });
-      if (existing) {
-        existing.status = 'inactive';
-        await existing.save({ validateBeforeSave: false });
-      }
+      await deactivateOtherActiveEnrollments(payload);
 
       if (payload.section) {
         const section = await Section.findById(payload.section).populate('department academicSession');
@@ -539,11 +761,18 @@ exports.update = async (req, res, next) => {
     const model = getModel(req.params.resource);
     if (!model) return res.status(404).json({ success: false, message: 'Academic resource not found' });
 
+    const existingDoc = await model.findById(req.params.id).lean();
+    if (!existingDoc) return res.status(404).json({ success: false, message: 'Academic record not found' });
+
     const payload = await buildAcademicPayload(req.params.resource, req.body);
+    await ensureScopedMutationAccess(req.user, req.params.resource, {
+      ...existingDoc,
+      ...payload,
+    });
     const doc = await model.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
-    if (!doc) return res.status(404).json({ success: false, message: 'Academic record not found' });
 
     if (req.params.resource === 'enrollments' && payload.section && payload.student) {
+      await deactivateOtherActiveEnrollments(payload, req.params.id);
       const section = await Section.findById(payload.section).populate('department academicSession');
       await User.findByIdAndUpdate(payload.student, {
         sectionId: section?._id || null,
@@ -569,11 +798,101 @@ exports.remove = async (req, res, next) => {
     const model = getModel(req.params.resource);
     if (!model) return res.status(404).json({ success: false, message: 'Academic resource not found' });
 
+    const existingDoc = await model.findById(req.params.id).lean();
+    if (!existingDoc) return res.status(404).json({ success: false, message: 'Academic record not found' });
+
+    await ensureScopedMutationAccess(req.user, req.params.resource, existingDoc);
+
     if (req.params.resource === 'colleges') {
-      const departmentCount = await Department.countDocuments({ college: req.params.id });
-      if (departmentCount > 0) {
-        return res.status(409).json({ success: false, message: 'Cannot delete a college that still has departments' });
-      }
+      const departmentIds = await Department.find({ college: req.params.id }).distinct('_id');
+      const programIds = await Program.find({ department: { $in: departmentIds } }).distinct('_id');
+
+      await cascadeDeletePrograms(programIds);
+      await Promise.all([
+        Department.deleteMany({ college: req.params.id }),
+        Program.deleteMany({ _id: { $in: programIds } }),
+      ]);
+    }
+
+    if (req.params.resource === 'departments') {
+      const programIds = await Program.find({ department: req.params.id }).distinct('_id');
+      await cascadeDeletePrograms(programIds);
+      await Promise.all([
+        Program.deleteMany({ department: req.params.id }),
+        User.updateMany(
+          { departmentId: req.params.id },
+          {
+            $set: {
+              departmentId: null,
+              department: '',
+              programId: null,
+              sectionId: null,
+              section: '',
+              year: '',
+            },
+          }
+        ),
+      ]);
+    }
+
+    if (req.params.resource === 'programs') {
+      await cascadeDeletePrograms([existingDoc._id]);
+    }
+
+    if (req.params.resource === 'courses') {
+      const sectionIds = await Section.find({ course: req.params.id }).distinct('_id');
+      const subjectIds = await Subject.find({ course: req.params.id }).distinct('_id');
+      await cascadeDeleteSections(sectionIds);
+      await Promise.all([
+        SectionSubject.deleteMany({
+          $or: [
+            { section: { $in: sectionIds } },
+            { subject: { $in: subjectIds } },
+          ],
+        }),
+        AttendanceSession.deleteMany({
+          $or: [
+            { sectionId: { $in: sectionIds } },
+            { subjectId: { $in: subjectIds } },
+          ],
+        }),
+        Subject.deleteMany({ course: req.params.id }),
+        Section.deleteMany({ course: req.params.id }),
+      ]);
+    }
+
+    if (req.params.resource === 'academic-sessions' || req.params.resource === 'years') {
+      const sectionIds = await Section.find({ academicSession: req.params.id }).distinct('_id');
+      const subjectIds = await Subject.find({ academicSession: req.params.id }).distinct('_id');
+      await cascadeDeleteSections(sectionIds);
+      await Promise.all([
+        SectionSubject.deleteMany({
+          $or: [
+            { section: { $in: sectionIds } },
+            { subject: { $in: subjectIds } },
+          ],
+        }),
+        AttendanceSession.deleteMany({
+          $or: [
+            { sectionId: { $in: sectionIds } },
+            { subjectId: { $in: subjectIds } },
+          ],
+        }),
+        Subject.deleteMany({ academicSession: req.params.id }),
+        Section.deleteMany({ academicSession: req.params.id }),
+        Enrollment.deleteMany({ academicSession: req.params.id }),
+      ]);
+    }
+
+    if (req.params.resource === 'sections') {
+      await cascadeDeleteSections([existingDoc._id]);
+    }
+
+    if (req.params.resource === 'subjects') {
+      await Promise.all([
+        SectionSubject.deleteMany({ subject: req.params.id }),
+        AttendanceSession.deleteMany({ subjectId: req.params.id }),
+      ]);
     }
 
     const doc = await model.findByIdAndDelete(req.params.id);

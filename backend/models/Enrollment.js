@@ -31,11 +31,23 @@ const enrollmentSchema = new mongoose.Schema(
       default: 'active',
       index: true,
     },
+    enrolledAt: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 enrollmentSchema.index({ student: 1, status: 1 });
 enrollmentSchema.index({ section: 1, status: 1 });
+enrollmentSchema.index(
+  { student: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'active' },
+  }
+);
 
 module.exports = mongoose.model('Enrollment', enrollmentSchema);

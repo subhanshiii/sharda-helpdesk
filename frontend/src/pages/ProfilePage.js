@@ -72,8 +72,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarUpload = async (event) => {
-    const file = event.target.files?.[0];
+  const handleAvatarUpload = async (file) => {
     if (!file) return;
     const formData = new FormData();
     formData.append('profileImage', file);
@@ -83,12 +82,12 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       updateUser(res.data.data);
+      setAvatarPickerOpen(false);
       toast.success('Profile image updated');
     } catch (err) {
       setProfileError(err.response?.data?.message || 'Failed to upload image');
     } finally {
       setAvatarLoading(false);
-      event.target.value = '';
     }
   };
 

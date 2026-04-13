@@ -42,13 +42,19 @@ const subjectSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    type: {
+      type: String,
+      enum: ['core', 'elective', 'common'],
+      default: 'core',
+      index: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 subjectSchema.index({ program: 1, academicSession: 1, code: 1 }, { unique: true });

@@ -27,7 +27,8 @@ const collegeSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: { createdAt: true, updatedAt: false },
+    timestamps: true,
+    strict: true,
   }
 );
 

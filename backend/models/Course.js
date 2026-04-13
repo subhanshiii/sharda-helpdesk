@@ -25,13 +25,19 @@ const courseSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    yearNumber: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 10,
+    },
     isActive: {
       type: Boolean,
       default: true,
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 courseSchema.index({ program: 1, code: 1 }, { unique: true });

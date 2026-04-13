@@ -200,8 +200,7 @@ export default function UserDetailPage() {
     }));
   }, [user]);
 
-  const uploadAvatar = async (event) => {
-    const file = event.target.files?.[0];
+  const uploadAvatar = async (file) => {
     if (!file) return;
     const data = new FormData();
     data.append('profileImage', file);
@@ -210,13 +209,13 @@ export default function UserDetailPage() {
       await API.post(`/users/${systemId}/avatar`, data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      setAvatarPickerOpen(false);
       toast.success('Profile image updated');
       await loadUser();
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Failed to upload profile image');
     } finally {
       setSavingAvatar(false);
-      event.target.value = '';
     }
   };
 

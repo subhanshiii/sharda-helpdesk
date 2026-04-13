@@ -25,7 +25,7 @@ const departmentSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 departmentSchema.index({ code: 1 }, { unique: true });

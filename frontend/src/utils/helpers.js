@@ -214,7 +214,13 @@ export const getAvatarPresetUrl = (avatarChoice) => {
 };
 
 export const getAvatarSource = (user = {}) => {
-  if (user?.profileImage) return getAssetUrl(user.profileImage);
+  if (user?.profileImage) {
+    const assetUrl = getAssetUrl(user.profileImage);
+    if (!user?.updatedAt) return assetUrl;
+    const url = new URL(assetUrl, window.location.origin);
+    url.searchParams.set('v', String(new Date(user.updatedAt).getTime()));
+    return url.toString();
+  }
   if (user?.avatarChoice) return getAvatarPresetUrl(user.avatarChoice);
   if (user?.avatar) return getAssetUrl(user.avatar);
   return '';

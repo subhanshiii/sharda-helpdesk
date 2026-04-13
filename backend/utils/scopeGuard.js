@@ -105,6 +105,11 @@ const getScopeFilter = async (user, resource = 'departments') => {
     return { program: { $in: toObjectIds(programIds) } };
   }
 
+  if (resource === 'academic-sessions' || resource === 'years') {
+    const programIds = await getScopedProgramIds(scopes, effectiveTier);
+    return { program: { $in: toObjectIds(programIds) } };
+  }
+
   if (resource === 'sections') {
     const sectionIds = await getScopedSectionIds(scopes, effectiveTier);
     return { _id: { $in: toObjectIds(sectionIds) } };

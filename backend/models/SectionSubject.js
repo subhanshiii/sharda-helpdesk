@@ -22,7 +22,7 @@ const sectionSubjectSchema = new mongoose.Schema(
     },
     semester: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     isActive: {
@@ -31,9 +31,15 @@ const sectionSubjectSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
-sectionSubjectSchema.index({ section: 1, subject: 1, semester: 1 }, { unique: true });
+sectionSubjectSchema.index(
+  { section: 1, subject: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isActive: true },
+  }
+);
 
 module.exports = mongoose.model('SectionSubject', sectionSubjectSchema);

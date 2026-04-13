@@ -29,6 +29,7 @@ const academicSessionSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    strict: true,
     collection: 'academicyears',
   }
 );

@@ -25,13 +25,18 @@ const programSchema = new mongoose.Schema(
       min: 1,
       max: 10,
     },
+    degreeType: {
+      type: String,
+      trim: true,
+      default: 'UG',
+    },
     isActive: {
       type: Boolean,
       default: true,
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 programSchema.index({ department: 1, code: 1 }, { unique: true });

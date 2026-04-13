@@ -91,6 +91,15 @@ const buildUnauthorizedResponse = (res, err) => {
   return res.status(401).json({ success: false, message: 'Invalid token. Please log in again.' });
 };
 
+const resolveRequestPermissions = async (user) => {
+  const permissionDoc = await Permission.getRolePermissions(user.role);
+  return buildResolvedPermissions(
+    user.role,
+    permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[user.role],
+    user.adminTier
+  );
+};
+
 exports.loadAuthenticatedUser = loadAuthenticatedUser;
 
 exports.protect = async (req, res, next) => {
@@ -140,19 +149,35 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
-    const permissionDoc = await Permission.getRolePermissions(req.user.role);
-    const permissions = buildResolvedPermissions(
-      req.user.role,
-      permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[req.user.role],
-      req.user.adminTier
-    );
-
+    const permissions = await resolveRequestPermissions(req.user);
     req.permissions = permissions;
 
     if (!permissions[permissionKey]) {
       return res.status(403).json({
         success: false,
         message: `Access denied. Missing permission: ${permissionKey}`,
+      });
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.anyPermissionMiddleware = (...permissionKeys) => async (req, res, next) => {
+  try {
+    if (!req.user?.role) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
+    }
+
+    const permissions = await resolveRequestPermissions(req.user);
+    req.permissions = permissions;
+
+    if (!permissionKeys.some((permissionKey) => permissions[permissionKey])) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. One of these permissions is required: ${permissionKeys.join(', ')}`,
       });
     }
 

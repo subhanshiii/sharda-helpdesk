@@ -38,6 +38,12 @@ const sectionSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    code: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: '',
+    },
     capacity: {
       type: Number,
       default: 60,
@@ -54,7 +60,7 @@ const sectionSchema = new mongoose.Schema(
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, strict: true }
 );
 
 sectionSchema.index({ program: 1, course: 1, academicSession: 1, name: 1 }, { unique: true });
