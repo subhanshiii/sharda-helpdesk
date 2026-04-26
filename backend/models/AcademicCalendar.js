@@ -19,7 +19,37 @@ const academicCalendarSchema = new mongoose.Schema(
     },
     description: { type: String, trim: true },
     targetAudience: {
+      tiers: [{ type: String, trim: true }],
       roles: [{ type: String, trim: true }],
+      collegeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'College',
+        default: null,
+      },
+      departmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
+        default: null,
+      },
+      programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Program',
+        default: null,
+      },
+      courseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        default: null,
+      },
+      studyYear: {
+        type: Number,
+        default: null,
+      },
+      sectionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Section',
+        default: null,
+      },
       departments: [{ type: String, trim: true }],
       years: [{ type: String, trim: true }],
       sections: [{ type: String, trim: true }],

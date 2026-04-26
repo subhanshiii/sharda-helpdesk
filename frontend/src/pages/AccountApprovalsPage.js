@@ -16,6 +16,12 @@ const ROLE_FILTERS = [
 
 const PAGE_SIZE = 8;
 
+const renderAcademicMappingMeta = (item) => [
+  item.academicDisplay?.department || item.department,
+  (item.academicDisplay?.year || item.year) && `Year ${item.academicDisplay?.year || item.year}`,
+  (item.academicDisplay?.section || item.section || 'No section') && `Section ${item.academicDisplay?.section || item.section || 'No section'}`,
+].filter(Boolean).join(' · ');
+
 const SummaryCard = ({ icon: Icon, label, value, tone, active, onClick, isDark }) => (
   <button
     type="button"
@@ -206,7 +212,7 @@ export default function AccountApprovalsPage() {
             subtitle: 'Students missing section mapping that can break academic visibility.',
             items: alerts.missingAcademicMapping || [],
             emptyText: 'All students have valid academic mapping.',
-            metaRenderer: (item) => [item.department, item.year && `Year ${item.year}`, item.section || 'No section'].filter(Boolean).join(' · '),
+            metaRenderer: renderAcademicMappingMeta,
           },
         ],
       },
@@ -297,7 +303,7 @@ export default function AccountApprovalsPage() {
           subtitle: 'Students missing section mapping that can break academic visibility.',
           items: alerts.missingAcademicMapping || [],
           emptyText: 'All students have valid academic mapping.',
-          metaRenderer: (item) => [item.department, item.year && `Year ${item.year}`, item.section || 'No section'].filter(Boolean).join(' · '),
+          metaRenderer: renderAcademicMappingMeta,
         }],
       },
     ];

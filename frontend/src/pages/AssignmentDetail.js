@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../utils/api';
-import { Avatar, EmptyState, FullPageSpinner } from '../components/ui';
+import { Avatar, ConfirmDialog, EmptyState, FullPageSpinner } from '../components/ui';
 import { formatDate, formatRelative, getAssetUrl, getRoleLabel } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
-import { FiArrowLeft, FiCheck, FiDownload, FiUpload, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiCheck, FiDownload, FiTrash2, FiUpload, FiX } from 'react-icons/fi';
 
 const SubmissionState = ({ status }) => {
   const styles = {
@@ -30,6 +30,7 @@ export default function AssignmentDetail() {
   const [submissionComment, setSubmissionComment] = useState('');
   const [submissionFiles, setSubmissionFiles] = useState([]);
   const [gradeDrafts, setGradeDrafts] = useState({});
+  const [deleteState, setDeleteState] = useState({ open: false, loading: false });
 
   const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
   const canSubmitAssignments = user?.role === 'student' || hasPermission('canSubmitAssignments');
@@ -128,14 +129,43 @@ export default function AssignmentDetail() {
     return `${url}${url.includes('?') ? '&' : '?'}download=1`;
   };
 
+  const handleDeleteAssignment = async () => {
+    setDeleteState({ open: true, loading: true });
+    try {
+      await API.delete(`/assignments/${id}`);
+      toast.success('Assignment deleted');
+      navigate('/assignments');
+    } catch (err) {
+      const message = err.response?.data?.message || 'Failed to delete assignment';
+      setError(message);
+      toast.error(message);
+      setDeleteState({ open: true, loading: false });
+    }
+  };
+
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={deleteState.open}
+        title="Delete assignment"
+        description="This will remove the assignment and all submitted work linked to it. This action cannot be undone."
+        confirmLabel="Delete Assignment"
+        loading={deleteState.loading}
+        onConfirm={handleDeleteAssignment}
+        onClose={() => setDeleteState({ open: false, loading: false })}
+      />
       <div className="flex items-start gap-3">
         <button onClick={() => navigate('/assignments')} className="btn-secondary p-2"><FiArrowLeft size={16} /></button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold text-gray-900">{assignment.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{assignment.subject || 'General'} · {dueState}</p>
         </div>
+        {canManageAssignments ? (
+          <button type="button" onClick={() => setDeleteState({ open: true, loading: false })} className="btn-secondary text-red-600 hover:text-red-700">
+            <FiTrash2 size={14} />
+            Delete
+          </button>
+        ) : null}
       </div>
 
       <div className="card p-5 space-y-4">

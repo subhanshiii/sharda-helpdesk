@@ -126,6 +126,7 @@ export const Avatar = ({ user, name = '', src = '', avatarChoice = '', size = 's
           src={displaySrc}
           alt={resolvedName || 'Avatar'}
           loading="lazy"
+          crossOrigin="use-credentials"
           className="h-full w-full rounded-full object-contain"
           onError={() => {
             const fallbackFilename = getDefaultAvatarFilename();

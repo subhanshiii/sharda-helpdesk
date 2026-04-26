@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import { PageHeader, Alert, Avatar } from '../components/ui';
 import { getRoleColor, formatDate } from '../utils/helpers';
-import { FiUser, FiMail, FiBook, FiHash, FiLock, FiCheck, FiImage } from 'react-icons/fi';
+import { FiUser, FiMail, FiLayers, FiLock, FiCheck, FiImage } from 'react-icons/fi';
 import { fetchAvatarOptions } from '../constants/avatarOptions';
 import AvatarPickerPopover from '../components/AvatarPickerPopover';
 
@@ -12,9 +12,7 @@ export default function ProfilePage() {
   const { user, updateUser } = useAuth();
 
   const [profileForm, setProfileForm] = useState({
-    name:         user?.name || '',
-    department:   user?.department || '',
-    enrollmentId: user?.enrollmentId || '',
+    name: user?.name || '',
   });
   const [passForm, setPassForm] = useState({
     currentPassword: '',
@@ -28,6 +26,17 @@ export default function ProfilePage() {
   const [avatarLoading,  setAvatarLoading]  = useState(false);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarOptions, setAvatarOptions] = useState([]);
+
+  useEffect(() => {
+    setProfileForm({ name: user?.name || '' });
+  }, [user?.name]);
+
+  const academicDetails = useMemo(() => ([
+    { label: 'Department', value: user?.department || 'Not assigned' },
+    { label: 'Year', value: user?.year ? `Year ${user.year}` : 'Not assigned' },
+    { label: 'Section', value: user?.section || 'Not assigned' },
+    { label: 'Enrollment ID', value: user?.enrollmentId || 'Not assigned' },
+  ]), [user?.department, user?.enrollmentId, user?.section, user?.year]);
 
   useEffect(() => {
     let active = true;
@@ -63,7 +72,8 @@ export default function ProfilePage() {
     setAvatarLoading(true);
     try {
       const res = await API.put('/auth/updateprofile', { avatarChoice, removeProfileImage: true });
-      updateUser(res.data.data);
+      updateUser({ ...res.data.data, updatedAt: new Date().toISOString() });
+      setProfileError('');
       toast.success('Avatar updated');
     } catch (err) {
       setProfileError(err.response?.data?.message || 'Failed to update avatar');
@@ -81,7 +91,8 @@ export default function ProfilePage() {
       const res = await API.post('/auth/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      updateUser(res.data.data);
+      updateUser({ ...res.data.data, updatedAt: new Date().toISOString() });
+      setProfileError('');
       setAvatarPickerOpen(false);
       toast.success('Profile image updated');
     } catch (err) {
@@ -141,11 +152,9 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900">{user?.name}</h2>
             <p className="text-sm text-gray-500">{user?.email}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="mt-1 flex items-center gap-2">
               <span className={`badge ${getRoleColor(user?.role)}`}>{user?.role}</span>
-              {user?.department && (
-                <span className="badge bg-gray-100 text-gray-600">{user?.department}</span>
-              )}
+              {user?.section ? <span className="badge bg-gray-100 text-gray-600">{user.section}</span> : null}
             </div>
           </div>
         </div>
@@ -168,21 +177,39 @@ export default function ProfilePage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="mb-6 grid grid-cols-2 gap-3">
           <div className="bg-gray-50 rounded-lg p-3 text-center">
             <p className="text-xs text-gray-500">Member since</p>
             <p className="text-sm font-semibold text-gray-800 mt-0.5">{formatDate(user?.createdAt)}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Enrollment ID</p>
+            <p className="text-xs text-gray-500">Email status</p>
             <p className="text-sm font-semibold text-gray-800 mt-0.5 font-mono">
-              {user?.enrollmentId || '—'}
+              {user?.emailVerified ? 'Verified' : 'Pending'}
             </p>
           </div>
         </div>
 
+        <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <div className="flex items-center gap-2">
+            <FiLayers size={15} className="text-gray-500" />
+            <h3 className="text-sm font-semibold text-gray-800">Academic placement</h3>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            These fields come from your assigned academic structure so records stay consistent across attendance, timetable, and notices.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {academicDetails.map((item) => (
+              <div key={item.label} className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">{item.label}</p>
+                <p className="mt-1 text-sm font-semibold text-gray-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Edit profile form */}
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Edit Profile</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Profile essentials</h3>
         {profileError && <div className="mb-3"><Alert type="error" message={profileError} /></div>}
         <form onSubmit={handleProfileSave} className="space-y-4">
           <div>
@@ -206,31 +233,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Department</label>
-              <div className="relative">
-                <FiBook className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                <input
-                  className="input pl-9"
-                  value={profileForm.department}
-                  onChange={e => setProfileForm(f => ({ ...f, department: e.target.value }))}
-                  placeholder="e.g. CSE"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="label">Enrollment ID</label>
-              <div className="relative">
-                <FiHash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                <input
-                  className="input pl-9"
-                  value={profileForm.enrollmentId}
-                  onChange={e => setProfileForm(f => ({ ...f, enrollmentId: e.target.value }))}
-                  placeholder="SU2024001"
-                />
-              </div>
-            </div>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Need changes to department, year, section, or enrollment mapping? Update them from the academic structure or user management workflow so every module stays aligned.
           </div>
 
           <button type="submit" disabled={profileLoading} className="btn-primary">

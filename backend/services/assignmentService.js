@@ -3,16 +3,11 @@ const Submission = require('../models/Submission');
 const Enrollment = require('../models/Enrollment');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
+const Department = require('../models/Department');
 const mongoose = require('mongoose');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
-
-const parseValues = (value) => {
-  if (!value) return [];
-  const values = Array.isArray(value)
-    ? value.map((item) => String(item).trim()).filter(Boolean)
-    : String(value).split(',').map((item) => item.trim()).filter(Boolean);
-  return [...new Set(values)];
-};
+const { buildAudienceVisibilityQuery, buildTargetAudiencePayload, buildVisibilityFilterQuery } = require('../utils/visibility');
+const { buildResolvedPermissions, DEFAULT_ROLE_PERMISSIONS } = require('../utils/permissionDefaults');
 
 const normalizeValue = (value) => String(value ?? '').trim().toLowerCase();
 
@@ -35,6 +30,12 @@ const parseAssignedStudents = (value) => {
 
 const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: userId, status: 'active' }).lean();
 
+const getResolvedPermissions = (user) => buildResolvedPermissions(
+  user?.role,
+  DEFAULT_ROLE_PERMISSIONS[normalizeRole(user?.role)] || {},
+  user?.adminTier
+);
+
 const ensureAssignmentModuleAccess = (user) => {
   if (!user) {
     const error = new Error('Not authorized');
@@ -43,8 +44,9 @@ const ensureAssignmentModuleAccess = (user) => {
   }
 
   const role = normalizeRole(user.role);
+  const permissions = getResolvedPermissions(user);
 
-  if (!['student', 'faculty', 'admin'].includes(role)) {
+  if (!['student', 'faculty', 'admin'].includes(role) && !permissions.canManageAssignments && !permissions.canSubmitAssignments) {
     const error = new Error('Assignments are not available for this role');
     error.statusCode = 403;
     throw error;
@@ -85,8 +87,12 @@ const getAssignmentAccess = async (assignmentId, user) => {
   const userId = user.id?.toString?.() || user._id?.toString?.();
   const managesAssignment = isAdminRole(role) || assignment.createdBy?._id?.toString() === userId;
   const canViewAsStudent = role === 'student' && isStudentTargeted(assignment, user);
+  const audienceQuery = await buildAudienceVisibilityQuery(user);
+  const canViewByAudience = audienceQuery
+    ? await Assignment.exists({ _id: assignment._id, $and: [audienceQuery] })
+    : true;
 
-  if (!managesAssignment && !canViewAsStudent) {
+  if (!managesAssignment && !canViewAsStudent && !canViewByAudience) {
     const error = new Error('Not authorized to access this assignment');
     error.statusCode = 403;
     throw error;
@@ -95,10 +101,25 @@ const getAssignmentAccess = async (assignmentId, user) => {
   return { assignment, managesAssignment, canViewAsStudent };
 };
 
-const listAssignments = async (user, { status, search, limit } = {}) => {
+const listAssignments = async (user, filters = {}) => {
+  const {
+    status,
+    search,
+    limit,
+    visibilityTier,
+    visibilityRole,
+    collegeId,
+    departmentId,
+    programId,
+    courseId,
+    studyYear,
+    sectionId,
+  } = filters;
   ensureAssignmentModuleAccess(user);
   const role = normalizeRole(user.role);
   const query = {};
+  const permissions = getResolvedPermissions(user);
+  const audienceQuery = await buildAudienceVisibilityQuery(user);
 
   if (role === 'student') {
     const enrollment = await getActiveEnrollment(user.id || user._id);
@@ -129,8 +150,21 @@ const listAssignments = async (user, { status, search, limit } = {}) => {
         ],
       },
     ];
-  } else if (!isAdminRole(role)) {
+  } else if (!isAdminRole(role) && !permissions.canManageAssignments) {
     query.createdBy = user.id || user._id;
+  } else if (!isAdminRole(role) && audienceQuery) {
+    query.$and = [...(query.$and || []), {
+      $or: [
+        { createdBy: user.id || user._id },
+        audienceQuery,
+      ],
+    }];
+  } else if (audienceQuery && !isAdminRole(role)) {
+    query.$and = [...(query.$and || []), audienceQuery];
+  }
+
+  if (audienceQuery && role === 'student') {
+    query.$and = [...(query.$and || []), audienceQuery];
   }
 
   if (status === 'published') query.isPublished = true;
@@ -146,6 +180,20 @@ const listAssignments = async (user, { status, search, limit } = {}) => {
         ],
       },
     ];
+  }
+
+  const visibilityFilter = buildVisibilityFilterQuery({
+    visibilityTier: status === 'draft' ? undefined : visibilityTier,
+    visibilityRole,
+    collegeId,
+    departmentId,
+    programId,
+    courseId,
+    studyYear,
+    sectionId,
+  });
+  if (visibilityFilter) {
+    query.$and = [...(query.$and || []), visibilityFilter];
   }
 
   let cursor = Assignment.find(query)
@@ -222,12 +270,35 @@ const getAssignmentById = async (assignmentId, user) => {
 
 const createAssignment = async (body, user, files) => {
   ensureAssignmentModuleAccess(user);
-  const role = normalizeRole(user.role);
-  if (!['faculty', 'admin'].includes(role)) {
+  const permissions = getResolvedPermissions(user);
+  if (!permissions.canManageAssignments) {
     const error = new Error('Not authorized to create assignments');
     error.statusCode = 403;
     throw error;
   }
+  const audience = buildTargetAudiencePayload(body);
+
+  if (audience.sectionId) {
+    const section = await Section.findById(audience.sectionId).populate('department', 'name college');
+    if (section) {
+      audience.sectionId = section._id;
+      audience.studyYear = audience.studyYear || section.studyYear || null;
+      audience.courseId = audience.courseId || section.course || null;
+      audience.programId = audience.programId || section.program || null;
+      audience.departmentId = audience.departmentId || section.department?._id || null;
+      audience.collegeId = audience.collegeId || section.department?.college || null;
+      audience.departments = audience.departments?.length ? audience.departments : [section.department?.name].filter(Boolean);
+      audience.years = audience.years?.length ? audience.years : [String(section.studyYear || '')].filter(Boolean);
+      audience.sections = audience.sections?.length ? audience.sections : [section.name].filter(Boolean);
+    }
+  } else if (audience.departmentId) {
+    const department = await Department.findById(audience.departmentId).select('name college');
+    if (department) {
+      audience.collegeId = audience.collegeId || department.college || null;
+      audience.departments = audience.departments?.length ? audience.departments : [department.name].filter(Boolean);
+    }
+  }
+
   const assignment = await Assignment.create({
     title: body.title,
     description: body.description,
@@ -237,11 +308,7 @@ const createAssignment = async (body, user, files) => {
     maxScore: body.maxScore ? Number(body.maxScore) : 100,
     allowLateSubmissions: body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true,
     isPublished: body.isPublished !== 'false' && body.isPublished !== false,
-    targetAudience: {
-      departments: parseValues(body.audienceDepartments),
-      years: parseValues(body.audienceYears),
-      sections: parseValues(body.audienceSections),
-    },
+    targetAudience: audience,
     sectionId: mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null,
     assignedStudents: parseAssignedStudents(body.assignedStudentIds),
     attachments: serializeFiles(files),
@@ -257,6 +324,12 @@ const createAssignment = async (body, user, files) => {
       assignment.targetAudience.sections = assignment.targetAudience.sections?.length
         ? assignment.targetAudience.sections
         : [section.name].filter(Boolean);
+      assignment.targetAudience.departmentId = assignment.targetAudience.departmentId || section.department?._id || null;
+      assignment.targetAudience.collegeId = assignment.targetAudience.collegeId || section.department?.college || null;
+      assignment.targetAudience.programId = assignment.targetAudience.programId || section.program || null;
+      assignment.targetAudience.courseId = assignment.targetAudience.courseId || section.course || null;
+      assignment.targetAudience.studyYear = assignment.targetAudience.studyYear || section.studyYear || null;
+      assignment.targetAudience.sectionId = assignment.targetAudience.sectionId || section._id;
     }
   }
 
@@ -291,11 +364,7 @@ const updateAssignment = async (assignmentId, body, user, files) => {
   if (body.maxScore !== undefined) assignment.maxScore = Number(body.maxScore);
   if (body.allowLateSubmissions !== undefined) assignment.allowLateSubmissions = body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true;
   if (body.isPublished !== undefined) assignment.isPublished = body.isPublished === 'true' || body.isPublished === true;
-  assignment.targetAudience = {
-    departments: parseValues(body.audienceDepartments),
-    years: parseValues(body.audienceYears),
-    sections: parseValues(body.audienceSections),
-  };
+  assignment.targetAudience = buildTargetAudiencePayload(body);
   if (body.sectionId !== undefined) assignment.sectionId = mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null;
   assignment.assignedStudents = parseAssignedStudents(body.assignedStudentIds);
   if (files?.length) assignment.attachments = serializeFiles(files);
@@ -309,6 +378,20 @@ const updateAssignment = async (assignmentId, body, user, files) => {
       assignment.targetAudience.sections = assignment.targetAudience.sections?.length
         ? assignment.targetAudience.sections
         : [section.name].filter(Boolean);
+      assignment.targetAudience.departmentId = assignment.targetAudience.departmentId || section.department?._id || null;
+      assignment.targetAudience.collegeId = assignment.targetAudience.collegeId || section.department?.college || null;
+      assignment.targetAudience.programId = assignment.targetAudience.programId || section.program || null;
+      assignment.targetAudience.courseId = assignment.targetAudience.courseId || section.course || null;
+      assignment.targetAudience.studyYear = assignment.targetAudience.studyYear || section.studyYear || null;
+      assignment.targetAudience.sectionId = assignment.targetAudience.sectionId || section._id;
+    }
+  } else if (assignment.targetAudience.departmentId) {
+    const department = await Department.findById(assignment.targetAudience.departmentId).select('name college');
+    if (department) {
+      assignment.targetAudience.collegeId = assignment.targetAudience.collegeId || department.college || null;
+      assignment.targetAudience.departments = assignment.targetAudience.departments?.length
+        ? assignment.targetAudience.departments
+        : [department.name].filter(Boolean);
     }
   }
 

@@ -25,7 +25,23 @@ export default function FAQPage() {
   const [openIndex, setOpenIndex] = useState(null);
 
   useEffect(() => {
-    API.get('/chat/faqs').then(r => setFaqs(r.data.data)).catch(() => {}).finally(() => setLoading(false));
+    const loadFAQs = async () => {
+      try {
+        const res = await API.get('/chat/faqs');
+        setFaqs(res.data?.data || []);
+      } catch (error) {
+        console.error('Failed to load FAQs:', error);
+        setFaqs([
+          {
+            question: 'Failed to load FAQs',
+            answer: 'We encountered an error loading the FAQ database. Please refresh the page or contact support if the problem persists.',
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadFAQs();
   }, []);
 
   const filtered = faqs.filter(f =>
@@ -48,7 +64,7 @@ export default function FAQPage() {
         <>
           <div className="space-y-3 mb-8">
             {filtered.length === 0 ? (
-              <div className="text-center py-12">
+              <div className="text-center py-12" role="status" aria-live="polite">
                 <div className="text-4xl mb-3">🤔</div>
                 <p className="text-gray-500">No FAQs match your search.</p>
               </div>

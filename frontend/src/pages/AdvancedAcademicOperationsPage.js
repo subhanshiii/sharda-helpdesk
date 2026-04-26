@@ -30,43 +30,28 @@ export default function AdvancedAcademicOperationsPage() {
     setError('');
     try {
       const [
-        collegesRes,
-        departmentsRes,
-        programsRes,
-        coursesRes,
-        sessionsRes,
-        sectionsRes,
-        subjectsRes,
-        sectionSubjectsRes,
-        enrollmentsRes,
+        workspaceRes,
         facultyRes,
         studentsRes,
       ] = await Promise.all([
-        API.get('/academics/colleges?paginate=false'),
-        API.get('/academics/departments?paginate=false'),
-        API.get('/academics/programs?paginate=false'),
-        API.get('/academics/courses?paginate=false'),
-        API.get('/academics/academic-sessions?paginate=false'),
-        API.get('/academics/sections?paginate=false'),
-        API.get('/academics/subjects?paginate=false'),
-        API.get('/academics/section-subjects?paginate=false'),
-        API.get('/academics/enrollments?paginate=false'),
+        API.get('/academics/workspace-data'),
         API.get('/users?role=faculty&limit=100'),
         API.get('/users?role=student&limit=100'),
       ]);
+      const workspace = workspaceRes.data?.data?.options || {};
 
       setOptions({
-        colleges: collegesRes.data?.data || [],
-        departments: departmentsRes.data?.data || [],
-        programs: programsRes.data?.data || [],
-        courses: coursesRes.data?.data || [],
-        academicSessions: sessionsRes.data?.data || [],
-        sections: sectionsRes.data?.data || [],
-        subjects: subjectsRes.data?.data || [],
+        colleges: workspace.colleges || [],
+        departments: workspace.departments || [],
+        programs: workspace.programs || [],
+        courses: workspace.courses || [],
+        academicSessions: workspace.academicSessions || [],
+        sections: workspace.sections || [],
+        subjects: workspace.subjects || [],
         faculty: facultyRes.data?.data || [],
         students: studentsRes.data?.data || [],
-        'section-subjects': sectionSubjectsRes.data?.data || [],
-        enrollments: enrollmentsRes.data?.data || [],
+        'section-subjects': workspace['section-subjects'] || [],
+        enrollments: workspace.enrollments || [],
       });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to load advanced academic operations');

@@ -1,8 +1,12 @@
 const Content = require('../models/Content');
 const Announcement = require('../models/Announcement');
 const AcademicCalendar = require('../models/AcademicCalendar');
-const { parseAudienceValues, buildAudienceVisibilityQuery } = require('../utils/audience');
 const { isAdminRole } = require('../utils/roleHelpers');
+const {
+  buildAudienceVisibilityQuery,
+  buildTargetAudiencePayload,
+  parseVisibilityValues,
+} = require('../utils/visibility');
 
 let syncPromise = null;
 let syncComplete = false;
@@ -38,6 +42,8 @@ const toContentResponse = (document) => {
     date: item.startsAt,
     endDate: item.endsAt,
     message: item.description,
+    feedType: item.contentType === 'calendar' ? 'calendar' : 'notice',
+    href: item.contentType === 'calendar' ? '/academic-calendar/manage' : '/notice-board',
   };
 };
 
@@ -135,7 +141,7 @@ const ensureLegacyContentSynced = async () => {
   }
 };
 
-const buildQuery = ({ user, view = 'feed', contentType, category, priority, type, search, month, limit, upcomingOnly }) => {
+const buildContentQuery = async ({ user, view = 'feed', contentType, category, priority, type, search, month, limit, upcomingOnly }) => {
   const query = {
     status: 'published',
     $or: [
@@ -150,6 +156,10 @@ const buildQuery = ({ user, view = 'feed', contentType, category, priority, type
     query.contentType = contentType;
   } else {
     query.contentType = 'notice';
+    query.category = {
+      ...(query.category && query.category !== 'all' ? { $eq: query.category } : {}),
+      $nin: ['event', 'opportunity'],
+    };
   }
 
   if (category && category !== 'all') query.category = category;
@@ -190,7 +200,7 @@ const buildQuery = ({ user, view = 'feed', contentType, category, priority, type
     };
   }
 
-  const audienceQuery = buildAudienceVisibilityQuery(user);
+  const audienceQuery = await buildAudienceVisibilityQuery(user);
   if (audienceQuery) {
     query.$and = [...(query.$and || []), audienceQuery];
   }
@@ -213,7 +223,18 @@ const sortContent = (items, view) => {
 
 const listContent = async ({ user, view, contentType, category, priority, type, search, month, limit, upcomingOnly }) => {
   await ensureLegacyContentSynced();
-  const { query, limit: parsedLimit } = buildQuery({ user, view, contentType, category, priority, type, search, month, limit, upcomingOnly });
+  const { query, limit: parsedLimit } = await buildContentQuery({
+    user,
+    view,
+    contentType,
+    category,
+    priority,
+    type,
+    search,
+    month,
+    limit,
+    upcomingOnly,
+  });
 
   let cursor = Content.find(query).populate('createdBy', 'name role department year section');
   if (view === 'calendar') {
@@ -224,8 +245,8 @@ const listContent = async ({ user, view, contentType, category, priority, type, 
 
   if (parsedLimit) cursor = cursor.limit(parsedLimit);
 
-  const items = await cursor;
-  return sortContent(items, view).map(toContentResponse);
+  const contentItems = (await cursor).map(toContentResponse);
+  return sortContent(contentItems, view);
 };
 
 const createContent = async ({ body, files, userId }) => {
@@ -245,12 +266,7 @@ const createContent = async ({ body, files, userId }) => {
     category: body.category || (contentType === 'calendar' ? 'academic' : 'academic'),
     type: body.type || (contentType === 'calendar' ? 'Other' : NOTICE_TYPE_BY_PRIORITY[priority] || 'info'),
     priority,
-    targetAudience: {
-      roles: parseAudienceValues(body.audienceRoles),
-      departments: parseAudienceValues(body.audienceDepartments),
-      years: parseAudienceValues(body.audienceYears),
-      sections: parseAudienceValues(body.audienceSections),
-    },
+    targetAudience: buildTargetAudiencePayload(body),
     attachments: serializeAttachments(files),
     startsAt: contentType === 'calendar' ? body.startsAt || body.date : body.startsAt || null,
     endsAt: contentType === 'calendar' ? body.endsAt || body.endDate || null : body.endsAt || null,
@@ -289,12 +305,21 @@ const updateContent = async ({ contentId, body, files, requesterId, requesterRol
   if (body.endsAt !== undefined || body.endDate !== undefined) document.endsAt = body.endsAt || body.endDate || null;
   if (body.contentType !== undefined) document.contentType = body.contentType;
   if (body.publishAt !== undefined) document.publishAt = body.publishAt || document.publishAt;
-  document.targetAudience = {
-    roles: parseAudienceValues(body.audienceRoles),
-    departments: parseAudienceValues(body.audienceDepartments),
-    years: parseAudienceValues(body.audienceYears),
-    sections: parseAudienceValues(body.audienceSections),
-  };
+  if (
+    body.audienceTiers !== undefined ||
+    body.audienceRoles !== undefined ||
+    body.audienceCollegeId !== undefined ||
+    body.audienceDepartmentId !== undefined ||
+    body.audienceProgramId !== undefined ||
+    body.audienceCourseId !== undefined ||
+    body.audienceStudyYear !== undefined ||
+    body.audienceSectionId !== undefined ||
+    body.audienceDepartments !== undefined ||
+    body.audienceYears !== undefined ||
+    body.audienceSections !== undefined
+  ) {
+    document.targetAudience = buildTargetAudiencePayload(body);
+  }
   if (files?.length) document.attachments = serializeAttachments(files);
 
   await document.save();

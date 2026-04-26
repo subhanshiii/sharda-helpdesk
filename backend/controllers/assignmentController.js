@@ -6,6 +6,14 @@ exports.getAssignments = async (req, res, next) => {
       status: req.query.status,
       search: req.query.search,
       limit: req.query.limit,
+      visibilityTier: req.query.visibilityTier,
+      visibilityRole: req.query.visibilityRole,
+      collegeId: req.query.collegeId,
+      departmentId: req.query.departmentId,
+      programId: req.query.programId,
+      courseId: req.query.courseId,
+      studyYear: req.query.studyYear,
+      sectionId: req.query.sectionId,
     });
     res.status(200).json({ success: true, count: assignments.length, data: assignments });
   } catch (error) {

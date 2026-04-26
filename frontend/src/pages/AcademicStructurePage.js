@@ -24,8 +24,9 @@ const TREE_ACTIONS = {
   college: ['department'],
   department: ['program'],
   program: ['course', 'session'],
-  course: ['section'],
+  course: ['subject', 'section'],
   session: [],
+  subject: [],
 };
 
 const emptyQuickSetup = {
@@ -62,11 +63,65 @@ const formatEntityName = (entity) => {
   return entity.name || entity.label || entity.code || entity.email || entity.systemId || entity._id;
 };
 
+const getEntityId = (entity) => String(entity?._id || entity || '');
+
+const getProgramSections = (program) => [
+  ...((program?.courses || []).flatMap((course) => course.sections || [])),
+  ...(program?.standaloneSections || []),
+];
+
+const getProgramSubjects = (program, subjects = []) => (
+  subjects.filter((subject) => getEntityId(subject.program) === getEntityId(program))
+);
+
+const getCourseSubjects = (course, subjects = []) => (
+  subjects.filter((subject) => getEntityId(subject.course) === getEntityId(course))
+);
+
+const getSessionSections = (session, sections = []) => (
+  sections.filter((section) => getEntityId(section.academicSession) === getEntityId(session))
+);
+
+const getSessionSubjects = (session, subjects = []) => (
+  subjects.filter((subject) => getEntityId(subject.academicSession) === getEntityId(session))
+);
+
+const buildActiveStudentRecords = (enrollments = []) => {
+  const active = enrollments.filter((entry) => entry?.status === 'active' && entry?.student?._id);
+  const records = new Map();
+
+  active.forEach((entry) => {
+    const student = entry.student || {};
+    const current = records.get(String(student._id));
+    if (current) return;
+
+    records.set(String(student._id), {
+      _id: student._id,
+      name: student.name || 'Student',
+      systemId: student.systemId || '',
+      email: student.email || '',
+      semester: entry.semester || '',
+      section: entry.section || null,
+      academicSession: entry.academicSession || entry.section?.academicSession || null,
+      sectionName: entry.section?.name || '',
+      programName: entry.section?.program?.name || '',
+      courseName: entry.section?.course?.name || '',
+      departmentName: entry.section?.department?.name || '',
+      student,
+    });
+  });
+
+  return [...records.values()];
+};
+
 const getColumnMeta = (type, item) => {
   if (!item) return '—';
   if (type === 'college') return `${(item.departments || []).length} departments`;
   if (type === 'department') return `${(item.programs || []).length} programs`;
-  if (type === 'program') return `${(item.courses || []).length} courses`;
+  if (type === 'program') {
+    const directSections = (item.standaloneSections || []).length;
+    return [`${(item.courses || []).length} courses`, directSections ? `${directSections} direct sections` : ''].filter(Boolean).join(' · ');
+  }
   if (type === 'course') return `${(item.sections || []).length} sections`;
   if (type === 'section') {
     return [item.academicSession?.label, `Year ${item.studyYear || '—'}`, `Capacity ${item.capacity || 0}`].filter(Boolean).join(' · ');
@@ -76,6 +131,9 @@ const getColumnMeta = (type, item) => {
   }
   if (type === 'subject') {
     return [item.code || 'No code', item.type || 'core', `${item.credits ?? 0} credits`].filter(Boolean).join(' · ');
+  }
+  if (type === 'student') {
+    return [item.systemId || item.email || 'No ID', item.sectionName ? `Section ${item.sectionName}` : '', item.programName || ''].filter(Boolean).join(' · ');
   }
   return '—';
 };
@@ -101,94 +159,104 @@ const getEntityIcon = (type) => (
       : type === 'program' ? <FiBookOpen size={16} />
         : type === 'course' ? <FiBookOpen size={16} />
           : type === 'section' ? <FiUsers size={16} />
+            : type === 'student' ? <FiUsers size={16} />
             : type === 'subject' ? <FiBookOpen size={16} />
               : <FiGitBranch size={16} />
 );
 
-function DrilldownColumn({
-  title,
-  items,
-  type,
-  selectedId,
-  onSelect,
-  onAdd,
-  onEdit,
-  onDelete,
-  emptyLabel,
-}) {
-  return (
-    <div className="flex h-full min-h-0 min-w-[260px] flex-1 flex-col border-r border-slate-200 last:border-r-0 xl:min-w-0">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-4 py-3 backdrop-blur">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">{title}</span>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-700"
-        >
-          <FiPlus size={14} />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
-        {items.length ? items.map((item) => {
-          const isSelected = String(selectedId || '') === String(item._id);
-          return (
-            <div
-              key={item._id}
-              className={`group border-l-2 px-4 py-3 transition ${isSelected ? 'border-slate-900 bg-slate-50' : 'border-transparent hover:bg-slate-50/80'}`}
-            >
-              <button
-                type="button"
-                onClick={() => onSelect(item)}
-                className="flex w-full items-start gap-3 text-left"
-              >
-                <div className={`mt-1 h-2.5 w-2.5 rounded-full ${isSelected ? 'bg-slate-900 shadow-[0_0_0_4px_rgba(15,23,42,0.08)]' : 'bg-slate-300 group-hover:bg-slate-400'}`} />
-                <div className="min-w-0 flex-1">
-                  <p className={`truncate text-sm font-semibold leading-5 ${isSelected ? 'text-slate-900' : 'text-gray-900'}`}>{formatEntityName(item)}</p>
-                  <p className="mt-1 text-xs text-gray-500">{getColumnMeta(type, item)}</p>
-                </div>
-              </button>
-              <div className="mt-3 flex flex-wrap items-center gap-2 pl-[22px]">
-                {(TREE_ACTIONS[type] || []).map((childResource) => (
-                  <button
-                    key={childResource}
-                    type="button"
-                    onClick={() => onAdd(item, childResource)}
-                    className="min-h-[36px] rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
-                  >
-                    Add {childResource === 'session' ? 'Session' : childResource}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => onEdit(item)}
-                  className="min-h-[36px] rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDelete(item)}
-                  className="min-h-[36px] rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          );
-        }) : (
-          <div className="flex h-full min-h-[120px] items-center justify-center px-4 text-center text-sm text-gray-400">
-            {emptyLabel}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+const getAssignedFacultyMembers = (entry) => {
+  const members = Array.isArray(entry?.facultyMembers) ? entry.facultyMembers.filter(Boolean) : [];
+  if (members.length) return members;
+  return entry?.faculty ? [entry.faculty] : [];
+};
 
 const DetailPill = ({ label, value }) => (
-  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+  <div className="flex h-full flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-    <p className="mt-2 text-sm font-semibold text-gray-900">{value || '—'}</p>
+    <p className="mt-2 text-sm font-semibold leading-5 text-gray-900">{value || '—'}</p>
+  </div>
+);
+
+const SummaryCard = ({ card, active, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!card.level}
+    className={`group flex min-h-[76px] items-center rounded-2xl border px-4 py-3.5 text-left transition ${active ? 'border-slate-900 bg-slate-900 text-white shadow-lg' : 'border-slate-200 bg-white text-slate-900'} ${card.level ? 'hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md' : 'cursor-default'}`}
+    title={`${card.label}: ${card.value}. ${card.description}`}
+  >
+    <p className={`w-full text-center text-xs font-semibold leading-4 sm:text-sm ${active ? 'text-white' : 'text-slate-900'}`}>{card.label}</p>
+  </button>
+);
+
+const FocusMetric = ({ label, value, tone = 'slate' }) => (
+  <div className={`rounded-2xl border px-4 py-4 ${
+    tone === 'blue'
+      ? 'border-blue-100 bg-blue-50'
+      : tone === 'emerald'
+        ? 'border-emerald-100 bg-emerald-50'
+        : 'border-slate-200 bg-slate-50'
+  }`}>
+    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+    <p className="mt-2 text-xl font-black text-slate-900">{value || '—'}</p>
+  </div>
+);
+
+const FocusPanel = ({ eyebrow, title, description, children }) => (
+  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="mb-5 space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
+      <h4 className="text-base font-bold leading-6 text-slate-900">{title}</h4>
+      {description ? <p className="text-sm leading-6 text-slate-500">{description}</p> : null}
+    </div>
+    {children}
+  </div>
+);
+
+const LinkedRecordButton = ({ title, subtitle, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-blue-200 hover:bg-blue-50"
+  >
+    <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-slate-900">{title}</span>
+    <span className="max-w-[42%] text-right text-xs leading-5 text-slate-500">{subtitle}</span>
+  </button>
+);
+
+const ToolbarButton = ({ children, primary = false, className = '', ...props }) => (
+  <button
+    type="button"
+    {...props}
+    className={`${primary ? 'btn-primary' : 'btn-secondary'} inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap px-3 ${className}`.trim()}
+  >
+    {children}
+  </button>
+);
+
+const TrailButton = ({ active, children, ...props }) => (
+  <button
+    type="button"
+    {...props}
+    className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-[0.12em] transition ${active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+  >
+    {children}
+  </button>
+);
+
+const EntityListCard = ({ title, meta, selected, onOpen, actions }) => (
+  <div className={`rounded-2xl border px-4 py-4 transition ${selected ? 'border-slate-900 bg-slate-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
+    <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-start">
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 space-y-1">
+          <p className="text-base font-semibold leading-6 text-slate-900">{title}</p>
+          <p className="break-words text-sm leading-6 text-slate-500" title={meta}>{meta}</p>
+        </div>
+      </button>
+      <div className="flex flex-wrap items-center gap-2 2xl:w-auto 2xl:justify-end">
+        {actions}
+      </div>
+    </div>
   </div>
 );
 
@@ -220,6 +288,10 @@ function HierarchyExplorer({
       if (!normalizedQuery) return true;
       return matchesQuery(course.name) || matchesQuery(course.code) || matchesQuery(course.sections?.map((section) => section.name).join(' '));
     };
+    const sectionMatches = (section) => {
+      if (!normalizedQuery) return true;
+      return [section?.name, section?.code, section?.academicSession?.label].some(matchesQuery);
+    };
 
     return treeData
       .filter((college) => !collegeFilter || String(college._id) === String(collegeFilter))
@@ -231,9 +303,10 @@ function HierarchyExplorer({
             programs: (department.programs || []).map((program) => ({
               ...program,
               courses: (program.courses || []).filter(courseMatches),
+              standaloneSections: (program.standaloneSections || []).filter(sectionMatches),
             })).filter((program) => {
               if (!normalizedQuery) return true;
-              return matchesQuery(program.name) || matchesQuery(program.code) || program.courses.length > 0;
+              return matchesQuery(program.name) || matchesQuery(program.code) || program.courses.length > 0 || program.standaloneSections.length > 0;
             }),
           }))
           .filter((department) => {
@@ -367,7 +440,10 @@ function HierarchyExplorer({
                                   </div>
                                   <div className="min-w-0">
                                     <p className="truncate font-semibold text-slate-900">{formatEntityName(program)}</p>
-                                    <p className="mt-1 text-xs text-slate-500">{(program.courses || []).length} courses</p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {(program.courses || []).length} courses
+                                      {(program.standaloneSections || []).length ? ` · ${(program.standaloneSections || []).length} direct sections` : ''}
+                                    </p>
                                   </div>
                                 </button>
                                 <div className="flex items-center gap-2">
@@ -420,6 +496,24 @@ function HierarchyExplorer({
                                   No courses under this program yet.
                                 </div>
                               )}
+                              {(program.standaloneSections || []).length ? (
+                                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Direct Sections Without Course</p>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {program.standaloneSections.map((section) => (
+                                      <button
+                                        key={section._id}
+                                        type="button"
+                                        onClick={() => onOpenSection(section)}
+                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                                      >
+                                        <span className="text-slate-400">{getEntityIcon('section')}</span>
+                                        Section {section.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -437,20 +531,34 @@ function HierarchyExplorer({
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="card p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                  {getEntityIcon('session')}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                    {getEntityIcon('session')}
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg font-bold text-slate-900">Academic Sessions</h3>
+                    <p className="mt-1 text-sm text-slate-500">{filteredSessions.length} sessions in the current view</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-display text-lg font-bold text-slate-900">Academic Sessions</h3>
-                  <p className="mt-1 text-sm text-slate-500">{filteredSessions.length} sessions in the current view</p>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                  <HelpTooltip
+                    title="Why sessions matter"
+                    items={[
+                      { label: 'Academic grouping', description: 'Sessions define the year-level delivery window for sections, subjects, enrollments, timetable, and attendance.' },
+                      { label: 'Safer operations', description: 'Deleting or editing a session changes the downstream structure, so keeping sessions visible here prevents hidden academic drift.' },
+                    ]}
+                  />
                 </div>
               </div>
               <div className="mt-4 flex max-h-[260px] flex-wrap gap-2 overflow-y-auto pr-1">
                 {filteredSessions.length ? filteredSessions.map((session) => (
-                  <span key={session._id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                    {session.label} · Year {session.yearNumber}
-                  </span>
+                  <div key={session._id} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    <span>{session.label} · Year {session.yearNumber}</span>
+                    <button type="button" onClick={() => session.program && onOpenProgram(session.program)} className="text-slate-500 transition hover:text-slate-800">Open</button>
+                    <button type="button" onClick={() => onEdit('session', session)} className="text-slate-500 transition hover:text-slate-800">Edit</button>
+                    <button type="button" onClick={() => onDelete('session', session)} className="text-red-600 transition hover:text-red-700">Delete</button>
+                  </div>
                 )) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400">
                     No academic sessions match the current filters.
@@ -537,10 +645,15 @@ export default function AcademicStructurePage() {
   const [previousScreen, setPreviousScreen] = useState('structure');
   const [facultySubjectsTab, setFacultySubjectsTab] = useState('subjects');
   const [selectedSubject, setSelectedSubject] = useState(null);
+  const [facultySectionFilterId, setFacultySectionFilterId] = useState('');
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [selectedProgramId, setSelectedProgramId] = useState('');
   const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [focusLevel, setFocusLevel] = useState('college');
+  const [focusScopeMode, setFocusScopeMode] = useState('contextual');
   const [workspaceView, setWorkspaceView] = useState('hierarchy');
   const [recordsQuery, setRecordsQuery] = useState('');
   const [recordsCollegeFilter, setRecordsCollegeFilter] = useState('');
@@ -551,50 +664,23 @@ export default function AcademicStructurePage() {
     setLoading(true);
     setError('');
     try {
-      const [
-        treeRes,
-        summaryRes,
-        collegesRes,
-        departmentsRes,
-        programsRes,
-        coursesRes,
-        sessionsRes,
-        sectionsRes,
-        subjectsRes,
-        sectionSubjectsRes,
-        enrollmentsRes,
-        facultyRes,
-        studentsRes,
-      ] = await Promise.all([
-        API.get('/academics/structure-tree'),
-        API.get('/academics/workspace-summary'),
-        API.get('/academics/colleges?paginate=false'),
-        API.get('/academics/departments?paginate=false'),
-        API.get('/academics/programs?paginate=false'),
-        API.get('/academics/courses?paginate=false'),
-        API.get('/academics/academic-sessions?paginate=false'),
-        API.get('/academics/sections?paginate=false'),
-        API.get('/academics/subjects?paginate=false'),
-        API.get('/academics/section-subjects?paginate=false'),
-        API.get('/academics/enrollments?paginate=false'),
-        API.get('/users?role=faculty&limit=500'),
-        API.get('/users?role=student&limit=500'),
-      ]);
+      const workspaceRes = await API.get('/academics/workspace-data');
+      const workspaceData = workspaceRes.data?.data || {};
 
-      setTreeData(treeRes.data?.data || []);
-      setWorkspaceSummary(summaryRes.data?.data || {});
+      setTreeData(workspaceData.treeData || []);
+      setWorkspaceSummary(workspaceData.summary || {});
       setOptions({
-        colleges: collegesRes.data?.data || [],
-        departments: departmentsRes.data?.data || [],
-        programs: programsRes.data?.data || [],
-        courses: coursesRes.data?.data || [],
-        academicSessions: sessionsRes.data?.data || [],
-        sections: sectionsRes.data?.data || [],
-        subjects: subjectsRes.data?.data || [],
-        faculty: facultyRes.data?.data || [],
-        students: studentsRes.data?.data || [],
-        'section-subjects': sectionSubjectsRes.data?.data || [],
-        enrollments: enrollmentsRes.data?.data || [],
+        colleges: workspaceData.options?.colleges || [],
+        departments: workspaceData.options?.departments || [],
+        programs: workspaceData.options?.programs || [],
+        courses: workspaceData.options?.courses || [],
+        academicSessions: workspaceData.options?.academicSessions || [],
+        sections: workspaceData.options?.sections || [],
+        subjects: workspaceData.options?.subjects || [],
+        faculty: workspaceData.options?.faculty || [],
+        students: workspaceData.options?.students || [],
+        'section-subjects': workspaceData.options?.['section-subjects'] || [],
+        enrollments: workspaceData.options?.enrollments || [],
       });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to load academic structure');
@@ -613,6 +699,7 @@ export default function AcademicStructurePage() {
       setSelectedDepartmentId('');
       setSelectedProgramId('');
       setSelectedCourseId('');
+      setSelectedSessionId('');
       return;
     }
 
@@ -638,7 +725,15 @@ export default function AcademicStructurePage() {
     if (String(selectedCourseId) !== String(selectedCourse?._id || '')) {
       setSelectedCourseId(selectedCourse?._id || '');
     }
-  }, [treeData, selectedCollegeId, selectedDepartmentId, selectedProgramId, selectedCourseId]);
+
+    const sessions = (options.academicSessions || []).filter(
+      (session) => String(session.program?._id || session.program) === String(selectedProgram?._id || '')
+    );
+    const selectedSession = sessions.find((session) => String(session._id) === String(selectedSessionId)) || sessions[0] || null;
+    if (String(selectedSessionId) !== String(selectedSession?._id || '')) {
+      setSelectedSessionId(selectedSession?._id || '');
+    }
+  }, [options.academicSessions, treeData, selectedCollegeId, selectedDepartmentId, selectedProgramId, selectedCourseId, selectedSessionId]);
 
   useEffect(() => {
     if (!recordsCollegeFilter) return;
@@ -653,12 +748,14 @@ export default function AcademicStructurePage() {
 
   const summaryCards = useMemo(() => {
     return [
-      { label: 'Colleges', value: workspaceSummary.colleges, icon: <FiLayers size={16} /> },
-      { label: 'Departments', value: workspaceSummary.departments, icon: <FiLayers size={16} /> },
-      { label: 'Programs', value: workspaceSummary.programs, icon: <FiLayers size={16} /> },
-      { label: 'Sections', value: workspaceSummary.sections, icon: <FiUsers size={16} /> },
-      { label: 'Students', value: workspaceSummary.students, icon: <FiUsers size={16} /> },
-      { label: 'Academic Sessions', value: workspaceSummary.academicSessions, icon: <FiGitBranch size={16} /> },
+      { label: 'Colleges', value: workspaceSummary.colleges, icon: <FiLayers size={16} />, level: 'college', description: 'Top-level institutional containers.' },
+      { label: 'Departments', value: workspaceSummary.departments, icon: <FiGitBranch size={16} />, level: 'department', description: 'Academic domains grouped inside colleges.' },
+      { label: 'Programs', value: workspaceSummary.programs, icon: <FiBookOpen size={16} />, level: 'program', description: 'Program blueprints and degree tracks.' },
+      { label: 'Courses', value: workspaceSummary.courses, icon: <FiBookOpen size={16} />, level: 'course', description: 'Course-level delivery containers inside programs.' },
+      { label: 'Academic Sessions', value: workspaceSummary.academicSessions, icon: <FiGitBranch size={16} />, level: 'session', description: 'Year-based delivery windows for sections and subjects.' },
+      { label: 'Sections', value: workspaceSummary.sections, icon: <FiUsers size={16} />, level: 'section', description: 'Operational teaching groups linked to delivery.' },
+      { label: 'Subjects', value: workspaceSummary.subjects, icon: <FiBookOpen size={16} />, level: 'subject', description: 'Mapped teaching subjects across the structure.' },
+      { label: 'Students', value: workspaceSummary.students, icon: <FiUsers size={16} />, level: 'student', description: 'Active enrolled learners across sections.' },
     ];
   }, [workspaceSummary]);
 
@@ -678,9 +775,240 @@ export default function AcademicStructurePage() {
     () => (selectedProgram?.courses || []).find((course) => String(course._id) === String(selectedCourseId)) || null,
     [selectedProgram, selectedCourseId]
   );
+  const selectedSession = useMemo(
+    () => (options.academicSessions || []).find((session) => String(session._id) === String(selectedSessionId)) || null,
+    [options.academicSessions, selectedSessionId]
+  );
+  const activeStudentRecords = useMemo(() => buildActiveStudentRecords(options.enrollments || []), [options.enrollments]);
+  const selectedStudentRecord = useMemo(
+    () => activeStudentRecords.find((entry) => String(entry._id) === String(selectedStudentId)) || null,
+    [activeStudentRecords, selectedStudentId]
+  );
+
+  useEffect(() => {
+    if (!treeData.length) setFocusScopeMode('contextual');
+  }, [treeData.length]);
+
+  useEffect(() => {
+    if (!activeStudentRecords.length) {
+      setSelectedStudentId('');
+      return;
+    }
+
+    const exists = activeStudentRecords.some((entry) => String(entry._id) === String(selectedStudentId));
+    if (!exists) {
+      setSelectedStudentId(activeStudentRecords[0]._id);
+    }
+  }, [activeStudentRecords, selectedStudentId]);
+
+  useEffect(() => {
+    if (!selectedSection?._id) return;
+
+    const refreshedSection = (options.sections || []).find((section) => String(section._id) === String(selectedSection._id)) || null;
+    if (!refreshedSection) {
+      setSelectedSection(null);
+      if (activeScreen === 'sectionDetail') {
+        setActiveScreen('structure');
+      }
+      return;
+    }
+
+    if (refreshedSection !== selectedSection) {
+      setSelectedSection(refreshedSection);
+    }
+  }, [activeScreen, options.sections, selectedSection]);
+
+  useEffect(() => {
+    if (!selectedSubject?._id) return;
+
+    const refreshedSubject = (options.subjects || []).find((subject) => String(subject._id) === String(selectedSubject._id)) || null;
+    if (!refreshedSubject) {
+      setSelectedSubject(null);
+      if (activeScreen === 'subjectDetail') {
+        setActiveScreen('structure');
+      }
+      return;
+    }
+
+    if (refreshedSubject !== selectedSubject) {
+      setSelectedSubject(refreshedSubject);
+    }
+  }, [activeScreen, options.subjects, selectedSubject]);
+
+  const filteredFocusItems = useMemo(() => {
+    const query = recordsQuery.trim().toLowerCase();
+    const matches = (item) => {
+      if (!query) return true;
+      const values = typeof item === 'string'
+        ? [item]
+        : [item?.name, item?.code, item?.label, item?.description, item?.systemId, item?.email];
+      return values
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    };
+
+    if (focusLevel === 'college') return treeData.filter(matches);
+    const useGlobalList = focusScopeMode === 'global';
+
+    if (focusLevel === 'department') {
+      const items = useGlobalList ? (options.departments || []) : (selectedCollege?.departments || []);
+      return items.filter(matches);
+    }
+    if (focusLevel === 'program') {
+      const items = useGlobalList ? (options.programs || []) : (selectedDepartment?.programs || []);
+      return items.filter(matches);
+    }
+    if (focusLevel === 'course') {
+      const items = useGlobalList
+        ? (options.courses || [])
+        : (selectedProgram?.courses || []);
+      return items.filter(matches);
+    }
+    if (focusLevel === 'section') {
+      const items = useGlobalList ? (options.sections || []) : (selectedCourse?.sections || []);
+      return items.filter(matches);
+    }
+    if (focusLevel === 'session') {
+      return (options.academicSessions || []).filter((session) => {
+        const inScope = useGlobalList || !selectedProgramId || String(session.program?._id || session.program) === String(selectedProgramId);
+        return inScope && matches(session);
+      });
+    }
+    if (focusLevel === 'subject') {
+      return (options.subjects || []).filter((subject) => {
+        if (!useGlobalList && selectedDepartmentId && String(subject.department?._id || subject.department) !== String(selectedDepartmentId)) return false;
+        if (!useGlobalList && selectedProgramId && String(subject.program?._id || subject.program) !== String(selectedProgramId)) return false;
+        if (!useGlobalList && selectedCourseId && String(subject.course?._id || subject.course) !== String(selectedCourseId)) return false;
+        return matches(subject);
+      });
+    }
+    if (focusLevel === 'student') {
+      return activeStudentRecords.filter((student) => {
+        if (!useGlobalList && selectedDepartmentId && String(student.section?.department?._id || student.section?.department) !== String(selectedDepartmentId)) return false;
+        if (!useGlobalList && selectedProgramId && String(student.section?.program?._id || student.section?.program) !== String(selectedProgramId)) return false;
+        if (!useGlobalList && selectedCourseId && String(student.section?.course?._id || student.section?.course) !== String(selectedCourseId)) return false;
+        return matches(student) || matches(student.student) || matches(student.sectionName) || matches(student.programName);
+      });
+    }
+    return [];
+  }, [activeStudentRecords, focusLevel, focusScopeMode, options.academicSessions, options.courses, options.departments, options.programs, options.sections, options.subjects, recordsQuery, selectedCollege, selectedCourse, selectedCourseId, selectedProgram, selectedProgramId, selectedDepartment, selectedDepartmentId, treeData]);
+
+  const focusedEntity = useMemo(() => {
+    if (focusLevel === 'college') return selectedCollege;
+    if (focusLevel === 'department') return selectedDepartment;
+    if (focusLevel === 'program') return selectedProgram;
+    if (focusLevel === 'course') return selectedCourse;
+    if (focusLevel === 'session') return selectedSession;
+    if (focusLevel === 'subject') return selectedSubject;
+    if (focusLevel === 'student') return selectedStudentRecord;
+    if (focusLevel === 'section') return selectedSection && String(selectedSection.course?._id || selectedSection.course) === String(selectedCourseId) ? selectedSection : null;
+    return null;
+  }, [focusLevel, selectedCollege, selectedCourse, selectedCourseId, selectedDepartment, selectedProgram, selectedSection, selectedSession, selectedStudentRecord, selectedSubject]);
+
+  const focusSelectionValue = useMemo(() => {
+    if (focusLevel === 'college') return selectedCollegeId;
+    if (focusLevel === 'department') return selectedDepartmentId;
+    if (focusLevel === 'program') return selectedProgramId;
+    if (focusLevel === 'course') return selectedCourseId;
+    if (focusLevel === 'session') return selectedSessionId;
+    if (focusLevel === 'subject') return selectedSubject?._id || '';
+    if (focusLevel === 'student') return selectedStudentId;
+    if (focusLevel === 'section') return selectedSection?._id || '';
+    return '';
+  }, [focusLevel, selectedCollegeId, selectedCourseId, selectedDepartmentId, selectedProgramId, selectedSection?._id, selectedSessionId, selectedStudentId, selectedSubject?._id]);
+
+  const selectFocusedItem = useCallback((item) => {
+    if (!item) return;
+
+    setFocusScopeMode('contextual');
+
+    if (focusLevel === 'college') {
+      setSelectedCollegeId(item._id);
+      setSelectedDepartmentId('');
+      setSelectedProgramId('');
+      setSelectedCourseId('');
+      setSelectedSection(null);
+      setFocusLevel('department');
+      return;
+    }
+
+    if (focusLevel === 'department') {
+      setSelectedDepartmentId(item._id);
+      setSelectedProgramId('');
+      setSelectedCourseId('');
+      setSelectedSection(null);
+      setFocusLevel('program');
+      return;
+    }
+
+    if (focusLevel === 'program') {
+      const parentDepartment = options.departments.find((department) => String(department._id) === String(item.department?._id || item.department || ''));
+      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
+      setSelectedDepartmentId(parentDepartment?._id || item.department?._id || item.department || '');
+      setSelectedProgramId(item._id);
+      setSelectedCourseId('');
+      setSelectedSection(null);
+      setFocusLevel('course');
+      return;
+    }
+
+    if (focusLevel === 'course') {
+      const parentProgram = options.programs.find((program) => String(program._id) === String(item.program?._id || item.program || ''));
+      const parentDepartment = options.departments.find((department) => String(department._id) === String(parentProgram?.department?._id || parentProgram?.department || item.department?._id || item.department || ''));
+      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
+      setSelectedDepartmentId(parentDepartment?._id || item.department?._id || item.department || '');
+      setSelectedProgramId(parentProgram?._id || item.program?._id || item.program || '');
+      setSelectedCourseId(item._id);
+      setSelectedSection(null);
+      setFocusLevel('section');
+      return;
+    }
+
+    if (focusLevel === 'section') {
+      const parentProgram = options.programs.find((program) => String(program._id) === String(item.program?._id || item.program || ''));
+      const parentDepartment = options.departments.find((department) => String(department._id) === String(item.department?._id || item.department || parentProgram?.department?._id || parentProgram?.department || ''));
+      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
+      setSelectedDepartmentId(parentDepartment?._id || item.department?._id || item.department || '');
+      setSelectedProgramId(parentProgram?._id || item.program?._id || item.program || '');
+      setSelectedCourseId(item.course?._id || item.course || '');
+      setSelectedSection(item);
+      setPreviousScreen('structure');
+      setActiveScreen('sectionDetail');
+      return;
+    }
+
+    if (focusLevel === 'session' && item.program) {
+      const parentProgram = options.programs.find((program) => String(program._id) === String(item.program?._id || item.program));
+      const parentDepartment = options.departments.find((department) => String(department._id) === String(parentProgram?.department?._id || parentProgram?.department || ''));
+      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
+      setSelectedDepartmentId(parentDepartment?._id || '');
+      setSelectedProgramId(parentProgram?._id || item.program?._id || item.program || '');
+      setSelectedSessionId(item._id);
+      setSelectedSection(null);
+      return;
+    }
+
+    if (focusLevel === 'subject') {
+      const parentProgram = options.programs.find((program) => String(program._id) === String(item.program?._id || item.program || ''));
+      const parentDepartment = options.departments.find((department) => String(department._id) === String(item.department?._id || item.department || parentProgram?.department?._id || parentProgram?.department || ''));
+      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
+      setSelectedDepartmentId(parentDepartment?._id || item.department?._id || item.department || '');
+      setSelectedProgramId(parentProgram?._id || item.program?._id || item.program || '');
+      setSelectedCourseId(item.course?._id || item.course || '');
+      setSelectedSessionId(item.academicSession?._id || item.academicSession || '');
+      setSelectedSubject(item);
+      return;
+    }
+
+    if (focusLevel === 'student') {
+      setSelectedStudentId(item._id);
+    }
+  }, [focusLevel, options.departments, options.programs]);
 
   const focusHierarchyFromItem = (type, item) => {
     if (!item) return;
+
+    setFocusScopeMode('contextual');
 
     if (type === 'college') {
       setSelectedCollegeId(item._id);
@@ -688,6 +1016,7 @@ export default function AcademicStructurePage() {
       setSelectedProgramId('');
       setSelectedCourseId('');
       setWorkspaceView('hierarchy');
+      setFocusLevel('department');
       return;
     }
 
@@ -702,6 +1031,7 @@ export default function AcademicStructurePage() {
       setSelectedProgramId('');
       setSelectedCourseId('');
       setWorkspaceView('hierarchy');
+      setFocusLevel('program');
       return;
     }
 
@@ -712,6 +1042,7 @@ export default function AcademicStructurePage() {
       setSelectedProgramId(item._id);
       setSelectedCourseId('');
       setWorkspaceView('hierarchy');
+      setFocusLevel('course');
       return;
     }
 
@@ -723,6 +1054,7 @@ export default function AcademicStructurePage() {
       setSelectedProgramId(parentProgram?._id || programValue);
       setSelectedCourseId(item._id);
       setWorkspaceView('hierarchy');
+      setFocusLevel('section');
       return;
     }
 
@@ -733,6 +1065,7 @@ export default function AcademicStructurePage() {
       setSelectedDepartmentId(parentDepartment?._id || departmentValue);
       setSelectedProgramId(parentProgram?._id || programValue);
       setSelectedCourseId(courseValue);
+      setFocusLevel('section');
       openSectionDetail(item);
     }
   };
@@ -746,7 +1079,7 @@ export default function AcademicStructurePage() {
     setActiveScreen(previousScreen || 'structure');
   };
 
-  const openCreateForm = (resource, parentType = '', parentItem = null) => {
+  function openCreateForm(resource, parentType = '', parentItem = null) {
     const base = {
       mode: 'create',
       resource,
@@ -801,7 +1134,73 @@ export default function AcademicStructurePage() {
 
     setInlineError('');
     setInlineForm(base);
-  };
+  }
+
+  const focusMeta = focusLevel === 'college'
+    ? {
+        title: 'Colleges',
+        subtitle: 'Browse institutions here, then drill into departments from the left list.',
+        emptyLabel: 'Add the first college to start the structure.',
+        addAction: () => openCreateForm('college'),
+        addLabel: 'Add College',
+      }
+    : focusLevel === 'department'
+      ? {
+          title: selectedCollege ? `Departments in ${selectedCollege.name}` : 'Departments',
+          subtitle: 'Choose a college first, then explore only the departments that belong to it.',
+          emptyLabel: selectedCollege ? 'No departments under this college yet.' : 'Select a college first.',
+          addAction: () => selectedCollege && openCreateForm('department', 'college', selectedCollege),
+          addLabel: 'Add Department',
+        }
+      : focusLevel === 'program'
+        ? {
+            title: selectedDepartment ? `Programs in ${selectedDepartment.name}` : 'Programs',
+            subtitle: selectedDepartment ? 'Stay inside the selected department so program management remains focused and predictable.' : 'Browse all programs in scope, then drill into the one you want to manage.',
+            emptyLabel: selectedDepartment ? 'No programs under this department yet.' : 'No programs are available in the current scope.',
+            addAction: () => selectedDepartment && openCreateForm('program', 'department', selectedDepartment),
+            addLabel: 'Add Program',
+          }
+        : focusLevel === 'course'
+          ? {
+              title: selectedProgram ? `Courses in ${selectedProgram.name}` : 'Courses',
+              subtitle: selectedProgram ? 'Courses are filtered to the selected program, so section and subject creation never drift out of scope.' : 'Browse all courses in scope, then narrow into the one you want to manage.',
+              emptyLabel: selectedProgram ? 'No courses under this program yet.' : 'No courses are available in the current scope.',
+              addAction: () => selectedProgram && openCreateForm('course', 'program', selectedProgram),
+              addLabel: 'Add Course',
+            }
+          : focusLevel === 'section'
+            ? {
+                title: selectedCourse ? `Sections in ${selectedCourse.name}` : 'Sections',
+                subtitle: selectedCourse ? 'Sections are the delivery layer for the selected course.' : 'Browse all sections in scope, then open the delivery group you want to review.',
+                emptyLabel: selectedCourse ? 'No sections under this course yet.' : 'No sections are available in the current scope.',
+                addAction: () => selectedCourse && openCreateForm('section', 'course', selectedCourse),
+                addLabel: 'Add Section',
+              }
+            : {
+                title: 'Academic Sessions',
+                subtitle: 'Sessions stay scoped to the selected program so they support clear year-level delivery.',
+                emptyLabel: selectedProgram ? 'No academic sessions under this program yet.' : 'Select a program first.',
+                addAction: () => selectedProgram && openCreateForm('session', 'program', selectedProgram),
+                addLabel: 'Add Session',
+              };
+
+  const extendedFocusMeta = focusLevel === 'subject'
+    ? {
+        title: 'Subjects',
+        subtitle: 'Review mapped teaching subjects with the same academic filters used across the structure.',
+        emptyLabel: 'No subjects are available in the current scope.',
+        addAction: () => openCreateForm('subject', selectedCourse ? 'course' : '', selectedCourse || selectedProgram || null),
+        addLabel: 'Add Subject',
+      }
+    : focusLevel === 'student'
+      ? {
+          title: 'Students',
+          subtitle: 'See active enrolled students in the current academic scope with section context attached.',
+          emptyLabel: 'No active students are available in the current scope.',
+          addAction: null,
+          addLabel: 'Add Student',
+        }
+      : focusMeta;
 
   const openEditForm = (resourceType, item) => {
     const resourceMap = {
@@ -945,11 +1344,22 @@ export default function AcademicStructurePage() {
       (entry) => String(entry.section?._id || entry.section) === String(selectedSection._id) && entry.status === 'active'
     );
   }, [options.enrollments, selectedSection]);
+  const sectionFacultyMembers = useMemo(() => {
+    const facultyMap = new Map();
+    sectionAssignments.forEach((assignment) => {
+      getAssignedFacultyMembers(assignment).forEach((faculty) => {
+        if (faculty?._id) {
+          facultyMap.set(String(faculty._id), faculty);
+        }
+      });
+    });
+    return [...facultyMap.values()];
+  }, [sectionAssignments]);
   const sectionSubjectOptions = useMemo(() => options['section-subjects'] || [], [options]);
 
-  const handleFacultyAssignment = async (sectionSubjectId, facultyId) => {
+  const handleFacultyAssignment = async (sectionSubjectId, facultyIds) => {
     try {
-      await API.patch(`/academics/section-subjects/${sectionSubjectId}`, { facultyId: facultyId || null });
+      await API.patch(`/academics/section-subjects/${sectionSubjectId}`, { facultyIds });
       toast.success('Faculty assignment updated');
       setAssignmentRowId('');
       await loadAcademicWorkspace();
@@ -960,20 +1370,30 @@ export default function AcademicStructurePage() {
 
   const filteredSubjects = useMemo(() => {
     return (options.subjects || []).filter((subject) => {
+      if (selectedDepartmentId && String(subject.department?._id || subject.department) !== String(selectedDepartmentId)) return false;
       if (selectedProgramId && String(subject.program?._id || subject.program) !== String(selectedProgramId)) return false;
       if (selectedCourseId && String(subject.course?._id || subject.course) !== String(selectedCourseId)) return false;
+      if (facultySectionFilterId) {
+        const subjectSectionAssignments = (options['section-subjects'] || []).filter(
+          (entry) => String(entry.subject?._id || entry.subject) === String(subject._id)
+        );
+        if (!subjectSectionAssignments.some((entry) => String(entry.section?._id || entry.section) === String(facultySectionFilterId))) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [options.subjects, selectedProgramId, selectedCourseId]);
+  }, [facultySectionFilterId, options, selectedCourseId, selectedDepartmentId, selectedProgramId]);
 
   const facultyCards = useMemo(() => {
     return (options.faculty || []).map((faculty) => {
       const assignments = sectionSubjectOptions.filter(
-        (entry) => String(entry.faculty?._id || entry.faculty) === String(faculty._id)
+        (entry) => getAssignedFacultyMembers(entry).some((assignedFaculty) => String(assignedFaculty?._id || assignedFaculty) === String(faculty._id))
+          && (!facultySectionFilterId || String(entry.section?._id || entry.section) === String(facultySectionFilterId))
       );
       return { faculty, assignments };
     });
-  }, [options.faculty, sectionSubjectOptions]);
+  }, [facultySectionFilterId, options.faculty, sectionSubjectOptions]);
 
   const selectedSubjectAssignments = useMemo(() => {
     if (!selectedSubject?._id) return [];
@@ -981,6 +1401,11 @@ export default function AcademicStructurePage() {
       (entry) => String(entry.subject?._id || entry.subject) === String(selectedSubject._id)
     );
   }, [options, selectedSubject]);
+  const selectedProgramSections = useMemo(() => getProgramSections(selectedProgram), [selectedProgram]);
+  const selectedProgramSubjects = useMemo(() => getProgramSubjects(selectedProgram, options.subjects), [options.subjects, selectedProgram]);
+  const selectedCourseSubjects = useMemo(() => getCourseSubjects(selectedCourse, options.subjects), [options.subjects, selectedCourse]);
+  const selectedSessionSections = useMemo(() => getSessionSections(selectedSession, options.sections), [options.sections, selectedSession]);
+  const selectedSessionSubjects = useMemo(() => getSessionSubjects(selectedSession, options.subjects), [options.subjects, selectedSession]);
 
   const openSectionDetail = (section) => {
     setSelectedSection(section);
@@ -1000,6 +1425,64 @@ export default function AcademicStructurePage() {
   const handleFacultyOpen = (faculty) => {
     navigate(`/admin/users/${faculty.systemId}`);
   };
+
+  const focusContextItems = [
+    { label: 'College', value: selectedCollege?.name || 'Not selected' },
+    { label: 'Department', value: selectedDepartment?.name || 'Not selected' },
+    { label: 'Program', value: selectedProgram?.name || 'Not selected' },
+    { label: 'Course', value: selectedCourse?.name || 'Not selected' },
+    { label: 'Session', value: selectedSession?.label || 'Not selected' },
+    { label: 'Current View', value: extendedFocusMeta.title },
+  ];
+
+  const focusMetrics = focusedEntity ? (
+    focusLevel === 'program'
+      ? [
+          { label: 'Courses', value: (focusedEntity.courses || []).length, tone: 'blue' },
+          { label: 'Sections', value: selectedProgramSections.length },
+          { label: 'Sessions', value: (options.academicSessions || []).filter((session) => getEntityId(session.program) === getEntityId(focusedEntity)).length },
+          { label: 'Subjects', value: selectedProgramSubjects.length, tone: 'emerald' },
+        ]
+      : focusLevel === 'course'
+        ? [
+            { label: 'Sections', value: (focusedEntity.sections || []).length, tone: 'blue' },
+            { label: 'Subjects', value: selectedCourseSubjects.length, tone: 'emerald' },
+            { label: 'Program', value: selectedProgram?.name || '—' },
+            { label: 'Department', value: selectedDepartment?.name || '—' },
+          ]
+        : focusLevel === 'section'
+          ? [
+              { label: 'Program', value: focusedEntity.program?.name || selectedProgram?.name || '—' },
+              { label: 'Course', value: focusedEntity.course?.name || selectedCourse?.name || '—' },
+              { label: 'Session', value: focusedEntity.academicSession?.label || '—', tone: 'blue' },
+              { label: 'Capacity', value: focusedEntity.capacity || 0 },
+            ]
+          : focusLevel === 'session'
+            ? [
+                { label: 'Program', value: selectedProgram?.name || focusedEntity.program?.name || '—' },
+                { label: 'Year', value: focusedEntity.yearNumber ? `Year ${focusedEntity.yearNumber}` : '—' },
+                { label: 'Sections', value: selectedSessionSections.length, tone: 'blue' },
+                { label: 'Subjects', value: selectedSessionSubjects.length, tone: 'emerald' },
+              ]
+            : focusLevel === 'subject'
+              ? [
+                  { label: 'Code', value: focusedEntity.code || '—' },
+                  { label: 'Credits', value: focusedEntity.credits ?? 0 },
+                  { label: 'Assignments', value: selectedSubjectAssignments.length, tone: 'blue' },
+                  { label: 'Session', value: focusedEntity.academicSession?.label || '—', tone: 'emerald' },
+                ]
+              : focusLevel === 'student'
+                ? [
+                    { label: 'Student ID', value: focusedEntity.systemId || '—' },
+                    { label: 'Section', value: focusedEntity.sectionName || '—', tone: 'blue' },
+                    { label: 'Program', value: focusedEntity.programName || '—' },
+                    { label: 'Session', value: focusedEntity.academicSession?.label || '—', tone: 'emerald' },
+                  ]
+                : []
+  ) : [];
+  const focusMetricsGridClass = focusLevel === 'student'
+    ? 'grid gap-3 sm:grid-cols-2'
+    : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-4';
 
   const getDeleteResource = (type) => ({
     college: 'colleges',
@@ -1308,41 +1791,41 @@ export default function AcademicStructurePage() {
                   : 'Inspect subject mappings, assigned faculty, and linked sections from the same academic workspace.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {activeScreen === 'structure' ? (
             <>
               <HelpTooltip title="Academic workspace help" items={WORKSPACE_HELP_ITEMS} />
-              <button type="button" onClick={openFacultySubjects} className="btn-primary">
+              <ToolbarButton primary onClick={openFacultySubjects}>
                 <FiBookOpen size={15} />
                 View Subjects & Faculty
-              </button>
-              <button type="button" onClick={() => setWorkspaceView((current) => current === 'hierarchy' ? 'catalog' : 'hierarchy')} className="btn-secondary">
+              </ToolbarButton>
+              <ToolbarButton onClick={() => setWorkspaceView((current) => current === 'hierarchy' ? 'catalog' : 'hierarchy')}>
                 <FiLayers size={15} />
-                {workspaceView === 'hierarchy' ? 'View All Records' : 'Back to Hierarchy'}
-              </button>
-              <button type="button" onClick={() => navigate('/academics/advanced')} className="btn-secondary">
+                {workspaceView === 'hierarchy' ? 'Open Global Search' : 'Back to Drilldown'}
+              </ToolbarButton>
+              <ToolbarButton onClick={() => navigate('/academics/advanced')}>
                 <FiLayers size={15} />
                 Advanced Operations
-              </button>
-              <button type="button" onClick={() => setQuickSetupOpen(true)} className="btn-secondary">
+              </ToolbarButton>
+              <ToolbarButton onClick={() => setQuickSetupOpen(true)}>
                 <FiPlus size={15} />
                 Quick Setup
-              </button>
-              <button type="button" onClick={loadAcademicWorkspace} className="btn-secondary">
+              </ToolbarButton>
+              <ToolbarButton onClick={loadAcademicWorkspace}>
                 <FiRefreshCw size={15} />
                 Refresh
-              </button>
+              </ToolbarButton>
             </>
           ) : (
             <>
-              <button type="button" onClick={goBack} className="btn-secondary">
+              <ToolbarButton onClick={goBack}>
                 <FiArrowLeft size={15} />
                 Back
-              </button>
-              <button type="button" onClick={loadAcademicWorkspace} className="btn-secondary">
+              </ToolbarButton>
+              <ToolbarButton onClick={loadAcademicWorkspace}>
                 <FiRefreshCw size={15} />
                 Refresh
-              </button>
+              </ToolbarButton>
             </>
           )}
         </div>
@@ -1350,17 +1833,32 @@ export default function AcademicStructurePage() {
 
       {error ? <Alert type="error" message={error} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         {summaryCards.map((card) => (
-          <div key={card.label} className="card p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{card.label}</p>
-                <p className="mt-2 font-display text-3xl font-black text-gray-900">{card.value}</p>
-              </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">{card.icon}</div>
-            </div>
-          </div>
+          <SummaryCard
+            key={card.label}
+            onClick={() => {
+              if (!card.level) return;
+              setActiveScreen('structure');
+              setWorkspaceView('hierarchy');
+              setFocusScopeMode('global');
+              setFocusLevel(card.level);
+              if (card.level === 'subject') {
+                setSelectedSubject((current) => current || options.subjects?.[0] || null);
+              }
+              if (card.level === 'student') {
+                setSelectedStudentId((current) => current || activeStudentRecords[0]?._id || '');
+              }
+              if (card.level === 'session' && selectedProgram) {
+                const firstSession = (options.academicSessions || []).find(
+                  (session) => String(session.program?._id || session.program) === String(selectedProgram._id)
+                );
+                setSelectedSessionId(firstSession?._id || '');
+              }
+            }}
+            card={card}
+            active={Boolean(card.level && focusLevel === card.level && workspaceView === 'hierarchy')}
+          />
         ))}
       </div>
 
@@ -1378,92 +1876,344 @@ export default function AcademicStructurePage() {
           ) : null}
 
           {workspaceView === 'hierarchy' ? (
-            <div className="card overflow-hidden p-0">
-              <div className="overflow-x-auto">
-                <div className="flex h-[72vh] min-h-[540px] min-w-[1280px] max-h-[760px] flex-col xl:min-w-0 xl:flex-row">
-                  <DrilldownColumn
-                    title="Colleges"
-                    type="college"
-                    items={treeData}
-                    selectedId={selectedCollegeId}
-                    onSelect={(college) => {
-                      setSelectedCollegeId(college._id);
-                      setSelectedDepartmentId('');
-                      setSelectedProgramId('');
-                      setSelectedCourseId('');
-                    }}
-                    onAdd={(parentItem, childResource) => {
-                      if (childResource) openCreateForm(childResource, 'college', parentItem);
-                      else openCreateForm('college');
-                    }}
-                    onEdit={(item) => openEditForm('college', item)}
-                    onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('college'), item, loading: false })}
-                    emptyLabel="Add the first college to start the structure."
-                  />
-                  <DrilldownColumn
-                    title="Departments"
-                    type="department"
-                    items={selectedCollege?.departments || []}
-                    selectedId={selectedDepartmentId}
-                    onSelect={(department) => {
-                      setSelectedDepartmentId(department._id);
-                      setSelectedProgramId('');
-                      setSelectedCourseId('');
-                    }}
-                    onAdd={(parentItem, childResource) => {
-                      if (childResource) openCreateForm(childResource, 'department', parentItem);
-                      else openCreateForm('department', 'college', selectedCollege);
-                    }}
-                    onEdit={(item) => openEditForm('department', item)}
-                    onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('department'), item, loading: false })}
-                    emptyLabel={selectedCollege ? 'No departments under this college yet.' : 'Select a college first.'}
-                  />
-                  <DrilldownColumn
-                    title="Programs"
-                    type="program"
-                    items={selectedDepartment?.programs || []}
-                    selectedId={selectedProgramId}
-                    onSelect={(program) => {
-                      setSelectedProgramId(program._id);
-                      setSelectedCourseId('');
-                    }}
-                    onAdd={(parentItem, childResource) => {
-                      if (childResource) openCreateForm(childResource, 'program', parentItem);
-                      else openCreateForm('program', 'department', selectedDepartment);
-                    }}
-                    onEdit={(item) => openEditForm('program', item)}
-                    onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('program'), item, loading: false })}
-                    emptyLabel={selectedDepartment ? 'No programs under this department yet.' : 'Select a department first.'}
-                  />
-                  <DrilldownColumn
-                    title="Courses"
-                    type="course"
-                    items={selectedProgram?.courses || []}
-                    selectedId={selectedCourseId}
-                    onSelect={(course) => setSelectedCourseId(course._id)}
-                    onAdd={(parentItem, childResource) => {
-                      if (childResource) openCreateForm(childResource, 'course', parentItem);
-                      else openCreateForm('course', 'program', selectedProgram);
-                    }}
-                    onEdit={(item) => openEditForm('course', item)}
-                    onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('course'), item, loading: false })}
-                    emptyLabel={selectedProgram ? 'No courses under this program yet.' : 'Select a program first.'}
-                  />
-                  <DrilldownColumn
-                    title="Sections"
-                    type="section"
-                    items={selectedCourse?.sections || []}
-                    selectedId={selectedSection?._id}
-                    onSelect={openSectionDetail}
-                    onAdd={() => openCreateForm('section', 'course', selectedCourse)}
-                    onEdit={(item) => openEditForm('section', item)}
-                    onDelete={(item) => setConfirmDelete({ open: true, resource: getDeleteResource('section'), item, loading: false })}
-                    emptyLabel={selectedCourse ? 'No sections under this course yet.' : 'Select a course first.'}
-                  />
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.94fr)] xl:items-start">
+              <div className="card flex overflow-hidden p-0 xl:h-[760px] xl:flex-col">
+                <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+                  <div className="space-y-4">
+                    <div className="max-w-2xl space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Workspace Level</p>
+                      <h3 className="font-display text-2xl font-bold text-slate-900">{extendedFocusMeta.title}</h3>
+                      <p className="truncate text-xs leading-5 text-slate-500" title={extendedFocusMeta.subtitle}>{extendedFocusMeta.subtitle}</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <label className="relative block w-full min-w-0">
+                        <FiSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          className="input w-full pl-10"
+                          placeholder={`Search ${extendedFocusMeta.title.toLowerCase()}`}
+                          value={recordsQuery}
+                          onChange={(event) => setRecordsQuery(event.target.value)}
+                        />
+                      </label>
+                      <ToolbarButton primary className="shrink-0 sm:self-stretch" onClick={extendedFocusMeta.addAction} disabled={!extendedFocusMeta.addAction}>
+                        <FiPlus size={15} />
+                        {extendedFocusMeta.addLabel}
+                      </ToolbarButton>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 space-y-5 overflow-y-auto p-6">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <TrailButton active={focusLevel === 'college'} onClick={() => {
+                      setFocusScopeMode('global');
+                      setFocusLevel('college');
+                    }}>Hierarchy</TrailButton>
+                    {selectedCollege ? (
+                      <>
+                        <FiChevronRight size={12} />
+                        <TrailButton active={focusLevel === 'department'} onClick={() => {
+                          setFocusScopeMode('contextual');
+                          setFocusLevel('department');
+                        }} title={selectedCollege.name}>{selectedCollege.name}</TrailButton>
+                      </>
+                    ) : null}
+                    {selectedDepartment ? (
+                      <>
+                        <FiChevronRight size={12} />
+                        <TrailButton active={focusLevel === 'program'} onClick={() => {
+                          setFocusScopeMode('contextual');
+                          setFocusLevel('program');
+                        }} title={selectedDepartment.name}>{selectedDepartment.name}</TrailButton>
+                      </>
+                    ) : null}
+                    {selectedProgram ? (
+                      <>
+                        <FiChevronRight size={12} />
+                        <TrailButton active={focusLevel === 'course'} onClick={() => {
+                          setFocusScopeMode('contextual');
+                          setFocusLevel('course');
+                        }} title={selectedProgram.name}>{selectedProgram.name}</TrailButton>
+                      </>
+                    ) : null}
+                    {selectedCourse ? (
+                      <>
+                        <FiChevronRight size={12} />
+                        <TrailButton active={focusLevel === 'section'} onClick={() => {
+                          setFocusScopeMode('contextual');
+                          setFocusLevel('section');
+                        }} title={selectedCourse.name}>{selectedCourse.name}</TrailButton>
+                      </>
+                    ) : null}
+                    {selectedSubject && focusLevel === 'subject' ? (
+                      <>
+                        <FiChevronRight size={12} />
+                        <span className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold tracking-[0.12em] text-white">{selectedSubject.code || selectedSubject.name}</span>
+                      </>
+                    ) : null}
+                  </div>
+
+                  {filteredFocusItems.length ? (
+                    <div className="grid gap-3">
+                      {filteredFocusItems.map((item) => {
+                        const isSelected = String(focusSelectionValue) === String(item._id);
+
+                        return (
+                          <EntityListCard
+                            key={item._id}
+                            title={formatEntityName(item)}
+                            meta={getColumnMeta(focusLevel, item)}
+                            selected={isSelected}
+                            onOpen={() => selectFocusedItem(item)}
+                            actions={(
+                              <>
+                                <ToolbarButton className="text-xs" onClick={() => selectFocusedItem(item)}>
+                                  {['section', 'subject', 'student'].includes(focusLevel) ? 'Open' : 'Explore'}
+                                </ToolbarButton>
+                                {focusLevel !== 'student' ? (
+                                  <>
+                                    <ToolbarButton className="text-xs" onClick={() => openEditForm(focusLevel === 'session' ? 'session' : focusLevel, item)}>Edit</ToolbarButton>
+                                    <ToolbarButton className="text-xs text-red-600 hover:text-red-700" onClick={() => setConfirmDelete({ open: true, resource: getDeleteResource(focusLevel === 'session' ? 'session' : focusLevel), item, loading: false })}>Delete</ToolbarButton>
+                                  </>
+                                ) : (
+                                  <ToolbarButton className="text-xs" onClick={() => navigate(`/admin/users/${item.systemId}`)} disabled={!item.systemId}>
+                                    Open Profile
+                                  </ToolbarButton>
+                                )}
+                              </>
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 px-5 py-10 text-sm leading-6 text-slate-400">
+                      {extendedFocusMeta.emptyLabel}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                Click through the columns to drill down. Each list now scrolls vertically inside the workspace instead of stretching the entire card.
+
+              <div className="flex flex-col gap-5 xl:h-[760px]">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {focusContextItems.map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
+                      <p className="mt-2 truncate text-sm font-semibold leading-6 text-slate-900">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="card flex flex-1 overflow-hidden p-0">
+                  {focusedEntity ? (
+                    <div className="flex h-full flex-1 flex-col">
+                      <div className="border-b border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 px-6 py-6 text-white">
+                        <div className="flex flex-col gap-6">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-white/10 text-white">
+                              {getEntityIcon(focusLevel === 'session' ? 'session' : focusLevel)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                                {focusLevel === 'session' ? 'Session Overview' : 'Selected Item'}
+                              </p>
+                              <h3 className="mt-2 truncate font-display text-2xl font-bold">{formatEntityName(focusedEntity)}</h3>
+                              <p className="mt-2 max-w-2xl truncate text-sm text-white/70" title={getColumnMeta(focusLevel, focusedEntity)}>{getColumnMeta(focusLevel, focusedEntity)}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {(TREE_ACTIONS[focusLevel] || []).map((childResource) => (
+                              <button key={childResource} type="button" onClick={() => openCreateForm(childResource, focusLevel, focusedEntity)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <FiPlus size={13} />
+                                  Add {childResource === 'session' ? 'Session' : childResource}
+                                </span>
+                              </button>
+                            ))}
+                            {focusLevel === 'student' ? (
+                              <button type="button" onClick={() => focusedEntity.systemId && navigate(`/admin/users/${focusedEntity.systemId}`)} disabled={!focusedEntity.systemId} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                Open Profile
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => openEditForm(focusLevel, focusedEntity)} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <FiEdit2 size={13} />
+                                  Edit
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 space-y-5 overflow-y-auto p-6">
+                        <div className={focusMetricsGridClass}>
+                          {focusMetrics.map((item) => (
+                            <FocusMetric key={item.label} label={item.label} value={item.value} tone={item.tone} />
+                          ))}
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          {focusLevel === 'program' ? (
+                            <>
+                              <FocusPanel eyebrow="Sessions" title="Academic Sessions" description="Year-level sessions connected to this program.">
+                                <div className="flex flex-wrap gap-2">
+                                  {(options.academicSessions || [])
+                                    .filter((session) => String(session.program?._id || session.program) === String(focusedEntity._id))
+                                    .map((session) => (
+                                      <button
+                                        key={session._id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedSessionId(session._id);
+                                          setFocusScopeMode('contextual');
+                                          setFocusLevel('session');
+                                        }}
+                                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${String(selectedSessionId) === String(session._id) ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-200 hover:bg-blue-50'}`}
+                                      >
+                                        {session.label} · Year {session.yearNumber}
+                                      </button>
+                                    ))}
+                                  {!((options.academicSessions || []).filter((session) => String(session.program?._id || session.program) === String(focusedEntity._id)).length) ? (
+                                    <p className="text-sm text-slate-500">No academic sessions are linked to this program yet.</p>
+                                  ) : null}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Direct Delivery" title="Sections Without Course" description="Program sections that are not mapped to a specific course.">
+                                <div className="space-y-2">
+                                  {(focusedEntity.standaloneSections || []).length ? (focusedEntity.standaloneSections || []).map((section) => (
+                                    <LinkedRecordButton key={section._id} title={section.name} subtitle={section.academicSession?.label || 'Session'} onClick={() => openSectionDetail(section)} />
+                                  )) : <p className="text-sm text-slate-500">All sections in this program are mapped to a course.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
+                          ) : null}
+
+                          {focusLevel === 'course' ? (
+                            <>
+                              <FocusPanel eyebrow="Delivery" title="Sections in this Course" description="Operational teaching groups attached to this course.">
+                                <div className="space-y-2">
+                                  {(focusedEntity.sections || []).length ? (focusedEntity.sections || []).map((section) => (
+                                    <LinkedRecordButton key={section._id} title={section.name} subtitle={section.academicSession?.label || 'Session'} onClick={() => openSectionDetail(section)} />
+                                  )) : <p className="text-sm text-slate-500">No sections are linked to this course yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Curriculum" title="Subjects in this Course" description="Subject catalog available for this course.">
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedCourseSubjects.length ? selectedCourseSubjects.slice(0, 8).map((subject) => (
+                                    <button
+                                      key={subject._id}
+                                      type="button"
+                                      onClick={() => openSubjectDetail(subject)}
+                                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
+                                    >
+                                      {subject.code}
+                                    </button>
+                                  )) : <p className="text-sm text-slate-500">No subjects are linked to this course yet.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
+                          ) : null}
+
+                          {focusLevel === 'section' ? (
+                            <FocusPanel eyebrow="Teaching Delivery" title="Delivered Subjects" description="Subjects currently assigned to this section.">
+                              <div className="flex flex-wrap gap-2">
+                                {(options['section-subjects'] || []).filter((entry) => getEntityId(entry.section) === getEntityId(focusedEntity)).length
+                                  ? (options['section-subjects'] || [])
+                                    .filter((entry) => getEntityId(entry.section) === getEntityId(focusedEntity))
+                                    .slice(0, 8)
+                                    .map((entry) => (
+                                      <button
+                                        key={entry._id}
+                                        type="button"
+                                        onClick={() => entry.subject && openSubjectDetail(entry.subject)}
+                                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
+                                      >
+                                        {entry.subject?.code || entry.subject?.name || 'Subject'}
+                                      </button>
+                                    ))
+                                  : <p className="text-sm text-slate-500">No subjects are linked to this section yet.</p>}
+                              </div>
+                            </FocusPanel>
+                          ) : null}
+
+                          {focusLevel === 'session' ? (
+                            <>
+                              <FocusPanel eyebrow="Sections" title="Sections in this Session" description="Delivery groups active in the selected academic session.">
+                                <div className="space-y-2">
+                                  {selectedSessionSections.length ? selectedSessionSections.slice(0, 6).map((section) => (
+                                    <LinkedRecordButton key={section._id} title={section.name} subtitle={section.course?.name || 'No course'} onClick={() => openSectionDetail(section)} />
+                                  )) : <p className="text-sm text-slate-500">No sections are attached to this session yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Subjects" title="Subjects in this Session" description="Subjects available for delivery in the selected session.">
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedSessionSubjects.length ? selectedSessionSubjects.slice(0, 8).map((subject) => (
+                                    <button
+                                      key={subject._id}
+                                      type="button"
+                                      onClick={() => openSubjectDetail(subject)}
+                                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
+                                    >
+                                      {subject.code}
+                                    </button>
+                                  )) : <p className="text-sm text-slate-500">No subjects are attached to this session yet.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
+                          ) : null}
+
+                          {focusLevel === 'subject' ? (
+                            <FocusPanel eyebrow="Assignments" title="Faculty and Section Delivery" description="Where this subject is being delivered and who is assigned to it.">
+                              <div className="space-y-2">
+                                {selectedSubjectAssignments.length ? selectedSubjectAssignments.slice(0, 6).map((assignment) => (
+                                  <LinkedRecordButton
+                                    key={assignment._id}
+                                    title={assignment.section?.name ? `Section ${assignment.section.name}` : 'Section mapping'}
+                                    subtitle={getAssignedFacultyMembers(assignment).map((faculty) => faculty.name).join(', ') || 'No faculty'}
+                                    onClick={() => assignment.section && openSectionDetail(assignment.section)}
+                                  />
+                                )) : <p className="text-sm text-slate-500">This subject is not assigned to any section yet.</p>}
+                              </div>
+                            </FocusPanel>
+                          ) : null}
+
+                          {focusLevel === 'student' ? (
+                            <>
+                              <FocusPanel eyebrow="Academic Placement" title="Current Placement" description="The student's current academic alignment inside the structure.">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <DetailPill label="Department" value={focusedEntity.departmentName || '—'} />
+                                  <DetailPill label="Course" value={focusedEntity.courseName || '—'} />
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Section" title="Current Section" description="Active section mapping for this student.">
+                                {focusedEntity.section ? (
+                                  <LinkedRecordButton
+                                    title={focusedEntity.sectionName ? `Section ${focusedEntity.sectionName}` : 'Section'}
+                                    subtitle={focusedEntity.academicSession?.label || 'Session'}
+                                    onClick={() => openSectionDetail(focusedEntity.section)}
+                                  />
+                                ) : <p className="text-sm text-slate-500">This student does not have an active section mapping.</p>}
+                              </FocusPanel>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6">
+                      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+                        <p className="text-sm font-semibold text-slate-900">Choose a {extendedFocusMeta.title.slice(0, -1).toLowerCase() || 'record'} from the left panel</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">Details, related records, and next actions will appear here in a structured workspace.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
@@ -1531,10 +2281,15 @@ export default function AcademicStructurePage() {
               </div>
             </div>
             <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <DetailPill label="Course" value={selectedSection.course?.name} />
+              <DetailPill label="Course" value={selectedSection.course?.name || selectedCourse?.name || '—'} />
               <DetailPill label="Academic Session" value={selectedSection.academicSession?.label} />
               <DetailPill label="Study Year" value={selectedSection.studyYear ? `Year ${selectedSection.studyYear}` : '—'} />
               <DetailPill label="Capacity" value={selectedSection.capacity} />
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <DetailPill label="Linked Subjects" value={sectionAssignments.length} />
+              <DetailPill label="Assigned Teachers" value={sectionFacultyMembers.length} />
+              <DetailPill label="Enrolled Students" value={sectionStudents.length} />
             </div>
           </div>
 
@@ -1553,7 +2308,7 @@ export default function AcademicStructurePage() {
               {sectionAssignments.length ? (
                 <div className="space-y-3">
                   {sectionAssignments.map((assignment) => (
-                    <div key={assignment._id} className={`rounded-2xl border px-4 py-4 ${assignment.faculty?._id ? 'border-gray-100 bg-gray-50 dark:border-slate-800 dark:bg-slate-900/80' : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-950/20'}`}>
+                    <div key={assignment._id} className={`rounded-2xl border px-4 py-4 ${getAssignedFacultyMembers(assignment).length ? 'border-gray-100 bg-gray-50 dark:border-slate-800 dark:bg-slate-900/80' : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-950/20'}`}>
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                           <button type="button" onClick={() => openSubjectDetail(assignment.subject)} className="text-left">
@@ -1562,29 +2317,41 @@ export default function AcademicStructurePage() {
                           <p className="mt-1 text-sm text-gray-500">
                             {(assignment.subject?.code || 'No subject code')}{assignment.semester ? ` · ${assignment.semester}` : ''}
                           </p>
-                          <p className="mt-2 text-sm text-gray-700">
-                            Faculty:{' '}
-                            {assignment.faculty?.systemId ? (
-                              <button type="button" onClick={() => handleFacultyOpen(assignment.faculty)} className="font-medium text-blue-700 transition hover:underline">
-                                {assignment.faculty.name}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {getAssignedFacultyMembers(assignment).length ? getAssignedFacultyMembers(assignment).map((faculty) => (
+                              <button key={faculty._id} type="button" onClick={() => handleFacultyOpen(faculty)} className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100">
+                                {faculty.name}
                               </button>
-                            ) : (
+                            )) : (
                               <span className="inline-flex rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">No faculty assigned</span>
                             )}
-                          </p>
+                          </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
                           {assignmentRowId === assignment._id ? (
-                            <select
-                              className="input min-w-[240px]"
-                              value={assignment.faculty?._id || ''}
-                              onChange={(event) => handleFacultyAssignment(assignment._id, event.target.value)}
-                            >
-                              <option value="">Unassigned</option>
-                              {options.faculty.map((faculty) => (
-                                <option key={faculty._id} value={faculty._id}>{faculty.name}</option>
-                              ))}
-                            </select>
+                            <div className="min-w-[240px] rounded-2xl border border-gray-200 bg-white p-3">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Assign Faculty</p>
+                              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                                {options.faculty.map((faculty) => {
+                                  const isChecked = getAssignedFacultyMembers(assignment).some((entry) => String(entry._id) === String(faculty._id));
+                                  return (
+                                    <label key={faculty._id} className="flex items-center gap-2 text-sm text-gray-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(event) => {
+                                          const nextFacultyIds = event.target.checked
+                                            ? [...getAssignedFacultyMembers(assignment).map((entry) => entry._id), faculty._id]
+                                            : getAssignedFacultyMembers(assignment).filter((entry) => String(entry._id) !== String(faculty._id)).map((entry) => entry._id);
+                                          handleFacultyAssignment(assignment._id, nextFacultyIds);
+                                        }}
+                                      />
+                                      <span>{faculty.name}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           ) : null}
                           <button
                             type="button"
@@ -1633,6 +2400,32 @@ export default function AcademicStructurePage() {
               </div>
 
               <div className="card p-6">
+                <h3 className="font-display text-lg font-bold text-gray-900">Assigned Teachers</h3>
+                <p className="mt-1 text-sm text-gray-500">Faculty linked through section-subject assignments appear here once mapped.</p>
+                <div className="mt-4 space-y-3">
+                  {sectionFacultyMembers.length ? sectionFacultyMembers.map((faculty) => (
+                    <div key={faculty._id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-gray-900">{faculty.name || 'Faculty'}</p>
+                          <p className="mt-1 text-sm text-gray-500">{faculty.systemId || faculty.email || 'No faculty ID'}</p>
+                        </div>
+                        {faculty.systemId ? (
+                          <button type="button" onClick={() => handleFacultyOpen(faculty)} className="btn-secondary text-xs">
+                            Open Profile
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
+                      No teachers are assigned to this section yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="card p-6">
                 <h3 className="font-display text-lg font-bold text-gray-900">Section Context</h3>
                 <div className="mt-4 space-y-3 text-sm text-gray-600">
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
@@ -1656,16 +2449,17 @@ export default function AcademicStructurePage() {
             <div className="border-b border-gray-100 px-6 pt-4">
               <div className="flex gap-2">
                 {[
-                  { key: 'subjects', label: 'Subjects' },
-                  { key: 'faculty', label: 'Faculty' },
+                  { key: 'subjects', label: 'Subjects', count: filteredSubjects.length },
+                  { key: 'faculty', label: 'Faculty', count: facultyCards.length },
                 ].map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => setFacultySubjectsTab(tab.key)}
-                    className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${facultySubjectsTab === tab.key ? 'border-blue-500 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                    className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${facultySubjectsTab === tab.key ? 'border-blue-500 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
                   >
                     {tab.label}
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${facultySubjectsTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{tab.count}</span>
                   </button>
                 ))}
               </div>
@@ -1674,7 +2468,20 @@ export default function AcademicStructurePage() {
             <div className="p-6">
               {facultySubjectsTab === 'subjects' ? (
                 <div className="space-y-5">
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <select className="input min-w-[220px] sm:max-w-xs" value={facultySectionFilterId} onChange={(event) => setFacultySectionFilterId(event.target.value)}>
+                      <option value="">All Sections in Scope</option>
+                      {(options.sections || [])
+                        .filter((section) => {
+                          if (selectedDepartmentId && String(section.department?._id || section.department) !== String(selectedDepartmentId)) return false;
+                          if (selectedProgramId && String(section.program?._id || section.program) !== String(selectedProgramId)) return false;
+                          if (selectedCourseId && String(section.course?._id || section.course) !== String(selectedCourseId)) return false;
+                          return true;
+                        })
+                        .map((section) => (
+                          <option key={section._id} value={section._id}>{section.name} · {section.program?.name || 'Program'}</option>
+                        ))}
+                    </select>
                     <button type="button" onClick={() => navigate('/academics/advanced')} className="btn-secondary text-xs">
                       Subject Operations
                     </button>
@@ -1695,11 +2502,16 @@ export default function AcademicStructurePage() {
                           <p className="mt-2 text-base font-bold text-gray-900 group-hover:text-blue-700">{subject.name}</p>
                           <p className="mt-2 text-sm text-gray-500">{subject.credits ? `${subject.credits} credits` : 'Credits not set'} · {subject.academicSession?.label || 'Session'}</p>
                           <div className="mt-4 flex flex-wrap gap-2">
-                            {assignments.length ? assignments.slice(0, 3).map((assignment) => (
-                              <span key={assignment._id} className="badge border border-slate-200 bg-slate-100 text-slate-700">
-                                {assignment.faculty?.name || 'Unassigned'}
-                              </span>
-                            )) : <span className="badge border border-amber-200 bg-amber-100 text-amber-800">No faculty assigned</span>}
+                            {assignments.length ? assignments.slice(0, 3).flatMap((assignment) => {
+                              const facultyMembers = getAssignedFacultyMembers(assignment);
+                              return facultyMembers.length
+                                ? facultyMembers.map((faculty) => (
+                                  <span key={`${assignment._id}-${faculty._id}`} className="badge border border-slate-200 bg-slate-100 text-slate-700">
+                                    {faculty.name}
+                                  </span>
+                                ))
+                                : [<span key={`${assignment._id}-unassigned`} className="badge border border-amber-200 bg-amber-100 text-amber-800">Unassigned</span>];
+                            }) : <span className="badge border border-amber-200 bg-amber-100 text-amber-800">No faculty assigned</span>}
                           </div>
                         </button>
                       );
@@ -1732,6 +2544,11 @@ export default function AcademicStructurePage() {
                             <span className="font-semibold text-gray-800">{assignment.subject?.code || 'SUBJ'}</span>
                             {' · '}
                             {assignment.subject?.name || 'Subject'}
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {getAssignedFacultyMembers(assignment).map((member) => (
+                                <span key={member._id} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">{member.name}</span>
+                              ))}
+                            </div>
                           </div>
                         )) : (
                           <div className="rounded-xl border border-dashed border-gray-200 px-3 py-3 text-xs text-gray-400">
@@ -1758,7 +2575,7 @@ export default function AcademicStructurePage() {
           <div className="card p-6">
             <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800">
               <FiArrowLeft size={15} />
-              Back to faculty & subjects
+              {previousScreen === 'sectionDetail' ? 'Back to section' : 'Back to faculty & subjects'}
             </button>
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
               <span>Academic Workspace</span>
@@ -1793,14 +2610,18 @@ export default function AcademicStructurePage() {
                   <p className="text-sm font-semibold text-gray-900">Section {assignment.section?.name || '—'}</p>
                   <p className="mt-1 text-xs text-gray-500">{assignment.section?.academicSession?.label || selectedSubject.academicSession?.label || 'Academic Session'} · {assignment.semester || 'Semester not set'}</p>
                   <div className="mt-4">
-                    {assignment.faculty?.systemId ? (
-                      <button type="button" onClick={() => handleFacultyOpen(assignment.faculty)} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:bg-blue-50">
-                        <Avatar user={assignment.faculty} size="sm" />
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-gray-900">{assignment.faculty.name}</p>
-                          <p className="text-xs text-gray-500">Open faculty profile</p>
-                        </div>
-                      </button>
+                    {getAssignedFacultyMembers(assignment).length ? (
+                      <div className="space-y-2">
+                        {getAssignedFacultyMembers(assignment).map((faculty) => (
+                          <button key={faculty._id} type="button" onClick={() => handleFacultyOpen(faculty)} className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:bg-blue-50">
+                            <Avatar user={faculty} size="sm" />
+                            <div className="text-left">
+                              <p className="text-sm font-semibold text-gray-900">{faculty.name}</p>
+                              <p className="text-xs text-gray-500">Open faculty profile</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     ) : (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">No faculty assigned yet.</div>
                     )}

@@ -53,6 +53,37 @@ const assignmentSchema = new mongoose.Schema(
       default: true,
     },
     targetAudience: {
+      tiers: [{ type: String, trim: true }],
+      roles: [{ type: String, trim: true }],
+      collegeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'College',
+        default: null,
+      },
+      departmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
+        default: null,
+      },
+      programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Program',
+        default: null,
+      },
+      courseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        default: null,
+      },
+      studyYear: {
+        type: Number,
+        default: null,
+      },
+      sectionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Section',
+        default: null,
+      },
       departments: [{ type: String, trim: true }],
       years: [{ type: String, trim: true }],
       sections: [{ type: String, trim: true }],
@@ -84,5 +115,10 @@ assignmentSchema.index({ dueDate: 1, isPublished: 1 });
 assignmentSchema.index({ sectionId: 1, dueDate: 1 });
 assignmentSchema.index({ subjectId: 1, dueDate: 1 });
 assignmentSchema.index({ createdAt: -1 });
+assignmentSchema.index({ 'targetAudience.collegeId': 1 });
+assignmentSchema.index({ 'targetAudience.departmentId': 1 });
+assignmentSchema.index({ 'targetAudience.programId': 1 });
+assignmentSchema.index({ 'targetAudience.courseId': 1 });
+assignmentSchema.index({ 'targetAudience.sectionId': 1 });
 
 module.exports = mongoose.model('Assignment', assignmentSchema);

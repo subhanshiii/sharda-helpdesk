@@ -179,7 +179,7 @@ export default function UserFormPage() {
         next.departmentId = selectedSection?.department?._id || current.departmentId || '';
         next.collegeId = selectedSection?.department?.college?._id || current.collegeId || '';
         next.programId = selectedSection?.program?._id || current.programId || '';
-        next.year = selectedSection?.academicSession?.yearNumber ? String(selectedSection.academicSession.yearNumber) : current.year;
+        next.year = selectedSection?.studyYear ? String(selectedSection.studyYear) : current.year;
       }
       return next;
     });

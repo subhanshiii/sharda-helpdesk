@@ -34,7 +34,6 @@ const createEmptyWorkspace = () => ({
     totalSessions: 0,
     attendedSessions: 0,
     attendanceRate: 0,
-    recentSessions: [],
   },
   recentSubmissions: [],
   personalTasks: [],
@@ -554,30 +553,6 @@ export default function Dashboard() {
                 </div>
               ))}
 
-              {workspace.attendance?.recentSessions?.length ? (
-                <div className="dashboard-panel-secondary rounded-2xl border border-gray-100 bg-slate-50 p-4">
-                  <p className="dashboard-eyebrow">Recent Attendance</p>
-                  <div className="mt-3 space-y-2">
-                    {workspace.attendance.recentSessions.slice(0, 3).map((session) => (
-                      <div key={session._id} className="dashboard-compact-row flex items-center justify-between gap-3 text-sm">
-                        <div>
-                          <p className="font-medium text-gray-900">{session.title}</p>
-                          <p className="text-gray-500">{formatDate(session.date)}</p>
-                        </div>
-                        <span className={`badge ${
-                          session.myRecord?.status === 'present' || session.myRecord?.status === 'late'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : session.myRecord?.status
-                              ? 'bg-red-50 text-red-700'
-                              : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {session.myRecord?.status || `${session.recordCount || 0} records`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </div>
           </SectionCard>
           ) : null}

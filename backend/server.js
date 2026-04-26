@@ -11,6 +11,7 @@ const { initSocket } = require('./socket/socketManager');
 const errorHandler = require('./middleware/errorHandler');
 const { ensureInitialAdmin } = require('./utils/bootstrapAdmin');
 const { backfillMissingSystemIds } = require('./services/userProvisioningService');
+const { runAutomaticStudentPromotions } = require('./services/academicPromotionService');
 const { backfillAcademicSessionRefs, migrateAcademicIndexes } = require('./utils/academicSetupService');
 const { migrateAssignmentIndexes } = require('./utils/assignmentMigration');
 const AcademicSession = require('./models/AcademicSession');
@@ -137,6 +138,7 @@ const startServer = async () => {
     await backfillAcademicSessionRefs();
     await backfillMissingSystemIds();
     await ensureInitialAdmin(logger);
+    const promotionSummary = await runAutomaticStudentPromotions();
     const academicSessionCount = await AcademicSession.countDocuments();
 
     server.listen(PORT, () => {
@@ -144,6 +146,7 @@ const startServer = async () => {
       logger.info(`💬 Group Chat: enabled`);
       logger.info(`🔌 Socket.io:  real-time enabled`);
       logger.info(`📚 AcademicSession collection count: ${academicSessionCount}`);
+      logger.info(`🎓 Auto-promotion sync: ${promotionSummary.promoted} promoted, ${promotionSummary.completed} completed`);
     });
   } catch (error) {
     logger.error(`Startup bootstrap failed: ${error.message}`);

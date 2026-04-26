@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiArrowLeft, FiCalendar, FiEdit2, FiMail, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiEdit2, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, HelpTooltip, PageHeader } from '../components/ui';
 import { formatDate, formatRelative, getAdminTierDefinition, getAdminTierTone, getRoleColor, getRoleLabel } from '../utils/helpers';
@@ -340,75 +340,111 @@ export default function UserDetailPage() {
 
       {error ? <Alert type="error" message={error} /> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_380px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_360px]">
         <div className="space-y-6">
           <div className="card p-6">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-              <Avatar user={user} size="xl" />
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-display text-2xl font-bold text-gray-900 dark-text-primary">{user.name}</h2>
-                  <span className={`badge ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
-                  {user.adminTier ? (
-                    <span className={`badge ${getAdminTierTone(user.adminTier)}`}>
-                      {adminTierDefinition?.label || user.adminTier}
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+              <div className="flex items-start gap-4">
+                <Avatar user={user} size="xl" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h2 className="font-display text-2xl font-bold text-gray-900 dark-text-primary">{user.name}</h2>
+                    <span className={`badge ${getRoleColor(user.role)}`}>{getRoleLabel(user.role)}</span>
+                    {user.adminTier ? (
+                      <span className={`badge ${getAdminTierTone(user.adminTier)}`}>
+                        {adminTierDefinition?.label || user.adminTier}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500 dark-text-muted">{user.email}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className={`badge ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : user.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                      {user.status}
                     </span>
-                  ) : null}
-                  <span className={`badge ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : user.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{user.status}</span>
-                  <span className={`badge ${lifecycleTone[user.lifecycle?.overall] || 'bg-slate-100 text-slate-700'}`}>{String(user.lifecycle?.overall || 'pending').replace(/_/g, ' ')}</span>
+                    <span className={`badge ${lifecycleTone[user.lifecycle?.overall] || 'bg-slate-100 text-slate-700'}`}>
+                      {String(user.lifecycle?.overall || 'pending').replace(/_/g, ' ')}
+                    </span>
+                    <span className={`badge ${user.isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                      {user.isActive ? 'Account active' : 'Account inactive'}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <MetaItem icon={FiMail} label="Email" value={user.email} />
-                  <MetaItem icon={FiShield} label="Verification" value={user.emailVerified ? 'Verified' : 'Not verified'} />
-                  <MetaItem icon={FiCalendar} label="Last login" value={user.lastLogin ? formatDate(user.lastLogin) : 'No successful login yet'} />
-                  <MetaItem icon={FiClock} label="Created" value={formatDate(user.createdAt)} />
-                </div>
+              </div>
+              <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                <MetaItem icon={FiShield} label="Verification" value={user.emailVerified ? 'Verified' : 'Not verified'} />
+                <MetaItem icon={FiUser} label="System ID" value={user.systemId} />
+                <MetaItem icon={FiCalendar} label="Last login" value={user.lastLogin ? formatDate(user.lastLogin) : 'No successful login yet'} />
+                <MetaItem icon={FiClock} label="Created" value={formatDate(user.createdAt)} />
               </div>
             </div>
           </div>
 
-          <div className="card p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Lifecycle</h3>
-                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Track exactly where this identity is in onboarding and operational readiness.</p>
-              </div>
-              {adminTierDefinition ? (
-                <HelpTooltip
-                  title={`${adminTierDefinition.label} access`}
-                  items={[
-                    { label: `Tier ${adminTierDefinition.level}`, description: `${adminTierDefinition.scopeLabel}. ${adminTierDefinition.description}` },
-                    { label: 'Inherited access', description: 'Higher admin tiers automatically inherit the permissions granted to lower tiers.' },
-                  ]}
-                />
-              ) : null}
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              {(user.lifecycle?.stages || []).map((stage) => (
-                <div key={stage.key} className={`rounded-2xl border px-4 py-4 ${stage.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-gray-900">{stage.label}</p>
-                    <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${stage.complete ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                      <FiCheckCircle size={14} />
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-gray-500">{stage.description}</p>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+            <div className="card p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Access & Lifecycle</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark-text-muted">Prioritized account readiness, onboarding state, and access health.</p>
                 </div>
-              ))}
+                {adminTierDefinition ? (
+                  <HelpTooltip
+                    title={`${adminTierDefinition.label} access`}
+                    items={[
+                      { label: `Tier ${adminTierDefinition.level}`, description: `${adminTierDefinition.scopeLabel}. ${adminTierDefinition.description}` },
+                      { label: 'Inherited access', description: 'Higher admin tiers automatically inherit the permissions granted to lower tiers.' },
+                    ]}
+                  />
+                ) : null}
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {(user.lifecycle?.stages || []).map((stage) => (
+                  <div key={stage.key} className={`rounded-2xl border px-4 py-4 ${stage.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900">{stage.label}</p>
+                      <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${stage.complete ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                        <FiCheckCircle size={14} />
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-gray-500">{stage.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Identity Snapshot</h3>
+              <div className="mt-4 space-y-3">
+                <MetaItem icon={FiShield} label="Status" value={`${user.status} · ${user.emailVerified ? 'Verified' : 'Unverified'}`} />
+                <MetaItem icon={FiCheckCircle} label="Academic context" value={academicSummary.join(' · ') || 'No academic mapping'} />
+                <MetaItem icon={FiCalendar} label="Expiry" value={user.expiryDate ? formatDate(user.expiryDate) : 'No expiry set'} />
+              </div>
+              {user.adminScopes?.length ? (
+                <div className="mt-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Admin Scopes</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {user.adminScopes.map((scope) => (
+                      <span key={scope._id} className="badge bg-slate-100 text-slate-700">
+                        {scope.scopeType} · {scope.scopeName || scope.scopeValue || 'Scoped'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
           <div className="card p-6">
             <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">{pageCopy.academicTitle}</h3>
             <p className="mt-1 text-sm text-gray-500 dark-text-muted">{pageCopy.academicDescription}</p>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetaItem icon={FiBookOpen} label="Program" value={user.sectionContext?.program?.name || user.department || '—'} />
               <MetaItem icon={FiBookOpen} label="Course" value={user.sectionContext?.course?.name || '—'} />
               <MetaItem icon={FiBookOpen} label="Academic session" value={user.sectionContext?.academicSession?.label || user.year || '—'} />
               <MetaItem icon={FiUser} label="Section" value={user.sectionContext?.name || user.section || '—'} />
             </div>
 
-            <div className="mt-5">
+            <div className="mt-6">
               <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">{pageCopy.subjectsTitle}</h4>
               <div className="mt-3 space-y-3">
                 {user.subjects?.length ? user.subjects.map((subject) => (
@@ -429,9 +465,9 @@ export default function UserDetailPage() {
             </div>
 
             {user.role === 'faculty' ? (
-              <div className="mt-5">
+              <div className="mt-6">
                 <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Teaching Summary</h4>
-                <p className="mt-1 text-sm text-gray-500 dark-text-muted">This faculty member’s live teaching scope is derived from section-subject assignments in the academic structure.</p>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Live teaching scope derived from section-subject assignments.</p>
                 <div className="mt-3 space-y-3">
                   {facultySubjectSummary.length ? facultySubjectSummary.map((assignment) => (
                     <div key={assignment.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark-surface-subtle">
@@ -448,25 +484,11 @@ export default function UserDetailPage() {
                 </div>
               </div>
             ) : null}
-
-            {user.teachingAssignments?.length ? (
-              <div className="mt-5">
-                <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Teaching Assignments</h4>
-                <div className="mt-3 space-y-3">
-                  {user.teachingAssignments.map((assignment) => (
-                    <div key={assignment.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark-surface-subtle">
-                      <p className="font-semibold text-gray-900 dark-text-primary">{assignment.subject?.name || 'Subject'}</p>
-                      <p className="mt-1 text-sm text-gray-500 dark-text-muted">{assignment.subject?.code || '—'} · Section {assignment.section?.name || '—'} · {assignment.semester}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="card p-6">
-              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Recent Activity</h3>
+              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Recent Notifications</h3>
               <div className="mt-4 space-y-3">
                 {user.recentNotifications?.length ? user.recentNotifications.map((item) => (
                   <div key={`${item.type}-${item.createdAt}`} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
@@ -481,7 +503,7 @@ export default function UserDetailPage() {
             </div>
 
             <div className="card p-6">
-              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Ticket Activity</h3>
+              <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Recent Ticket Activity</h3>
               <div className="mt-4 space-y-3">
                 {user.recentTickets?.length ? user.recentTickets.map((ticket) => (
                   <div key={ticket._id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
@@ -499,40 +521,11 @@ export default function UserDetailPage() {
 
         <div className="space-y-6">
           <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Identity Summary</h3>
-            <div className="mt-4 space-y-3">
-              <MetaItem icon={FiUser} label="System ID" value={user.systemId} />
-              <MetaItem icon={FiShield} label="Status" value={`${user.status} · ${user.isActive ? 'Active' : 'Inactive'} · ${user.emailVerified ? 'Verified' : 'Unverified'}`} />
-              <MetaItem icon={FiCheckCircle} label="Academic context" value={academicSummary.join(' · ') || 'No academic mapping'} />
-            </div>
-          </div>
-
-          <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Connected Modules</h3>
-            <p className="mt-1 text-sm text-gray-500 dark-text-muted">This identity record connects access, academics, and support activity across the ERP.</p>
-            <div className="mt-4 grid gap-3">
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Identity</p>
-                <p className="mt-2 text-sm text-gray-700 dark-text-primary">Lifecycle, verification, password readiness, and access state are managed from this profile.</p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Academics</p>
-                <p className="mt-2 text-sm text-gray-700 dark-text-primary">
-                  {user.role === 'student'
-                    ? 'Student access is derived from section enrollment, which unlocks subjects, timetable, and attendance.'
-                    : user.role === 'faculty'
-                      ? 'Faculty access is derived from teaching assignments, which scope timetable and attendance control.'
-                      : 'Operational roles can support academic workflows without requiring section enrollment.'}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Support</p>
-                <p className="mt-2 text-sm text-gray-700 dark-text-primary">Recent tickets and notifications show the user’s connected helpdesk and platform activity.</p>
-              </div>
-            </div>
+            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Quick Actions</h3>
+            <p className="mt-1 text-sm text-gray-500 dark-text-muted">Move to the most relevant operational workspace from this identity record.</p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link to="/users" className="btn-secondary">Identity & Access</Link>
-              <Link to="/approvals" className="btn-secondary">Identity Alerts</Link>
+              <Link to="/users" className="btn-secondary">All Users</Link>
+              <Link to="/approvals" className="btn-secondary">Approvals</Link>
               <Link to="/academics" className="btn-secondary">Academic Structure</Link>
               <Link to="/tickets" className="btn-secondary">Tickets</Link>
             </div>

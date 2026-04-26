@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import API from '../utils/api';
-import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../context/PermissionContext';
 import toast from 'react-hot-toast';
-import { PageHeader, FullPageSpinner, EmptyState, Alert, ConfirmDialog } from '../components/ui';
+import { PageHeader, FullPageSpinner, EmptyState, Alert, ConfirmDialog, Modal } from '../components/ui';
 import { FiPlus, FiTrash2, FiX, FiCalendar } from 'react-icons/fi';
+import VisibilitySection from '../components/content/VisibilitySection';
 
 const TYPES = ['Exam','Holiday','Event','Deadline','Result','Registration','Other'];
 const TYPE_CONFIG = {
@@ -18,7 +18,12 @@ const TYPE_CONFIG = {
 };
 
 function AddModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ title:'', date:'', endDate:'', type:'Exam', description:'' });
+  const [form, setForm] = useState({
+    title:'', date:'', endDate:'', type:'Exam', description:'',
+    audienceTiers:[], audienceRoles:[],
+    audienceCollegeId:'', audienceDepartmentId:'', audienceProgramId:'', audienceCourseId:'', audienceStudyYear:'', audienceSectionId:'',
+    audienceDepartments:[], audienceYears:[], audienceSections:[],
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,8 +41,8 @@ function AddModal({ onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in-up">
+    <Modal open onClose={onClose} panelClassName="max-w-md">
+      <div className="w-full rounded-2xl bg-white shadow-2xl animate-fade-in-up">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="font-display font-bold text-gray-900">Add Calendar Date</h2>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"><FiX size={18}/></button>
@@ -79,18 +84,18 @@ function AddModal({ onClose, onSaved }) {
             <label className="label">Description</label>
             <textarea className="input resize-none" rows={2} value={form.description} onChange={e => setForm(f => ({...f, description:e.target.value}))} placeholder="Optional details..." />
           </div>
+          <VisibilitySection form={form} compact onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))} />
           <div className="flex gap-3">
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">{loading ? 'Adding...' : 'Add Date'}</button>
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 
 export default function AcademicCalendarPage() {
-  const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);

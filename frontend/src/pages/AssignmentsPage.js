@@ -7,6 +7,8 @@ import { formatDate, formatRelative } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
 import { FiBookOpen, FiClock, FiPlus } from 'react-icons/fi';
+import AcademicScopeFilters from '../components/academics/AcademicScopeFilters';
+import useAcademicOptions from '../hooks/useAcademicOptions';
 
 const SubmissionBadge = ({ submission }) => {
   if (!submission) return <span className="badge bg-gray-100 text-gray-600">Pending</span>;
@@ -22,9 +24,20 @@ export default function AssignmentsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+  const { options, departmentCollegeMap } = useAcademicOptions();
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState({
+    visibilityTier: '',
+    visibilityRole: '',
+    collegeId: '',
+    departmentId: '',
+    programId: '',
+    courseId: '',
+    studyYear: '',
+    sectionId: '',
+  });
 
   const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
   const canSubmitAssignments = user?.role === 'student' || hasPermission('canSubmitAssignments');
@@ -34,7 +47,11 @@ export default function AssignmentsPage() {
       setLoading(true);
       setError('');
       try {
-        const res = await API.get('/assignments');
+        const params = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.append(key, value);
+        });
+        const res = await API.get(`/assignments${params.toString() ? `?${params}` : ''}`);
         setAssignments(Array.isArray(res.data?.data) ? res.data.data : []);
       } catch (requestError) {
         const message = requestError.response?.data?.message || 'Failed to load assignments';
@@ -47,7 +64,7 @@ export default function AssignmentsPage() {
     };
 
     loadAssignments();
-  }, []);
+  }, [filters]);
 
   const stats = useMemo(() => ({
     total: assignments.length,
@@ -89,6 +106,17 @@ export default function AssignmentsPage() {
       </div>
 
       {error ? <Alert type="error" message={error} /> : null}
+
+      <div className="card p-4">
+        <AcademicScopeFilters
+          filters={filters}
+          onChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))}
+          options={options}
+          departmentCollegeMap={departmentCollegeMap}
+          showRoleFilter
+          showTierFilter
+        />
+      </div>
 
       {loading ? (
         <FullPageSpinner />

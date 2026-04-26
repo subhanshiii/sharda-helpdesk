@@ -4,11 +4,14 @@ const Ticket = require('../models/Ticket');
 const DashboardPreference = require('../models/DashboardPreference');
 const TimetableEntry = require('../models/TimetableEntry');
 const AttendanceSession = require('../models/AttendanceSession');
+const Enrollment = require('../models/Enrollment');
+const SectionSubject = require('../models/SectionSubject');
 const { listAssignments } = require('./assignmentService');
 const { listContent } = require('./contentService');
 const { getStats } = require('./statsService');
 const { generateDashboardInsight } = require('./aiService');
 const { isAdminRole, isSupportRole } = require('../utils/roleHelpers');
+const { buildTimetableQuery } = require('../utils/timetableQuery');
 
 const DEFAULT_WIDGET_PREFERENCES = {
   hidden: [],
@@ -88,19 +91,21 @@ const getRecentSubmissions = async (user) => {
 };
 
 const getTimetableEntries = async (user) => {
-  const role = user.role;
-  const query = { isActive: true };
-
-  if (role === 'student') {
-    query.department = user.department;
-    query.year = user.year;
-    query.section = user.section;
-  } else if (role === 'faculty') {
-    query.$or = [{ faculty: user.id }, { department: user.department }];
-  }
+  const query = await buildTimetableQuery(user, {});
 
   return TimetableEntry.find(query)
     .populate('faculty', 'name email role')
+    .populate({
+      path: 'sectionId',
+      select: 'name studyYear program course department academicSession',
+      populate: [
+        { path: 'program', select: 'name code' },
+        { path: 'course', select: 'name code' },
+        { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+        { path: 'academicSession', select: 'label yearNumber' },
+      ],
+    })
+    .populate('subjectId', 'name code')
     .sort({ dayOfWeek: 1, startTime: 1 })
     .limit(10)
     .lean();
@@ -111,11 +116,20 @@ const getAttendanceSummary = async (user) => {
   const query = {};
 
   if (role === 'student') {
-    query.department = user.department;
-    query.year = user.year;
-    query.section = user.section;
+    const enrollment = await Enrollment.findOne({ student: user.id, status: 'active' }).select('section').lean();
+    if (enrollment?.section) {
+      query.sectionId = enrollment.section;
+    } else {
+      query.department = user.department;
+      query.year = user.year;
+      query.section = user.section;
+    }
   } else if (role === 'faculty') {
-    query.$or = [{ faculty: user.id }, { department: user.department }];
+    const assignedSectionIds = await SectionSubject.find({
+      isActive: true,
+      $or: [{ faculty: user.id }, { facultyMembers: user.id }],
+    }).distinct('section');
+    query.$or = [{ faculty: user.id }, ...(assignedSectionIds.length ? [{ sectionId: { $in: assignedSectionIds } }] : [])];
   }
 
   const sessions = await AttendanceSession.find(query)
@@ -139,13 +153,6 @@ const getAttendanceSummary = async (user) => {
       totalSessions: total,
       attendedSessions: attended,
       attendanceRate: total ? Math.round((attended / total) * 100) : 0,
-      recentSessions: sessions.slice(0, 5).map((session) => ({
-        _id: session._id,
-        title: session.title,
-        subject: session.subject,
-        date: session.date,
-        myRecord: session.records.find((entry) => entry.student?._id?.toString() === user.id) || null,
-      })),
     };
   }
 
@@ -154,13 +161,6 @@ const getAttendanceSummary = async (user) => {
     totalSessions: sessions.length,
     attendedSessions: totalRecords,
     attendanceRate: sessions.length ? Math.round(totalRecords / sessions.length) : 0,
-    recentSessions: sessions.slice(0, 5).map((session) => ({
-      _id: session._id,
-      title: session.title,
-      subject: session.subject,
-      date: session.date,
-      recordCount: session.records?.length || 0,
-    })),
   };
 };
 

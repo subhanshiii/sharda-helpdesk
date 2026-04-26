@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
 
 const ADVANCED_RESOURCES = [
@@ -49,16 +49,118 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
     setError('');
   }, [resource.key]);
 
+  const scopedDepartments = useMemo(() => (
+    (options.departments || []).filter((department) => {
+      if (!form.college) return true;
+      return String(department.college?._id || department.college) === String(form.college);
+    })
+  ), [form.college, options.departments]);
+
+  const scopedPrograms = useMemo(() => (
+    (options.programs || []).filter((program) => {
+      if (!form.department) return true;
+      return String(program.department?._id || program.department) === String(form.department);
+    })
+  ), [form.department, options.programs]);
+
+  const scopedCourses = useMemo(() => (
+    (options.courses || []).filter((course) => {
+      if (form.program && String(course.program?._id || course.program) !== String(form.program)) return false;
+      if (form.department && String(course.department?._id || course.department) !== String(form.department)) return false;
+      return true;
+    })
+  ), [form.department, form.program, options.courses]);
+
+  const scopedSessions = useMemo(() => (
+    (options.academicSessions || []).filter((session) => {
+      if (!form.program) return true;
+      return String(session.program?._id || session.program) === String(form.program);
+    })
+  ), [form.program, options.academicSessions]);
+
+  const scopedSections = useMemo(() => (
+    (options.sections || []).filter((section) => {
+      if (form.department && String(section.department?._id || section.department) !== String(form.department)) return false;
+      if (form.program && String(section.program?._id || section.program) !== String(form.program)) return false;
+      if (form.course && String(section.course?._id || section.course) !== String(form.course)) return false;
+      if (form.academicSession && String(section.academicSession?._id || section.academicSession) !== String(form.academicSession)) return false;
+      return true;
+    })
+  ), [form.academicSession, form.course, form.department, form.program, options.sections]);
+
+  const scopedSubjects = useMemo(() => (
+    (options.subjects || []).filter((subject) => {
+      if (form.department && String(subject.department?._id || subject.department) !== String(form.department)) return false;
+      if (form.program && String(subject.program?._id || subject.program) !== String(form.program)) return false;
+      if (form.course && String(subject.course?._id || subject.course) !== String(form.course)) return false;
+      if (form.academicSession && String(subject.academicSession?._id || subject.academicSession) !== String(form.academicSession)) return false;
+      return true;
+    })
+  ), [form.academicSession, form.course, form.department, form.program, options.subjects]);
+
+  const scopedStudents = useMemo(() => (options.students || []), [options.students]);
+
   const fieldOptions = {
     college: options.colleges || [],
-    department: options.departments || [],
-    program: options.programs || [],
-    course: options.courses || [],
-    academicSession: options.academicSessions || [],
-    section: options.sections || [],
-    subject: options.subjects || [],
+    department: scopedDepartments,
+    program: scopedPrograms,
+    course: scopedCourses,
+    academicSession: scopedSessions,
+    section: scopedSections,
+    subject: scopedSubjects,
     faculty: options.faculty || [],
-    student: options.students || [],
+    student: scopedStudents,
+  };
+
+  const handleFieldChange = (field, value) => {
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === 'department') {
+        next.program = '';
+        next.course = '';
+        next.academicSession = '';
+        if (resource.key === 'section-subjects') next.subject = '';
+      }
+      if (field === 'program') {
+        next.course = '';
+        next.academicSession = '';
+        if (resource.key === 'section-subjects') {
+          next.section = '';
+          next.subject = '';
+        }
+      }
+      if (field === 'course') {
+        if (resource.key === 'section-subjects') {
+          next.section = '';
+          next.subject = '';
+        }
+      }
+      if (field === 'academicSession' && resource.key === 'section-subjects') {
+        next.section = '';
+        next.subject = '';
+      }
+      if (field === 'section' && resource.key === 'section-subjects') {
+        const selectedSection = (options.sections || []).find((section) => String(section._id) === String(value));
+        next.department = selectedSection?.department?._id || selectedSection?.department || current.department;
+        next.program = selectedSection?.program?._id || selectedSection?.program || current.program;
+        next.course = selectedSection?.course?._id || selectedSection?.course || current.course;
+        next.academicSession = selectedSection?.academicSession?._id || selectedSection?.academicSession || current.academicSession;
+      }
+      if (field === 'subject' && resource.key === 'section-subjects') {
+        const selectedSubject = (options.subjects || []).find((subject) => String(subject._id) === String(value));
+        next.department = selectedSubject?.department?._id || selectedSubject?.department || current.department;
+        next.program = selectedSubject?.program?._id || selectedSubject?.program || current.program;
+        next.course = selectedSubject?.course?._id || selectedSubject?.course || current.course;
+        next.academicSession = selectedSubject?.academicSession?._id || selectedSubject?.academicSession || current.academicSession;
+      }
+      if (field === 'section' && resource.key === 'enrollments') {
+        const selectedSection = (options.sections || []).find((section) => String(section._id) === String(value));
+        next.academicSession = selectedSection?.academicSession?._id || selectedSection?.academicSession || current.academicSession;
+      }
+
+      return next;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -91,7 +193,7 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
                 key={field}
                 className="input"
                 value={form[field]}
-                onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
+                onChange={(event) => handleFieldChange(field, event.target.value)}
                 required
               >
                 <option value="">Select {getFieldLabel(field)}</option>
@@ -108,7 +210,7 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
                 key={field}
                 className="input"
                 value={form[field]}
-                onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
+                onChange={(event) => handleFieldChange(field, event.target.value)}
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -124,7 +226,7 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
               className="input"
               placeholder={getFieldLabel(field)}
               value={form[field]}
-              onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
+              onChange={(event) => handleFieldChange(field, event.target.value)}
               required
             />
           );
@@ -136,6 +238,14 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
       </form>
 
       {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+      {(resource.key === 'subjects' || resource.key === 'section-subjects' || resource.key === 'enrollments') ? (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {resource.key === 'subjects' ? 'Subjects sit under a course and academic session, then get delivered through section-teaching assignments.' : null}
+          {resource.key === 'section-subjects' ? 'Teaching assignments connect a subject to a delivery section. Selecting a section or subject will automatically align the related hierarchy fields.' : null}
+          {resource.key === 'enrollments' ? 'Enrollments attach students to sections. The academic session is inferred from the selected section when available.' : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 space-y-2">
         {items.length ? items.slice(0, 8).map((item) => (

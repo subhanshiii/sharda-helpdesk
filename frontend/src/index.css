@@ -148,6 +148,51 @@
     padding: 0.2rem 0.625rem; border-radius: 99px;
     font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em;
   }
+
+  /* Keep status/tag colors stable in dark mode so badge text stays readable. */
+  :root[data-theme='dark'] .badge.bg-gray-100,
+  :root[data-theme='dark'] .badge.bg-slate-100,
+  :root[data-theme='dark'] .badge.bg-slate-200,
+  :root[data-theme='dark'] .badge.bg-blue-50,
+  :root[data-theme='dark'] .badge.bg-blue-100,
+  :root[data-theme='dark'] .badge.bg-indigo-50,
+  :root[data-theme='dark'] .badge.bg-indigo-100,
+  :root[data-theme='dark'] .badge.bg-violet-100,
+  :root[data-theme='dark'] .badge.bg-purple-100,
+  :root[data-theme='dark'] .badge.bg-emerald-50,
+  :root[data-theme='dark'] .badge.bg-emerald-100,
+  :root[data-theme='dark'] .badge.bg-green-50,
+  :root[data-theme='dark'] .badge.bg-green-100,
+  :root[data-theme='dark'] .badge.bg-amber-50,
+  :root[data-theme='dark'] .badge.bg-amber-100,
+  :root[data-theme='dark'] .badge.bg-orange-100,
+  :root[data-theme='dark'] .badge.bg-red-100,
+  :root[data-theme='dark'] .badge.bg-rose-100,
+  :root[data-theme='dark'] .badge.bg-teal-100,
+  :root[data-theme='dark'] .badge.bg-yellow-100 {
+    filter: none;
+  }
+
+  :root[data-theme='dark'] .badge.bg-gray-100 { background-color: #f3f4f6 !important; color: #4b5563 !important; border-color: #e5e7eb !important; }
+  :root[data-theme='dark'] .badge.bg-slate-100 { background-color: #f1f5f9 !important; color: #475569 !important; border-color: #cbd5e1 !important; }
+  :root[data-theme='dark'] .badge.bg-slate-200 { background-color: #e2e8f0 !important; color: #475569 !important; border-color: #cbd5e1 !important; }
+  :root[data-theme='dark'] .badge.bg-blue-50 { background-color: #eff6ff !important; color: #1d4ed8 !important; border-color: #bfdbfe !important; }
+  :root[data-theme='dark'] .badge.bg-blue-100 { background-color: #dbeafe !important; color: #1d4ed8 !important; border-color: #bfdbfe !important; }
+  :root[data-theme='dark'] .badge.bg-indigo-50 { background-color: #eef2ff !important; color: #4338ca !important; border-color: #c7d2fe !important; }
+  :root[data-theme='dark'] .badge.bg-indigo-100 { background-color: #e0e7ff !important; color: #4338ca !important; border-color: #c7d2fe !important; }
+  :root[data-theme='dark'] .badge.bg-violet-100 { background-color: #ede9fe !important; color: #6d28d9 !important; border-color: #ddd6fe !important; }
+  :root[data-theme='dark'] .badge.bg-purple-100 { background-color: #f3e8ff !important; color: #7e22ce !important; border-color: #e9d5ff !important; }
+  :root[data-theme='dark'] .badge.bg-emerald-50 { background-color: #ecfdf5 !important; color: #047857 !important; border-color: #a7f3d0 !important; }
+  :root[data-theme='dark'] .badge.bg-emerald-100 { background-color: #d1fae5 !important; color: #047857 !important; border-color: #a7f3d0 !important; }
+  :root[data-theme='dark'] .badge.bg-green-50 { background-color: #f0fdf4 !important; color: #15803d !important; border-color: #bbf7d0 !important; }
+  :root[data-theme='dark'] .badge.bg-green-100 { background-color: #dcfce7 !important; color: #15803d !important; border-color: #bbf7d0 !important; }
+  :root[data-theme='dark'] .badge.bg-amber-50 { background-color: #fffbeb !important; color: #b45309 !important; border-color: #fde68a !important; }
+  :root[data-theme='dark'] .badge.bg-amber-100 { background-color: #fef3c7 !important; color: #b45309 !important; border-color: #fcd34d !important; }
+  :root[data-theme='dark'] .badge.bg-orange-100 { background-color: #ffedd5 !important; color: #c2410c !important; border-color: #fdba74 !important; }
+  :root[data-theme='dark'] .badge.bg-red-100 { background-color: #fee2e2 !important; color: #b91c1c !important; border-color: #fca5a5 !important; }
+  :root[data-theme='dark'] .badge.bg-rose-100 { background-color: #ffe4e6 !important; color: #be123c !important; border-color: #fda4af !important; }
+  :root[data-theme='dark'] .badge.bg-teal-100 { background-color: #ccfbf1 !important; color: #0f766e !important; border-color: #99f6e4 !important; }
+  :root[data-theme='dark'] .badge.bg-yellow-100 { background-color: #fef9c3 !important; color: #a16207 !important; border-color: #fde047 !important; }
 }
 
 /* Animations */

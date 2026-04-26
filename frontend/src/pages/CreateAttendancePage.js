@@ -4,6 +4,12 @@ import toast from 'react-hot-toast';
 import API from '../utils/api';
 import { Alert, PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import AcademicScopeFilters from '../components/academics/AcademicScopeFilters';
+import {
+  buildDepartmentCollegeMap,
+  emptyAcademicScopeFilters,
+  filterSectionsByScope,
+} from '../utils/academicScope';
 
 const STATUS_OPTIONS = ['present', 'absent', 'late', 'excused'];
 
@@ -15,50 +21,117 @@ export default function CreateAttendancePage() {
 
   const [form, setForm] = useState({
     title: '',
+    subjectId: '',
+    sectionId: '',
+    date: new Date().toISOString().slice(0, 10),
+    topic: '',
+    records: [],
+    // Fallback for backward compatibility
     subject: '',
     department: user?.department || '',
     year: user?.year || '',
     section: user?.section || '',
-    date: new Date().toISOString().slice(0, 10),
-    topic: '',
-    records: [],
   });
+  
+  const [sections, setSections] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [filters, setFilters] = useState(emptyAcademicScopeFilters);
   const [students, setStudents] = useState([]);
   const [loadingPage, setLoadingPage] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loadingSectionData, setLoadingSectionData] = useState(false);
 
-  const loadStudents = async (scope = form, existingItem = null) => {
+  // Load sections on mount for the dropdown
+  useEffect(() => {
+    const loadSections = async () => {
+      try {
+        const [collegesRes, departmentsRes, programsRes, coursesRes, sectionsRes] = await Promise.all([
+          API.get('/academics/colleges?paginate=false'),
+          API.get('/academics/departments?paginate=false'),
+          API.get('/academics/programs?paginate=false'),
+          API.get('/academics/courses?paginate=false'),
+          API.get('/academics/sections?paginate=false'),
+        ]);
+        setColleges(Array.isArray(collegesRes.data?.data) ? collegesRes.data.data : []);
+        setDepartments(Array.isArray(departmentsRes.data?.data) ? departmentsRes.data.data : []);
+        setPrograms(Array.isArray(programsRes.data?.data) ? programsRes.data.data : []);
+        setCourses(Array.isArray(coursesRes.data?.data) ? coursesRes.data.data : []);
+        setSections(Array.isArray(sectionsRes.data?.data) ? sectionsRes.data.data : []);
+      } catch (requestError) {
+        setColleges([]);
+        setDepartments([]);
+        setPrograms([]);
+        setCourses([]);
+        setSections([]);
+      }
+    };
+    loadSections();
+  }, []);
+
+  const departmentCollegeMap = buildDepartmentCollegeMap(departments);
+  const scopedSections = filterSectionsByScope(sections, filters, departmentCollegeMap);
+  const scopedSubjects = subjects.filter((subject) => {
+    if (filters.departmentId && String(subject.department?._id || subject.department) !== String(filters.departmentId)) return false;
+    if (filters.programId && String(subject.program?._id || subject.program) !== String(filters.programId)) return false;
+    if (filters.courseId && String(subject.course?._id || subject.course) !== String(filters.courseId)) return false;
+    if (filters.studyYear && String(subject.academicSession?.yearNumber || '') !== String(filters.studyYear)) return false;
+    return true;
+  });
+
+  // Load subjects on mount for the dropdown
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        const res = await API.get('/academics/subjects');
+        setSubjects(Array.isArray(res.data?.data) ? res.data.data : []);
+      } catch (requestError) {
+        setSubjects([]);
+      }
+    };
+    loadSubjects();
+  }, []);
+
+  const loadStudents = async (sectionId) => {
+    if (!sectionId) {
+      setStudents([]);
+      setForm((current) => ({ ...current, records: [] }));
+      return;
+    }
+
+    setLoadingSectionData(true);
     try {
-      const params = new URLSearchParams({
-        department: scope.department || '',
-        year: scope.year || '',
-        section: scope.section || '',
-      });
-      const res = await API.get(`/academics/attendance/options?${params.toString()}`);
-      const roster = res.data?.data || [];
+      // Get students enrolled in this section
+      const res = await API.get(`/academics/enrollments?section=${sectionId}&status=active`);
+      const roster = (res.data?.data || []).map((enrollment) => enrollment.student).filter(Boolean);
       setStudents(roster);
       setForm((current) => ({
         ...current,
-        records: existingItem?.records?.length
-          ? existingItem.records.map((record) => ({
-              student: record.student?._id || record.student,
-              status: record.status,
-            }))
-          : roster.map((student) => ({ student: student._id, status: 'present' })),
+        records: roster.map((student) => ({ student: student._id, status: 'present' })),
       }));
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to load students.');
+      setStudents([]);
+      setForm((current) => ({ ...current, records: [] }));
+    } finally {
+      setLoadingSectionData(false);
     }
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     let active = true;
 
     const bootstrap = async () => {
       if (isEdit) {
         try {
-          const res = await API.get('/academics/attendance');
+          const res = await API.get('/academics/attendance', {
+            signal: controller.signal,
+          });
           const sessions = res.data?.data || [];
           const item = sessions.find((entry) => entry._id === id);
           if (!active) return;
@@ -67,8 +140,11 @@ export default function CreateAttendancePage() {
             setLoadingPage(false);
             return;
           }
-          const nextForm = {
+          setForm((current) => ({
+            ...current,
             title: item.title || '',
+            subjectId: item.subjectId || '',
+            sectionId: item.sectionId || '',
             subject: item.subject || '',
             department: item.department || user?.department || '',
             year: item.year || user?.year || '',
@@ -76,16 +152,24 @@ export default function CreateAttendancePage() {
             date: item.date ? new Date(item.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
             topic: item.topic || '',
             records: [],
-          };
-          setForm(nextForm);
-          await loadStudents(nextForm, item);
+          }));
+          // If editing, load students for that section
+          if (item.sectionId) {
+            await loadStudents(item.sectionId);
+          } else {
+            // Fallback: try loading by section string if no sectionId
+            const matchedSection = sections.find((s) => s.name === item.section);
+            if (matchedSection) {
+              await loadStudents(matchedSection._id);
+            }
+          }
         } catch (requestError) {
-          if (active) setError(requestError.response?.data?.message || 'Failed to load attendance.');
+          if (active && !controller.signal.aborted) {
+            setError(requestError.response?.data?.message || 'Failed to load attendance.');
+          }
         } finally {
           if (active) setLoadingPage(false);
         }
-      } else {
-        await loadStudents(form);
       }
     };
 
@@ -93,31 +177,92 @@ export default function CreateAttendancePage() {
 
     return () => {
       active = false;
+      controller.abort();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, sections])
 
-  const handleScopeChange = (key, value) => {
-    setForm((current) => ({ ...current, [key]: value }));
+  const handleSectionChange = (sectionId) => {
+    const selectedSection = sections.find((s) => s._id === sectionId);
+    setFilters((current) => ({ ...current, sectionId }));
+    setForm((current) => ({
+      ...current,
+      sectionId,
+      section: selectedSection?.name || '',
+      department: selectedSection?.department?.name || current.department,
+    }));
+    setError('');
+    loadStudents(sectionId);
   };
 
-  const refreshRoster = async () => {
-    await loadStudents(form);
+  const handleScopeChange = (key, value) => {
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      if (key === 'collegeId') {
+        next.departmentId = '';
+        next.programId = '';
+        next.courseId = '';
+        next.sectionId = '';
+      }
+      if (key === 'departmentId') {
+        next.programId = '';
+        next.courseId = '';
+        next.sectionId = '';
+      }
+      if (key === 'programId') {
+        next.courseId = '';
+        next.sectionId = '';
+      }
+      if (key === 'courseId' || key === 'studyYear') {
+        next.sectionId = '';
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!form.title.trim() || !form.department.trim() || !form.year.trim() || !form.section.trim()) {
-      setError('Title, department, year, and section are required.');
+    
+    // Validate required fields
+    if (!form.title.trim() || !form.sectionId) {
+      setError('Title and section are required.');
+      return;
+    }
+    
+    // Validate form.records is not empty
+    if (!Array.isArray(form.records) || form.records.length === 0) {
+      setError('Must have at least one student record.');
+      return;
+    }
+    
+    // Validate date is not in the past (optional but good practice)
+    const selectedDate = new Date(form.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today && !isEdit) {
+      setError('Cannot create attendance for past dates.');
       return;
     }
 
     setSaving(true);
     setError('');
     try {
+      const payload = {
+        title: form.title,
+        subjectId: form.subjectId || null,
+        sectionId: form.sectionId,
+        subject: form.subject,
+        department: form.department,
+        year: form.year,
+        section: form.section,
+        date: form.date,
+        topic: form.topic,
+        records: form.records,
+      };
+
       if (isEdit) {
-        await API.put(`/academics/attendance/${id}`, form);
+        await API.put(`/academics/attendance/${id}`, payload);
       } else {
-        await API.post('/academics/attendance', form);
+        await API.post('/academics/attendance', payload);
       }
       toast.success(`Attendance ${isEdit ? 'updated' : 'saved'}`);
       navigate('/attendance');
@@ -136,60 +281,83 @@ export default function CreateAttendancePage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title={isEdit ? 'Update Attendance' : 'Mark Attendance'}
-        subtitle="Capture section attendance with a simple, reliable checklist."
+        subtitle="Capture section attendance from the academic structure, linked to real student enrollments."
       />
 
       <div className="card p-6">
         {error ? <div className="mb-4"><Alert type="error" message={error} /></div> : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <AcademicScopeFilters
+            filters={filters}
+            onChange={handleScopeChange}
+            options={{ colleges, departments, programs, courses, sections }}
+            departmentCollegeMap={departmentCollegeMap}
+          />
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="label">Title</label>
-              <input className="input" value={form.title} onChange={(event) => handleScopeChange('title', event.target.value)} placeholder="DBMS Lecture Attendance" />
+              <label htmlFor="title" className="label">Title</label>
+              <input id="title" className="input" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="DBMS Lecture Attendance" maxLength={160} />
             </div>
             <div>
-              <label className="label">Subject</label>
-              <input className="input" value={form.subject} onChange={(event) => handleScopeChange('subject', event.target.value)} placeholder="DBMS" />
+              <label htmlFor="date" className="label">Date</label>
+              <input id="date" type="date" className="input" value={form.date} onChange={(event) => { setError(''); setForm((current) => ({ ...current, date: event.target.value })); }} />
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="label">Department</label>
-              <input className="input" value={form.department} onChange={(event) => handleScopeChange('department', event.target.value)} />
+              <label htmlFor="section" className="label">Section *</label>
+              <select id="section" className="input" value={form.sectionId} onChange={(event) => handleSectionChange(event.target.value)} required>
+                <option value="">Select a section</option>
+                {scopedSections.map((section) => (
+                  <option key={section._id} value={section._id}>
+                    {section.name} ({section.program?.name || 'Program'}) - {section.academicSession?.label || 'Session'}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="label">Year</label>
-              <input className="input" value={form.year} onChange={(event) => handleScopeChange('year', event.target.value)} />
-            </div>
-            <div>
-              <label className="label">Section</label>
-              <input className="input" value={form.section} onChange={(event) => handleScopeChange('section', event.target.value)} />
-            </div>
-            <div>
-              <label className="label">Date</label>
-              <input type="date" className="input" value={form.date} onChange={(event) => handleScopeChange('date', event.target.value)} />
+              <label htmlFor="subject" className="label">Subject (Optional)</label>
+              <select id="subject" className="input" value={form.subjectId} onChange={(event) => {
+                const selectedSubject = scopedSubjects.find((s) => s._id === event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  subjectId: event.target.value,
+                  subject: selectedSubject?.name || current.subject,
+                }));
+                setError('');
+              }}>
+                <option value="">No specific subject</option>
+                {scopedSubjects.map((subject) => (
+                  <option key={subject._id} value={subject._id}>
+                    {subject.name} ({subject.code})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="label">Topic</label>
-              <input className="input" value={form.topic} onChange={(event) => handleScopeChange('topic', event.target.value)} placeholder="Normalization and joins" />
+              <label htmlFor="topic" className="label">Topic (Optional)</label>
+              <input id="topic" className="input" value={form.topic} onChange={(event) => setForm((current) => ({ ...current, topic: event.target.value }))} placeholder="Normalization and joins" maxLength={255} />
             </div>
-            <button type="button" onClick={refreshRoster} className="btn-secondary">Load Roster</button>
           </div>
 
           <div className="rounded-2xl border border-gray-100">
             <div className="border-b border-gray-100 px-4 py-3">
-              <p className="font-semibold text-gray-900">Student Roster</p>
+              <p className="font-semibold text-gray-900">Student Roster {loadingSectionData ? '(Loading...)' : `(${form.records.length} students)`}</p>
             </div>
             <div className="max-h-[420px] divide-y divide-gray-100 overflow-y-auto">
               {form.records.length === 0 ? (
-                <div className="p-5 text-center text-sm text-gray-400">Load the roster for this section first.</div>
+                <div className="p-5 text-center text-sm text-gray-400">
+                  {loadingSectionData ? 'Loading roster...' : 'Select a section to load the student roster.'}
+                </div>
               ) : form.records.map((record) => {
                 const student = students.find((entry) => entry._id === record.student);
+                const statusSelectId = `status-${record.student}`;
                 return (
                   <div key={record.student} className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_220px] md:items-center">
                     <div>
@@ -197,14 +365,19 @@ export default function CreateAttendancePage() {
                       <p className="mt-1 text-xs text-gray-500">{student?.email || ''}</p>
                     </div>
                     <select
+                      id={statusSelectId}
                       className="input"
                       value={record.status}
-                      onChange={(event) => setForm((current) => ({
-                        ...current,
-                        records: current.records.map((entry) => (
-                          entry.student === record.student ? { ...entry, status: event.target.value } : entry
-                        )),
-                      }))}
+                      aria-label={`Mark ${student?.name || 'Student'} as ${record.status}`}
+                      onChange={(event) => {
+                        setError('');
+                        setForm((current) => ({
+                          ...current,
+                          records: current.records.map((entry) => (
+                            entry.student === record.student ? { ...entry, status: event.target.value } : entry
+                          )),
+                        }));
+                      }}
                     >
                       {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>

@@ -21,6 +21,18 @@ const normalizeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+const normalizeObjectIdList = (value) => {
+  if (!value) return [];
+  const values = Array.isArray(value)
+    ? value
+    : String(value).split(',').map((item) => item.trim()).filter(Boolean);
+
+  return [...new Set(
+    values
+      .map((item) => String(item || '').trim())
+      .filter((item) => mongoose.Types.ObjectId.isValid(item))
+  )];
+};
 
 const ensureResourceExists = async (Model, id, label) => {
   const doc = await Model.findById(id).lean();
@@ -155,13 +167,19 @@ const buildAcademicPayload = async (resource, body = {}) => {
   }
 
   if (resource === 'section-subjects') {
-    const [section, subject, faculty] = await Promise.all([
+    const facultyIds = normalizeObjectIdList(body.facultyIds || body.facultyId || body.faculty);
+    const [section, subject, facultyDocs] = await Promise.all([
       ensureResourceExists(Section, body.section, 'Section'),
       ensureResourceExists(Subject, body.subject, 'Subject'),
-      body.faculty || body.facultyId ? ensureResourceExists(User, body.faculty || body.facultyId, 'Faculty user') : null,
+      facultyIds.length ? User.find({ _id: { $in: facultyIds } }).select('role').lean() : [],
     ]);
 
-    if (faculty && normalizeRole(faculty.role) !== 'faculty' && normalizeRole(faculty.role) !== 'admin') {
+    if (facultyDocs.length !== facultyIds.length) {
+      const error = new Error('One or more faculty users could not be found');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (facultyDocs.some((faculty) => normalizeRole(faculty.role) !== 'faculty' && normalizeRole(faculty.role) !== 'admin')) {
       const error = new Error('Selected user cannot be assigned as faculty');
       error.statusCode = 400;
       throw error;
@@ -184,7 +202,8 @@ const buildAcademicPayload = async (resource, body = {}) => {
 
     payload.section = section._id;
     payload.subject = subject._id;
-    payload.faculty = faculty?._id || null;
+    payload.faculty = facultyIds[0] || null;
+    payload.facultyMembers = facultyIds;
     payload.semester = normalizeString(body.semester);
     return payload;
   }
@@ -239,8 +258,33 @@ const populateMap = {
   'academic-sessions': 'program',
   sections: 'program course academicSession department advisorFaculty',
   subjects: 'department program course academicSession',
-  'section-subjects': 'section subject faculty',
-  enrollments: 'student section academicSession',
+  'section-subjects': [
+    {
+      path: 'section',
+      populate: [
+        { path: 'program', select: 'name code department' },
+        { path: 'course', select: 'name code' },
+        { path: 'academicSession', select: 'label yearNumber' },
+        { path: 'department', select: 'name code college' },
+      ],
+    },
+    { path: 'subject', populate: [{ path: 'department', select: 'name code' }, { path: 'program', select: 'name code department' }, { path: 'course', select: 'name code' }, { path: 'academicSession', select: 'label yearNumber' }] },
+    { path: 'faculty', select: 'name email systemId role' },
+    { path: 'facultyMembers', select: 'name email systemId role' },
+  ],
+  enrollments: [
+    { path: 'student', select: 'systemId name email role department section' },
+    {
+      path: 'section',
+      populate: [
+        { path: 'program', select: 'name code department' },
+        { path: 'course', select: 'name code' },
+        { path: 'academicSession', select: 'label yearNumber' },
+        { path: 'department', select: 'name code college' },
+      ],
+    },
+    { path: 'academicSession', select: 'label yearNumber' },
+  ],
 };
 
 const getModel = (resource) => modelMap[resource];
@@ -249,6 +293,116 @@ const SCOPED_ADMIN_TIERS = ['college_admin', 'department_admin', 'program_coordi
 const countDocumentsForScope = async (Model, scope = {}, extra = {}) => (
   Model.countDocuments({ ...scope, ...extra })
 );
+
+const getWorkspaceCollections = async (user) => {
+  const [
+    treeData,
+    summaryPayload,
+    collegeScope,
+    departmentScope,
+    programScope,
+    courseScope,
+    academicSessionScope,
+    sectionScope,
+    subjectScope,
+    sectionSubjectScope,
+    enrollmentScope,
+  ] = await Promise.all([
+    buildStructureTree(user),
+    (async () => {
+      const [collegeScopeValue, departmentScopeValue, programScopeValue, courseScopeValue, academicSessionScopeValue, sectionScopeValue, subjectScopeValue, enrollmentScopeValue] = await Promise.all([
+        getScopeFilter(user, 'colleges'),
+        getScopeFilter(user, 'departments'),
+        getScopeFilter(user, 'programs'),
+        getScopeFilter(user, 'courses'),
+        getScopeFilter(user, 'academic-sessions'),
+        getScopeFilter(user, 'sections'),
+        getScopeFilter(user, 'subjects'),
+        getScopeFilter(user, 'enrollments'),
+      ]);
+
+      const [
+        colleges,
+        departments,
+        programs,
+        courses,
+        academicSessions,
+        sections,
+        subjects,
+        activeEnrollments,
+      ] = await Promise.all([
+        countDocumentsForScope(College, collegeScopeValue, { isActive: true }),
+        countDocumentsForScope(Department, departmentScopeValue, { isActive: true }),
+        countDocumentsForScope(Program, programScopeValue, { isActive: true }),
+        countDocumentsForScope(Course, courseScopeValue, { isActive: true }),
+        countDocumentsForScope(AcademicSession, academicSessionScopeValue, { isActive: true }),
+        countDocumentsForScope(Section, sectionScopeValue, { isActive: true }),
+        countDocumentsForScope(Subject, subjectScopeValue, { isActive: true }),
+        Enrollment.distinct('student', { ...enrollmentScopeValue, status: 'active' }).then((rows) => rows.length),
+      ]);
+
+      return {
+        summary: {
+          colleges,
+          departments,
+          programs,
+          courses,
+          academicSessions,
+          sections,
+          subjects,
+          students: activeEnrollments,
+        },
+      };
+    })(),
+    getScopeFilter(user, 'colleges'),
+    getScopeFilter(user, 'departments'),
+    getScopeFilter(user, 'programs'),
+    getScopeFilter(user, 'courses'),
+    getScopeFilter(user, 'academic-sessions'),
+    getScopeFilter(user, 'sections'),
+    getScopeFilter(user, 'subjects'),
+    getScopeFilter(user, 'section-subjects'),
+    getScopeFilter(user, 'enrollments'),
+  ]);
+
+  const [colleges, departments, programs, courses, academicSessions, sections, subjects, sectionSubjects, enrollments, faculty, students] = await Promise.all([
+    College.find({ isActive: true, ...collegeScope }).sort({ name: 1 }).lean(),
+    Department.find({ isActive: true, ...departmentScope }).sort({ name: 1 }).populate('college', 'name code').lean(),
+    Program.find({ isActive: true, ...programScope }).sort({ name: 1 }).populate('department', 'name code college').lean(),
+    Course.find({ isActive: true, ...courseScope }).sort({ name: 1 }).populate('program department', 'name code').lean(),
+    AcademicSession.find({ isActive: true, ...academicSessionScope }).sort({ yearNumber: 1, label: 1 }).populate('program', 'name code department').lean(),
+    Section.find({ isActive: true, ...sectionScope })
+      .sort({ studyYear: 1, name: 1 })
+      .populate('department', 'name code college')
+      .populate('program', 'name code department')
+      .populate('course', 'name code')
+      .populate('academicSession', 'label yearNumber')
+      .lean(),
+    Subject.find({ isActive: true, ...subjectScope }).sort({ code: 1 }).populate('department program course academicSession').lean(),
+    SectionSubject.find({ isActive: true, ...sectionSubjectScope }).populate(populateMap['section-subjects']).lean(),
+    Enrollment.find({ ...enrollmentScope }).populate(populateMap.enrollments).lean(),
+    User.find({ role: 'faculty', isActive: true }).select('name email systemId role section sectionId department').sort({ name: 1 }).lean(),
+    User.find({ role: 'student', isActive: true }).select('name email systemId role section sectionId department year').sort({ name: 1 }).lean(),
+  ]);
+
+  return {
+    treeData,
+    summary: summaryPayload.summary,
+    options: {
+      colleges,
+      departments,
+      programs,
+      courses,
+      academicSessions,
+      sections,
+      subjects,
+      'section-subjects': sectionSubjects,
+      enrollments,
+      faculty,
+      students,
+    },
+  };
+};
 
 const ensureScopedMutationAccess = async (user, resource, source = {}) => {
   const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
@@ -313,6 +467,10 @@ const cascadeDeleteSections = async (sectionIds = []) => {
       { sectionId: { $in: sectionIds } },
       {
         $set: {
+          collegeId: null,
+          departmentId: null,
+          department: '',
+          programId: null,
           sectionId: null,
           section: '',
           year: '',
@@ -388,6 +546,83 @@ const deactivateOtherActiveEnrollments = async (payload, excludeId = null) => {
   }
 
   await Enrollment.updateMany(query, { $set: { status: 'inactive' } });
+};
+
+const buildStudentAcademicFields = (section) => ({
+  collegeId: section?.department?.college?._id || section?.department?.college || null,
+  departmentId: section?.department?._id || section?.department || null,
+  department: section?.department?.name || '',
+  programId: section?.program?._id || section?.program || null,
+  sectionId: section?._id || null,
+  section: section?.name || '',
+  year: section?.academicSession?.yearNumber ? String(section.academicSession.yearNumber) : '',
+});
+
+const clearStudentAcademicFields = {
+  collegeId: null,
+  departmentId: null,
+  department: '',
+  programId: null,
+  sectionId: null,
+  section: '',
+  year: '',
+};
+
+const syncStudentPlacementFromEnrollment = async (studentId, enrollment) => {
+  if (!studentId) return;
+
+  if (!enrollment?.section) {
+    await User.findByIdAndUpdate(studentId, clearStudentAcademicFields);
+    return;
+  }
+
+  const section = await Section.findById(enrollment.section)
+    .populate('department', 'name code college')
+    .populate('program', 'name code department')
+    .populate('academicSession', 'label yearNumber')
+    .lean();
+
+  await User.findByIdAndUpdate(studentId, buildStudentAcademicFields(section));
+};
+
+const syncActiveEnrollmentPlacementForStudent = async (studentId, excludeEnrollmentId = null) => {
+  if (!studentId) return;
+
+  const query = { student: studentId, status: 'active' };
+  if (excludeEnrollmentId) {
+    query._id = { $ne: excludeEnrollmentId };
+  }
+
+  const activeEnrollment = await Enrollment.findOne(query).sort({ updatedAt: -1, createdAt: -1 }).lean();
+  await syncStudentPlacementFromEnrollment(studentId, activeEnrollment);
+};
+
+const syncStudentsForSection = async (sectionId) => {
+  if (!sectionId) return;
+
+  const activeEnrollments = await Enrollment.find({ section: sectionId, status: 'active' }).select('student').lean();
+  if (!activeEnrollments.length) return;
+
+  const section = await Section.findById(sectionId)
+    .populate('department', 'name code college')
+    .populate('program', 'name code department')
+    .populate('academicSession', 'label yearNumber')
+    .lean();
+
+  if (!section) return;
+
+  const studentIds = [...new Set(activeEnrollments.map((entry) => String(entry.student)).filter(Boolean))];
+  if (!studentIds.length) return;
+
+  await User.updateMany(
+    { _id: { $in: studentIds } },
+    buildStudentAcademicFields(section)
+  );
+};
+
+const syncStudentsForSectionQuery = async (query = {}) => {
+  const sectionIds = await Section.find(query).distinct('_id');
+  await Promise.all(sectionIds.map((sectionId) => syncStudentsForSection(sectionId)));
 };
 
 exports.getProgramReport = async (req, res, next) => {
@@ -505,6 +740,34 @@ exports.getWorkspaceSummary = async (req, res, next) => {
   }
 };
 
+exports.getWorkspaceData = async (req, res, next) => {
+  try {
+    const data = await getWorkspaceCollections(req.user);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getWorkspaceOptions = async (req, res, next) => {
+  try {
+    const data = await getWorkspaceCollections(req.user);
+    res.status(200).json({
+      success: true,
+      data: {
+        colleges: data.options.colleges,
+        departments: data.options.departments,
+        programs: data.options.programs,
+        courses: data.options.courses,
+        academicSessions: data.options.academicSessions,
+        sections: data.options.sections,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.quickSetup = async (req, res, next) => {
   try {
     const payload = req.body || {};
@@ -588,10 +851,13 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
     const studentId = req.params.studentId || req.user.id;
     const requesterRole = normalizeRole(req.user.role);
 
+    // Viewing another student's data requires canManageAcademics permission (checked by route middleware)
+    // Additionally enforce role-based access: other roles cannot bypass role restrictions
     if (req.params.studentId && req.params.studentId !== String(req.user.id) && !['faculty', 'staff', 'admin'].includes(requesterRole)) {
       return res.status(403).json({ success: false, message: 'You are not allowed to view this student overview' });
     }
 
+    // For academic admins viewing other students, enforce assignment-based scope
     if (req.params.studentId && req.params.studentId !== String(req.user.id)) {
       const scope = await getScopeFilter(req.user, 'sections');
       if (Object.keys(scope).length) {
@@ -628,6 +894,7 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
       SectionSubject.find({ section: sectionId, isActive: true })
         .populate('subject', 'name code credits')
         .populate('faculty', 'name email')
+        .populate('facultyMembers', 'name email systemId')
         .sort({ createdAt: 1 })
         .lean(),
       AttendanceSession.aggregate([
@@ -734,18 +1001,14 @@ exports.create = async (req, res, next) => {
       await deactivateOtherActiveEnrollments(payload);
 
       if (payload.section) {
-        const section = await Section.findById(payload.section).populate('department academicSession');
-        await User.findByIdAndUpdate(payload.student, {
-          sectionId: section?._id || null,
-          section: section?.name || '',
-          departmentId: section?.department?._id || null,
-          department: section?.department?.name || '',
-          year: section?.academicSession?.yearNumber ? String(section.academicSession.yearNumber) : '',
-        });
+        await syncStudentPlacementFromEnrollment(payload.student, payload.status === 'active' ? { section: payload.section } : null);
       }
     }
 
     const doc = await model.create(payload);
+    if (req.params.resource === 'sections') {
+      await syncStudentsForSection(doc._id);
+    }
     const data = populateMap[req.params.resource]
       ? await model.findById(doc._id).populate(populateMap[req.params.resource]).lean()
       : doc;
@@ -773,14 +1036,27 @@ exports.update = async (req, res, next) => {
 
     if (req.params.resource === 'enrollments' && payload.section && payload.student) {
       await deactivateOtherActiveEnrollments(payload, req.params.id);
-      const section = await Section.findById(payload.section).populate('department academicSession');
-      await User.findByIdAndUpdate(payload.student, {
-        sectionId: section?._id || null,
-        section: section?.name || '',
-        departmentId: section?.department?._id || null,
-        department: section?.department?.name || '',
-        year: section?.academicSession?.yearNumber ? String(section.academicSession.yearNumber) : '',
-      });
+      if (payload.status === 'active') {
+        await syncStudentPlacementFromEnrollment(payload.student, { section: payload.section });
+      } else {
+        await syncActiveEnrollmentPlacementForStudent(payload.student, req.params.id);
+      }
+
+      const studentChanged = String(existingDoc.student) !== String(payload.student);
+      const previouslyActive = existingDoc.status === 'active';
+      if (previouslyActive && studentChanged) {
+        await syncActiveEnrollmentPlacementForStudent(existingDoc.student, req.params.id);
+      }
+    }
+
+    if (req.params.resource === 'sections') {
+      await syncStudentsForSection(doc._id);
+    }
+    if (req.params.resource === 'departments') {
+      await syncStudentsForSectionQuery({ department: doc._id });
+    }
+    if (req.params.resource === 'academic-sessions' || req.params.resource === 'years') {
+      await syncStudentsForSectionQuery({ academicSession: doc._id });
     }
 
     const data = populateMap[req.params.resource]
@@ -895,6 +1171,10 @@ exports.remove = async (req, res, next) => {
       ]);
     }
 
+    if (req.params.resource === 'enrollments' && existingDoc.student) {
+      await syncActiveEnrollmentPlacementForStudent(existingDoc.student, existingDoc._id);
+    }
+
     const doc = await model.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ success: false, message: 'Academic record not found' });
 
@@ -906,21 +1186,20 @@ exports.remove = async (req, res, next) => {
 
 exports.updateSectionSubjectFaculty = async (req, res, next) => {
   try {
-    const facultyId = req.body?.facultyId || null;
+    const facultyIds = normalizeObjectIdList(req.body?.facultyIds || req.body?.facultyId || []);
     const sectionSubject = await SectionSubject.findById(req.params.id);
     if (!sectionSubject) {
       return res.status(404).json({ success: false, message: 'Teaching assignment not found' });
     }
 
-    if (facultyId) {
-      const faculty = await User.findById(facultyId).select('role');
-      if (!faculty || !['faculty', 'admin'].includes(normalizeRole(faculty.role))) {
+    if (facultyIds.length) {
+      const facultyDocs = await User.find({ _id: { $in: facultyIds } }).select('role').lean();
+      if (facultyDocs.length !== facultyIds.length || facultyDocs.some((faculty) => !['faculty', 'admin'].includes(normalizeRole(faculty.role)))) {
         return res.status(400).json({ success: false, message: 'Selected user cannot be assigned as faculty' });
       }
-      sectionSubject.faculty = faculty._id;
-    } else {
-      sectionSubject.faculty = null;
     }
+    sectionSubject.faculty = facultyIds[0] || null;
+    sectionSubject.facultyMembers = facultyIds;
 
     await sectionSubject.save();
     const data = await SectionSubject.findById(sectionSubject._id).populate(populateMap['section-subjects']).lean();

@@ -1,4 +1,5 @@
-const { normalizeRole, isAdminRole } = require('./roleHelpers');
+const { normalizeRole } = require('./roleHelpers');
+const { isPlatformAdmin, resolveEffectiveTier } = require('./permissionDefaults');
 
 const parseAudienceValues = (value) => {
   if (!value) return [];
@@ -14,10 +15,18 @@ const parseAudienceValues = (value) => {
 
 const buildAudienceVisibilityQuery = (user) => {
   const normalizedRole = normalizeRole(user?.role);
-  if (!normalizedRole || isAdminRole(normalizedRole)) return null;
+  if (!normalizedRole || isPlatformAdmin(user)) return null;
+  const effectiveTier = resolveEffectiveTier(user?.role, user?.adminTier);
 
   return {
     $and: [
+      {
+        $or: [
+          { 'targetAudience.tiers': { $exists: false } },
+          { 'targetAudience.tiers.0': { $exists: false } },
+          ...(effectiveTier ? [{ 'targetAudience.tiers': effectiveTier }] : []),
+        ],
+      },
       {
         $or: [
           { 'targetAudience.roles': { $exists: false } },

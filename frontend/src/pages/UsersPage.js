@@ -272,7 +272,13 @@ export default function UsersPage() {
                     </div>
 
                     <div className="mt-4 space-y-2 text-sm text-gray-500">
-                      <p>{[u.department, u.year && `Year ${u.year}`, u.section && `Section ${u.section}`].filter(Boolean).join(' · ') || 'No academic mapping'}</p>
+                      <p>
+                        {[
+                          u.academicDisplay?.department,
+                          u.academicDisplay?.year && `Year ${u.academicDisplay.year}`,
+                          u.academicDisplay?.section && `Section ${u.academicDisplay.section}`,
+                        ].filter(Boolean).join(' · ') || 'No academic mapping'}
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
                         <span className={`badge ${u.emailVerified ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{u.emailVerified ? 'Verified' : 'Unverified'}</span>

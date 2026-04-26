@@ -85,6 +85,7 @@ export default function Layout() {
     '/tickets/new':   'New Ticket',
     '/assignments':   'Assignments',
     '/timetable':     'Timetable',
+    '/timetable/new': 'Create Timetable Slot',
     '/attendance':    'Attendance',
     '/users':         'User Management',
     '/approvals':     'Identity Alerts',
@@ -99,10 +100,13 @@ export default function Layout() {
     '/faq':           'FAQ',
     '/group-chat':    'Group Chat',
     '/permissions':   'Permissions',
+    '/events':        'Events & Calendar',
+    '/opportunities': 'Opportunities',
   };
   const pageTitle = (() => {
     if (location.pathname.startsWith('/tickets/')) return 'Ticket Details';
     if (location.pathname.startsWith('/assignments/')) return 'Assignment Details';
+    if (location.pathname.startsWith('/timetable/') && location.pathname.endsWith('/edit')) return 'Edit Timetable Slot';
     if (location.pathname.startsWith('/admin/users/')) return 'User Details';
     if (location.pathname.startsWith('/users/') && !location.pathname.endsWith('/edit')) return 'User Details';
     if (location.pathname.startsWith('/users/') && location.pathname.endsWith('/edit')) return 'Edit User';
@@ -115,6 +119,8 @@ export default function Layout() {
       items: [
         { to: '/dashboard', icon: FiHome, label: 'Dashboard', end: true },
         { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
+        { to: '/events', icon: FiCalendar, label: 'Events' },
+        { to: '/opportunities', icon: FiLayers, label: 'Opportunities' },
         { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: hasPermission('canViewChat') },
       ],
     },

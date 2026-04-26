@@ -12,6 +12,7 @@ const { getScopeFilter } = require('./scopeGuard');
 // Section.studyYear remains the student level number (1, 2, 3, 4) inside that session.
 const normalizeString = (value) => String(value || '').trim();
 const normalizeCode = (value) => normalizeString(value).toUpperCase();
+const getRefId = (value) => String(value?._id || value || '');
 
 const ensureCollege = async ({ id, name, code, description = '' }) => {
   if (id) {
@@ -177,6 +178,13 @@ const buildStructureTree = async (user) => {
     Course.find({ isActive: true, ...courseScope }).sort({ name: 1 }).lean(),
     Section.find({ isActive: true, ...sectionScope })
       .sort({ studyYear: 1, name: 1 })
+      .populate('course', 'name code')
+      .populate('program', 'name code department')
+      .populate({
+        path: 'department',
+        select: 'name code college',
+        populate: { path: 'college', select: 'name code' },
+      })
       .populate('academicSession', 'label yearNumber')
       .populate('advisorFaculty', 'name systemId')
       .lean(),
@@ -185,23 +193,28 @@ const buildStructureTree = async (user) => {
   return colleges.map((college) => ({
     ...college,
     departments: departments
-      .filter((department) => String(department.college) === String(college._id))
+      .filter((department) => getRefId(department.college) === getRefId(college._id))
       .map((department) => ({
         ...department,
         programs: programs
-          .filter((program) => String(program.department) === String(department._id))
+          .filter((program) => getRefId(program.department) === getRefId(department._id))
           .map((program) => ({
             ...program,
             courses: courses
-              .filter((course) => String(course.program) === String(program._id))
+              .filter((course) => getRefId(course.program) === getRefId(program._id))
               .map((course) => ({
                 ...course,
                 sections: sections.filter(
                   (section) =>
-                    String(section.program) === String(program._id) &&
-                    String(section.course || '') === String(course._id)
+                    getRefId(section.program) === getRefId(program._id) &&
+                    getRefId(section.course) === getRefId(course._id)
                 ),
               })),
+            standaloneSections: sections.filter(
+              (section) =>
+                getRefId(section.program) === getRefId(program._id) &&
+                !getRefId(section.course)
+            ),
           })),
       })),
   }));

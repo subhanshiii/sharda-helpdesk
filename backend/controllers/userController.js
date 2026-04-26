@@ -15,6 +15,7 @@ const {
   findUserByIdentifier,
   isValidSystemId,
 } = require('../services/userProvisioningService');
+const { runAutomaticStudentPromotions } = require('../services/academicPromotionService');
 const { resolveEffectiveTier } = require('../utils/permissionDefaults');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,7 +97,7 @@ const applyStudentSectionContext = async (payload) => {
     collegeId: sectionDoc.department?.college?._id || payload.collegeId || null,
     department: sectionDoc.department?.name || payload.department || '',
     programId: sectionDoc.program?._id || payload.programId || null,
-    year: sectionDoc.academicSession?.yearNumber ? String(sectionDoc.academicSession.yearNumber) : (payload.year || ''),
+    year: sectionDoc.studyYear ? String(sectionDoc.studyYear) : (payload.year || ''),
     section: sectionDoc.name || payload.section || '',
   };
 };
@@ -338,6 +339,51 @@ const invalidateUserCaches = async (identifier) => {
   }
 };
 
+const buildUserListItem = (user) => {
+  const normalizedRole = normalizeRole(user.role);
+  const liveSection = user.sectionId && typeof user.sectionId === 'object' ? user.sectionId : null;
+  const sectionDepartment = liveSection?.department?.name || '';
+  const sectionYear = liveSection?.studyYear ? String(liveSection.studyYear) : '';
+  const sectionName = liveSection?.name || '';
+
+  const academicDisplay = normalizedRole === 'student'
+    ? {
+        department: sectionDepartment,
+        year: sectionYear,
+        section: sectionName,
+      }
+    : {
+        department: user.department || '',
+        year: user.year || '',
+        section: user.section || '',
+      };
+
+  return {
+    ...sanitizeUserDoc(user),
+    sectionContext: liveSection ? {
+      id: liveSection._id,
+      name: liveSection.name,
+      studyYear: liveSection.studyYear || null,
+      department: liveSection.department || null,
+      program: liveSection.program || null,
+      course: liveSection.course || null,
+      academicSession: liveSection.academicSession || null,
+    } : null,
+    academicDisplay,
+  };
+};
+
+const populateAcademicSectionContext = (query) => query.populate({
+  path: 'sectionId',
+  select: 'name studyYear department program course academicSession',
+  populate: [
+    { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+    { path: 'program', select: 'name code' },
+    { path: 'course', select: 'name code' },
+    { path: 'academicSession', select: 'label yearNumber' },
+  ],
+});
+
 exports.getUsers = async (req, res, next) => {
   try {
     const {
@@ -371,6 +417,16 @@ exports.getUsers = async (req, res, next) => {
       User.countDocuments(query),
       User.find(query)
         .select('-password')
+        .populate({
+          path: 'sectionId',
+          select: 'name studyYear department program course academicSession',
+          populate: [
+            { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+            { path: 'program', select: 'name code' },
+            { path: 'course', select: 'name code' },
+            { path: 'academicSession', select: 'label yearNumber' },
+          ],
+        })
         .sort({ createdAt: -1 })
         .skip((numericPage - 1) * numericLimit)
         .limit(numericLimit)
@@ -385,7 +441,7 @@ exports.getUsers = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / numericLimit),
       currentPage: numericPage,
-      data: users.map(sanitizeUserDoc),
+      data: users.map(buildUserListItem),
       meta: {
         roles: roleValues.filter(Boolean).sort(),
         departments: departmentValues.filter(Boolean).sort((a, b) => a.localeCompare(b)),
@@ -808,9 +864,11 @@ exports.getIdentityAlerts = async (req, res, next) => {
         .select('systemId name email role status updatedAt avatar profileImage avatarChoice')
         .sort({ updatedAt: -1 })
         .lean(),
-      User.find(mappingQuery)
-        .select('systemId name email department year section status avatar profileImage avatarChoice')
+      populateAcademicSectionContext(
+        User.find(mappingQuery)
+        .select('systemId name email role department year section sectionId status avatar profileImage avatarChoice')
         .sort({ createdAt: -1 })
+      )
         .lean(),
       User.find(recentLoginsQuery)
         .select('systemId name email role lastLogin avatar profileImage avatarChoice')
@@ -833,7 +891,7 @@ exports.getIdentityAlerts = async (req, res, next) => {
         inactiveUsers,
         expiringUsers,
         blockedUsers,
-        missingAcademicMapping,
+        missingAcademicMapping: missingAcademicMapping.map(buildUserListItem),
         recentLogins,
       },
     });

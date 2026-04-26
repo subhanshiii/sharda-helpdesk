@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FiCheckCircle, FiLock, FiSave, FiShield } from 'react-icons/fi';
-import { PageHeader, Alert, EmptyState, FullPageSpinner, HelpTooltip } from '../components/ui';
+import { FiCheckCircle, FiLock, FiSave, FiShield, FiX } from 'react-icons/fi';
+import { PageHeader, Alert, EmptyState, FullPageSpinner, HelpTooltip, Modal } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
 import { getAdminTierTone } from '../utils/helpers';
 
@@ -26,6 +26,7 @@ export default function PermissionsPage() {
   } = usePermissions();
   const [drafts, setDrafts] = useState({});
   const [savingRole, setSavingRole] = useState('');
+  const [showReference, setShowReference] = useState(false);
 
   const permissionMetaMap = useMemo(
     () => permissionDefinitions.reduce((acc, definition) => {
@@ -105,6 +106,87 @@ export default function PermissionsPage() {
 
   return (
     <div className="space-y-6">
+      <Modal open={showReference} onClose={() => setShowReference(false)} panelClassName="max-w-6xl">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl font-bold text-gray-900">Permissions Reference</h2>
+              <p className="mt-1 text-sm text-gray-500">Full tier details and the permission catalog live here so the main page can stay focused on the editable policy matrix.</p>
+            </div>
+            <button type="button" onClick={() => setShowReference(false)} className="rounded-2xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+              <FiX size={18} />
+            </button>
+          </div>
+
+          <div className="mt-6 space-y-6">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-xl font-bold text-gray-900">Tier Access Model</h3>
+                  <p className="mt-1 text-sm text-gray-500">Each tier maps to a predefined elevated access level. Higher tiers inherit the permissions of lower tiers automatically.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  Authority order: Section Moderator → Program Coordinator → Department Admin → College Admin → Admin → Super Admin
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-5">
+                {Object.entries(groupedTierDefinitions).map(([group, tiers]) => (
+                  <div key={group}>
+                    <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{group}</div>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {tiers.map((tier) => {
+                        const includedPermissions = orderedPermissions.filter((permission) => tier.permissions?.[permission.key]);
+                        return (
+                          <div key={tier.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`badge ${getAdminTierTone(tier.key)}`}>{tier.label}</span>
+                                  <span className="badge bg-slate-100 text-slate-600">Tier {tier.level}</span>
+                                  <span className="badge bg-white text-slate-600 border border-slate-200">{tier.scopeLabel}</span>
+                                </div>
+                                <p className="mt-3 text-sm text-gray-600">{tier.description}</p>
+                              </div>
+                              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                                {includedPermissions.length} inherited permissions
+                              </div>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {includedPermissions.map((permission) => (
+                                <span key={permission.key} className="badge bg-slate-100 text-slate-700" title={permission.description}>
+                                  {permission.label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              {orderedPermissions.map((permission) => (
+                <div key={permission.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-base font-bold text-gray-900">{permission.label}</p>
+                      <p className="mt-1 text-sm text-gray-500">{permission.description}</p>
+                    </div>
+                    <FiCheckCircle size={16} className="text-emerald-500" />
+                  </div>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{permission.group}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       <PageHeader
         title="Permissions"
         description={isSuperAdmin
@@ -127,50 +209,37 @@ export default function PermissionsPage() {
       <div className="card p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-xl font-bold text-gray-900">Tier Access Model</h2>
-            <p className="mt-1 text-sm text-gray-500">Each tier maps to a predefined elevated access level. Higher tiers inherit the permissions of lower tiers automatically.</p>
+            <h2 className="font-display text-xl font-bold text-gray-900">Permission Overview</h2>
+            <p className="mt-1 text-sm text-gray-500">Keep the page focused on editable role access. Open the reference view only when you need the full tier map or permission dictionary.</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Authority order: Section Moderator → Program Coordinator → Department Admin → College Admin → Admin → Super Admin
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={() => setShowReference(true)} className="btn-secondary">
+              Read Full Access Model
+            </button>
           </div>
         </div>
 
-        <div className="mt-5 space-y-5">
-          {Object.entries(groupedTierDefinitions).map(([group, tiers]) => (
-            <div key={group}>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{group}</div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {tiers.map((tier) => {
-                  const includedPermissions = orderedPermissions.filter((permission) => tier.permissions?.[permission.key]);
-                  return (
-                    <div key={tier.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`badge ${getAdminTierTone(tier.key)}`}>{tier.label}</span>
-                            <span className="badge bg-slate-100 text-slate-600">Tier {tier.level}</span>
-                            <span className="badge bg-white text-slate-600 border border-slate-200">{tier.scopeLabel}</span>
-                          </div>
-                          <p className="mt-3 text-sm text-gray-600">{tier.description}</p>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                          {includedPermissions.length} inherited permissions
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {includedPermissions.map((permission) => (
-                          <span key={permission.key} className="badge bg-slate-100 text-slate-700" title={permission.description}>
-                            {permission.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Roles</p>
+            <p className="mt-2 font-display text-3xl font-black text-slate-900">{nonAdminRolePermissions.length}</p>
+            <p className="mt-2 text-sm text-slate-500">Editable base role policies.</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Permission Keys</p>
+            <p className="mt-2 font-display text-3xl font-black text-slate-900">{orderedPermissions.length}</p>
+            <p className="mt-2 text-sm text-slate-500">Available capability switches in the model.</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Admin Tiers</p>
+            <p className="mt-2 font-display text-3xl font-black text-slate-900">{adminTierDefinitions.length}</p>
+            <p className="mt-2 text-sm text-slate-500">Inherited authority layers above role access.</p>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">System Managed</p>
+            <p className="mt-2 font-display text-3xl font-black text-slate-900">{SYSTEM_MANAGED_PERMISSIONS.size}</p>
+            <p className="mt-2 text-sm text-slate-500">Reserved permissions controlled outside the role matrix.</p>
+          </div>
         </div>
       </div>
 
@@ -270,20 +339,6 @@ export default function PermissionsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        {orderedPermissions.map((permission) => (
-          <div key={permission.key} className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-display text-base font-bold text-gray-900">{permission.label}</p>
-                <p className="mt-1 text-sm text-gray-500">{permission.description}</p>
-              </div>
-              <FiCheckCircle size={16} className="text-emerald-500" />
-            </div>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{permission.group}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

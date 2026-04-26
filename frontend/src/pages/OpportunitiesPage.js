@@ -6,6 +6,7 @@ import { PageHeader, EmptyState, Alert, ConfirmDialog } from '../components/ui';
 import { OpportunitiesSkeleton } from '../components/skeletons/SkeletonComponents';
 import { useOptimisticUpdate } from '../hooks/useOptimisticUpdate';
 import { formatDate } from '../utils/helpers';
+import VisibilitySection from '../components/content/VisibilitySection';
 import {
   FiPlus, FiSearch, FiBookmark, FiExternalLink, FiX,
   FiCalendar, FiMapPin, FiDollarSign, FiTag, FiBriefcase,
@@ -101,6 +102,9 @@ const OpportunityModal = memo(({ onClose, onSaved }) => {
   const [form, setForm] = useState({
     title:'', description:'', type:'Internship', company:'', location:'Remote',
     externalLink:'', deadline:'', stipend:'', eligibility:'', tags:'',
+    audienceTiers:[], audienceRoles:[],
+    audienceCollegeId:'', audienceDepartmentId:'', audienceProgramId:'', audienceCourseId:'', audienceStudyYear:'', audienceSectionId:'',
+    audienceDepartments:[], audienceYears:[], audienceSections:[],
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -157,6 +161,7 @@ const OpportunityModal = memo(({ onClose, onSaved }) => {
           </div>
           <div><label className="label">Apply Link</label><div className="relative"><FiExternalLink className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/><input className="input pl-9" value={form.externalLink} onChange={e => setForm(f => ({...f,externalLink:e.target.value}))} placeholder="https://apply.example.com"/></div></div>
           <div><label className="label">Tags</label><div className="relative"><FiTag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/><input className="input pl-9" value={form.tags} onChange={e => setForm(f => ({...f,tags:e.target.value}))} placeholder="React, Python, ML (comma-separated)"/></div></div>
+          <VisibilitySection form={form} compact onChange={(key, value) => setForm(f => ({ ...f, [key]: value }))} />
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">{loading ? 'Saving...' : 'Post Opportunity'}</button>
             <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
@@ -177,11 +182,26 @@ export default function OpportunitiesPage() {
   const [error, setError]         = useState('');
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
   const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
+  const [totalSavedCount, setTotalSavedCount] = useState(0);
 
   // useOptimisticUpdate: bookmarks update instantly without waiting for server
   const { data: opportunities, setData: setOpportunities, optimisticUpdate } = useOptimisticUpdate([]);
 
   const canPost = hasPermission('canPostNotice');
+
+  // Load total saved count
+  useEffect(() => {
+    const loadSavedCount = async () => {
+      try {
+        const res = await API.get('/opportunities/bookmarked');
+        const allSaved = Array.isArray(res.data?.data) ? res.data.data : [];
+        setTotalSavedCount(allSaved.length);
+      } catch (requestError) {
+        setTotalSavedCount(0);
+      }
+    };
+    loadSavedCount();
+  }, []);
 
   const fetchOpps = useCallback(async (page = 1) => {
     setLoading(true);
@@ -220,6 +240,8 @@ export default function OpportunitiesPage() {
         items => items.map(o => o._id === id ? { ...o, isBookmarked: !o.isBookmarked } : o),
         () => API.put(`/opportunities/${id}/bookmark`)
       );
+      // Update total saved count
+      setTotalSavedCount((prev) => currentlyBookmarked ? prev - 1 : prev + 1);
       toast.success(currentlyBookmarked ? 'Bookmark removed' : 'Bookmarked!');
       if (showBookmarked && currentlyBookmarked) {
         setOpportunities(prev => prev.filter(o => o._id !== id));
@@ -242,8 +264,6 @@ export default function OpportunitiesPage() {
       setDeleteState((current) => ({ ...current, loading: false }));
     }
   }, [deleteState.id, setOpportunities]);
-
-  const bookmarkedCount = opportunities.filter(o => o.isBookmarked).length;
 
   return (
     <div>
@@ -291,7 +311,7 @@ export default function OpportunitiesPage() {
         <button onClick={() => setShowBookmarked(!showBookmarked)}
           className={`btn-secondary gap-2 ${showBookmarked ? 'border-yellow-400 text-yellow-600 bg-yellow-50' : ''}`}>
           <FiBookmark size={15} className={showBookmarked ? 'fill-current' : ''}/>
-          Saved {bookmarkedCount > 0 && `(${bookmarkedCount})`}
+          Saved {totalSavedCount > 0 && `(${totalSavedCount})`}
         </button>
         {(activeType || search || showBookmarked) && (
           <button onClick={() => { setActiveType(''); setSearch(''); setShowBookmarked(false); }}

@@ -4,18 +4,26 @@ import toast from 'react-hot-toast';
 import { FiUpload, FiX } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, PageHeader } from '../components/ui';
+import VisibilitySection from '../components/content/VisibilitySection';
 
 const CATEGORY_OPTIONS = [
   { value: 'academic', label: 'Academic' },
-  { value: 'event', label: 'Events' },
-  { value: 'opportunity', label: 'Opportunities' },
+  { value: 'administrative', label: 'Administrative' },
+  { value: 'student-services', label: 'Student Services' },
 ];
 
 const emptyAudience = {
-  audienceRoles: '',
-  audienceDepartments: '',
-  audienceYears: '',
-  audienceSections: '',
+  audienceTiers: [],
+  audienceRoles: [],
+  audienceCollegeId: '',
+  audienceDepartmentId: '',
+  audienceProgramId: '',
+  audienceCourseId: '',
+  audienceStudyYear: '',
+  audienceSectionId: '',
+  audienceDepartments: [],
+  audienceYears: [],
+  audienceSections: [],
 };
 
 export default function CreateNoticePage() {
@@ -116,44 +124,10 @@ export default function CreateNoticePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">Audience Roles</label>
-              <input
-                className="input"
-                value={form.audienceRoles}
-                onChange={(event) => setForm((current) => ({ ...current, audienceRoles: event.target.value }))}
-                placeholder="student, faculty"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Departments</label>
-              <input
-                className="input"
-                value={form.audienceDepartments}
-                onChange={(event) => setForm((current) => ({ ...current, audienceDepartments: event.target.value }))}
-                placeholder="CSE, IT"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Years</label>
-              <input
-                className="input"
-                value={form.audienceYears}
-                onChange={(event) => setForm((current) => ({ ...current, audienceYears: event.target.value }))}
-                placeholder="1, 2"
-              />
-            </div>
-            <div>
-              <label className="label">Audience Sections</label>
-              <input
-                className="input"
-                value={form.audienceSections}
-                onChange={(event) => setForm((current) => ({ ...current, audienceSections: event.target.value }))}
-                placeholder="A, B"
-              />
-            </div>
-          </div>
+          <VisibilitySection
+            form={form}
+            onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))}
+          />
 
           <div>
             <label className="label">Attachments</label>

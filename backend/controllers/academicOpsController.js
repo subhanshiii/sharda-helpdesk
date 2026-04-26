@@ -6,6 +6,7 @@ const Subject = require('../models/Subject');
 const SectionSubject = require('../models/SectionSubject');
 const User = require('../models/User');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
+const { buildTimetableQuery } = require('../utils/timetableQuery');
 
 const canManageAcademicOps = (user) => ['faculty', 'admin'].includes(normalizeRole(user.role));
 
@@ -33,15 +34,6 @@ const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: user
     populate: [{ path: 'department', select: 'name' }],
   });
 
-const getFacultyAssignments = async (facultyId) => SectionSubject.find({ faculty: facultyId, isActive: true })
-  .select('section subject')
-  .lean();
-
-const getFacultySectionIds = async (facultyId) => {
-  const assignments = await getFacultyAssignments(facultyId);
-  return [...new Set(assignments.map((assignment) => assignment.section?.toString()).filter(Boolean))];
-};
-
 const ensureFacultySectionAccess = async (user, sectionId, subjectId = null) => {
   if (normalizeRole(user.role) !== 'faculty') {
     return;
@@ -52,9 +44,12 @@ const ensureFacultySectionAccess = async (user, sectionId, subjectId = null) => 
   }
 
   const query = {
-    faculty: user.id,
     isActive: true,
     section: sectionId,
+    $or: [
+      { faculty: user.id },
+      { facultyMembers: user.id },
+    ],
   };
 
   if (subjectId) {
@@ -76,7 +71,7 @@ const toMinutes = (value = '') => {
 
 const overlaps = (startA, endA, startB, endB) => startA < endB && startB < endA;
 
-const buildTimetablePayload = async (body, userId) => {
+const buildTimetablePayload = async (body, userId, userDoc = null) => {
   const payload = {
     ...body,
     faculty: body.faculty || userId,
@@ -85,7 +80,7 @@ const buildTimetablePayload = async (body, userId) => {
   };
 
   if (payload.sectionId) {
-    const section = await Section.findById(payload.sectionId).populate('department');
+    const section = await Section.findById(payload.sectionId).populate('department academicSession');
     if (!section) {
       const error = new Error('Section not found');
       error.statusCode = 404;
@@ -93,6 +88,13 @@ const buildTimetablePayload = async (body, userId) => {
     }
     payload.section = section.name;
     payload.department = section.department?.name || body.department || '';
+    payload.year = body.year || String(section.academicSession?.yearNumber || section.studyYear || '');
+  } else {
+    // Backward compatibility: use body fields if not using sectionId
+    // Allow empty values for admins who don't have specific department/year/section
+    payload.department = body.department || userDoc?.department || '';
+    payload.year = body.year || userDoc?.year || '';
+    payload.section = body.section || userDoc?.section || '';
   }
 
   if (payload.subjectId) {
@@ -117,6 +119,7 @@ const ensureTimetableConflicts = async (payload, excludeId = null) => {
   const baseQuery = {
     dayOfWeek: payload.dayOfWeek,
     isActive: true,
+    isDeleted: false,
   };
   if (excludeId) baseQuery._id = { $ne: excludeId };
 
@@ -152,27 +155,27 @@ const ensureTimetableConflicts = async (payload, excludeId = null) => {
 
 exports.getTimetable = async (req, res, next) => {
   try {
-    const role = normalizeRole(req.user.role);
-    const query = { isActive: true };
-
-    if (role === 'student') {
-      const enrollment = await getActiveEnrollment(req.user.id);
-      if (enrollment?.section?._id) {
-        query.sectionId = enrollment.section._id;
-      } else {
-        query.department = req.user.department;
-        query.year = req.user.year;
-        query.section = req.user.section;
-      }
-    } else if (role === 'faculty') {
-      query.faculty = req.user.id;
-    } else if (req.query.sectionId) {
-      query.sectionId = req.query.sectionId;
-    }
+    const query = await buildTimetableQuery(req.user, {
+      collegeId: req.query.collegeId,
+      departmentId: req.query.departmentId,
+      programId: req.query.programId,
+      courseId: req.query.courseId,
+      studyYear: req.query.studyYear,
+      sectionId: req.query.sectionId,
+    });
 
     const entries = await TimetableEntry.find(query)
       .populate('faculty', 'name email role department')
-      .populate('sectionId', 'name')
+      .populate({
+        path: 'sectionId',
+        select: 'name studyYear program course department academicSession',
+        populate: [
+          { path: 'program', select: 'name code' },
+          { path: 'course', select: 'name code' },
+          { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+          { path: 'academicSession', select: 'label yearNumber' },
+        ],
+      })
       .populate('subjectId', 'name code')
       .sort({ dayOfWeek: 1, startTime: 1 })
       .lean();
@@ -189,7 +192,7 @@ exports.createTimetableEntry = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to manage timetable' });
     }
 
-    const payload = await buildTimetablePayload(req.body, req.user.id);
+    const payload = await buildTimetablePayload(req.body, req.user.id, req.user);
     await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     await ensureTimetableConflicts(payload);
 
@@ -220,6 +223,38 @@ exports.createTimetableEntry = async (req, res, next) => {
   }
 };
 
+exports.getTimetableEntry = async (req, res, next) => {
+  try {
+    const scopeQuery = await buildTimetableQuery(req.user, {});
+    const query = scopeQuery.$or || scopeQuery.sectionId || scopeQuery.department
+      ? { $and: [{ _id: req.params.id }, scopeQuery] }
+      : { _id: req.params.id, isActive: true, isDeleted: false };
+
+    const entry = await TimetableEntry.findOne(query)
+      .populate('faculty', 'name email role department')
+      .populate({
+        path: 'sectionId',
+        select: 'name studyYear program course department academicSession',
+        populate: [
+          { path: 'program', select: 'name code' },
+          { path: 'course', select: 'name code' },
+          { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+          { path: 'academicSession', select: 'label yearNumber' },
+        ],
+      })
+      .populate('subjectId', 'name code')
+      .lean();
+
+    if (!entry) {
+      return res.status(404).json({ success: false, message: 'Timetable entry not found' });
+    }
+
+    res.status(200).json({ success: true, data: entry });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.updateTimetableEntry = async (req, res, next) => {
   try {
     if (!canManageAcademicOps(req.user)) {
@@ -230,7 +265,7 @@ exports.updateTimetableEntry = async (req, res, next) => {
       ? { _id: req.params.id }
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
-    const payload = await buildTimetablePayload(req.body, req.user.id);
+    const payload = await buildTimetablePayload(req.body, req.user.id, req.user);
     await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     await ensureTimetableConflicts(payload, req.params.id);
 
@@ -270,12 +305,21 @@ exports.deleteTimetableEntry = async (req, res, next) => {
       ? { _id: req.params.id }
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
-    const entry = await TimetableEntry.findOne(query);
+    // FIX #11: Implement soft delete instead of permanent deletion
+    const entry = await TimetableEntry.findOneAndUpdate(
+      query,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id,
+      },
+      { new: true }
+    );
+    
     if (!entry) {
       return res.status(404).json({ success: false, message: 'Timetable entry not found' });
     }
 
-    await entry.deleteOne();
     res.status(200).json({ success: true, message: 'Timetable entry deleted' });
   } catch (error) {
     next(error);
@@ -342,7 +386,7 @@ exports.getAttendanceOptions = async (req, res, next) => {
 exports.getAttendanceSessions = async (req, res, next) => {
   try {
     const role = normalizeRole(req.user.role);
-    const query = {};
+    const query = { isDeleted: false };  // FIX #11: Soft delete support
 
     if (role === 'student') {
       const enrollment = await getActiveEnrollment(req.user.id);
@@ -355,6 +399,9 @@ exports.getAttendanceSessions = async (req, res, next) => {
       }
     } else if (role === 'faculty') {
       const allowedSectionIds = await getFacultySectionIds(req.user.id);
+      if (!allowedSectionIds.length) {
+        return res.status(200).json({ success: true, count: 0, data: [] });
+      }
       query.sectionId = { $in: allowedSectionIds };
       query.faculty = req.user.id;
       if (req.query.sectionId && !allowedSectionIds.includes(String(req.query.sectionId))) {
@@ -364,13 +411,19 @@ exports.getAttendanceSessions = async (req, res, next) => {
       query.sectionId = req.query.sectionId;
     }
 
+    // FIX #8, #15: Add pagination with sensible limits
+    const limit = Math.min(parseInt(req.query.limit) || 40, 100);
+    const skip = parseInt(req.query.skip) || 0;
+
+    // FIX #13: Optimize queries - use projection to limit fields returned
     const sessions = await AttendanceSession.find(query)
       .populate('faculty', 'name email role department')
-      .populate('records.student', 'name email department year section')
+      .populate('records.student', 'name email')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')
       .sort({ date: -1 })
-      .limit(40)
+      .skip(skip)
+      .limit(limit)
       .lean();
 
     const data = role === 'student'
@@ -392,13 +445,50 @@ exports.createAttendanceSession = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to manage attendance' });
     }
 
-    const payload = await buildTimetablePayload(req.body, req.user.id);
+    const payload = await buildTimetablePayload(req.body, req.user.id, req.user);
     await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
+    
+    // CRITICAL FIX #1: Prevent duplicate attendance for same session
+    if (payload.sectionId && payload.date && payload.title) {
+      const existing = await AttendanceSession.findOne({
+        sectionId: payload.sectionId,
+        date: { $gte: new Date(payload.date).setHours(0, 0, 0, 0), $lt: new Date(payload.date).setHours(23, 59, 59, 999) },
+        title: payload.title,
+        isDeleted: false,
+      });
+      if (existing) {
+        const error = new Error('Attendance already marked for this session today. Update the existing record instead.');
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+    
+    // CRITICAL FIX #2: Validate all students are actually enrolled in section
+    const recordsArray = Array.isArray(req.body.records) ? req.body.records : [];
+    if (payload.sectionId && recordsArray.length > 0) {
+      const validStudentIds = await Enrollment.find({
+        section: payload.sectionId,
+        status: 'active',
+      }).distinct('student');
+      
+      const submittedStudentIds = recordsArray.map(r => String(r.student));
+      const invalidStudents = submittedStudentIds.filter(
+        studentId => !validStudentIds.some(id => String(id) === studentId)
+      );
+      
+      if (invalidStudents.length > 0) {
+        const error = new Error(`${invalidStudents.length} student(s) are not enrolled in this section`);
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
     const session = await AttendanceSession.create({
       ...payload,
       faculty: req.user.id,
       createdBy: req.user.id,
-      records: Array.isArray(req.body.records) ? req.body.records : [],
+      records: recordsArray,
+      isDeleted: false,
     });
 
     const populated = await AttendanceSession.findById(session._id)
@@ -424,7 +514,7 @@ exports.updateAttendanceSession = async (req, res, next) => {
       ? { _id: req.params.id }
       : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
 
-    const payload = await buildTimetablePayload(req.body, req.user.id);
+    const payload = await buildTimetablePayload(req.body, req.user.id, req.user);
     await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     const update = {
       title: payload.title,
@@ -458,6 +548,37 @@ exports.updateAttendanceSession = async (req, res, next) => {
     }
 
     res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteAttendanceSession = async (req, res, next) => {
+  try {
+    if (!canManageAcademicOps(req.user)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to manage attendance' });
+    }
+
+    const query = isAdminRole(req.user.role)
+      ? { _id: req.params.id }
+      : { _id: req.params.id, $or: [{ faculty: req.user.id }, { createdBy: req.user.id }] };
+
+    // Soft delete - FIX #11: Soft delete support
+    const session = await AttendanceSession.findOneAndUpdate(
+      query,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id,
+      },
+      { new: true }
+    );
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Attendance session not found' });
+    }
+
+    res.status(200).json({ success: true, message: 'Attendance session deleted' });
   } catch (error) {
     next(error);
   }

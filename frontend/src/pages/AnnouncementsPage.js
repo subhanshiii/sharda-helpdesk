@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   FiAlertCircle,
-  FiArrowUpRight,
   FiBookmark,
   FiDownload,
   FiFilter,
   FiPlus,
-  FiCalendar,
   FiSearch,
   FiTrash2,
 } from 'react-icons/fi';
@@ -17,13 +15,6 @@ import { Alert, ConfirmDialog, EmptyState, PageHeader } from '../components/ui';
 import { formatRelative, getAssetUrl, getRoleLabel } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
-
-const CATEGORY_OPTIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'academic', label: 'Academic' },
-  { value: 'event', label: 'Events' },
-  { value: 'opportunity', label: 'Opportunities' },
-];
 
 const PRIORITY_STYLES = {
   high: { tone: 'border-red-200 bg-red-50 text-red-700', label: 'Urgent' },
@@ -190,6 +181,14 @@ export default function AnnouncementsPage() {
 
   const canManage = hasPermission('canPostNotice');
 
+  const categoryOptions = useMemo(() => {
+    const categories = [...new Set(items.map((item) => String(item.category || '').trim()).filter(Boolean))];
+    return [{ value: 'all', label: 'All' }, ...categories.map((value) => ({
+      value,
+      label: value.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
+    }))];
+  }, [items]);
+
   useEffect(() => {
     let active = true;
 
@@ -260,9 +259,9 @@ export default function AnnouncementsPage() {
     <div className="space-y-5">
       <ConfirmDialog
         open={deleteState.open}
-        title="Delete notice"
+        title="Delete item"
         description="Are you sure you want to delete this notice? This action cannot be undone."
-        confirmLabel="Delete Notice"
+        confirmLabel="Delete"
         loading={deleteState.loading}
         onConfirm={confirmDeleteItem}
         onClose={() => setDeleteState({ open: false, noticeId: '', loading: false })}
@@ -271,20 +270,11 @@ export default function AnnouncementsPage() {
       <div className="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
         <PageHeader
           title="Notice Board"
-          subtitle="Important university updates, arranged for fast scanning."
+          subtitle="A focused board for official notices that need attention without duplicating content from dedicated event or opportunity modules."
           action={canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => navigate('/notice-board/new')} className="btn-primary">
-                <FiPlus size={15} /> Publish Notice
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/academic-calendar/manage')}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <FiCalendar size={15} /> Academic calendar
-              </button>
-            </div>
+            <button type="button" onClick={() => navigate('/notice-board/new')} className="btn-primary">
+              <FiPlus size={15} /> Publish Notice
+            </button>
           ) : null}
         />
 
@@ -307,7 +297,7 @@ export default function AnnouncementsPage() {
       <section className="card p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
-            {CATEGORY_OPTIONS.map((option) => (
+            {categoryOptions.map((option) => (
               <button
                 key={option.value}
                 onClick={() => setCategory(option.value)}
@@ -380,15 +370,15 @@ export default function AnnouncementsPage() {
               <ul className="mt-3 space-y-3 text-sm leading-6 text-gray-600">
                 <li className="flex gap-2">
                   <FiBookmark className="mt-1 text-red-500" size={14} />
-                  Start with the lead notice for the most important update.
+                  Start with the lead notice for the highest-priority official update.
                 </li>
                 <li className="flex gap-2">
                   <FiSearch className="mt-1 text-blue-500" size={14} />
-                  Use live search to narrow the board instantly.
+                  Use live search to narrow notices instantly by topic, title, or category.
                 </li>
                 <li className="flex gap-2">
-                  <FiArrowUpRight className="mt-1 text-emerald-500" size={14} />
-                  Use category chips when you only need academic, event, or opportunity updates.
+                  <FiFilter className="mt-1 text-emerald-500" size={14} />
+                  Use the category chips to focus on one notice lane at a time instead of scanning everything.
                 </li>
               </ul>
             </div>
@@ -401,7 +391,7 @@ export default function AnnouncementsPage() {
                   <strong>{summary.urgent}</strong>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-slate-50 px-3.5 py-3 text-sm text-gray-600">
-                  This board is already filtered for your role, department, year, and section, so you can trust what appears here.
+                  This board stays focused on notice content only. Events and opportunities live in their dedicated modules, while this feed stays filtered to notices relevant to your audience.
                 </div>
               </div>
             </div>

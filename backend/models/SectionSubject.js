@@ -20,6 +20,12 @@ const sectionSubjectSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    facultyMembers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     semester: {
       type: String,
       default: '',

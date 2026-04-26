@@ -405,11 +405,23 @@ exports.getMe = async (req, res, next) => {
 // @access  Private
 exports.updateProfile = async (req, res, next) => {
   try {
-    const allowedFields = ['name', 'department', 'year', 'section', 'enrollmentId', 'avatarChoice'];
+    const allowedFields = ['name', 'avatarChoice'];
     const updates = {};
-    allowedFields.forEach(field => {
+    allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
+
+    if (updates.name !== undefined) {
+      updates.name = String(updates.name || '').trim();
+      if (!updates.name) {
+        return res.status(400).json({ success: false, message: 'Name is required' });
+      }
+    }
+
+    if (updates.avatarChoice !== undefined) {
+      updates.avatarChoice = String(updates.avatarChoice || '').trim() || null;
+    }
+
     if (req.body.removeProfileImage) {
       updates.profileImage = null;
     }

@@ -45,7 +45,37 @@ const contentSchema = new mongoose.Schema(
       default: 'medium',
     },
     targetAudience: {
+      tiers: [{ type: String, trim: true }],
       roles: [{ type: String, trim: true }],
+      collegeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'College',
+        default: null,
+      },
+      departmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
+        default: null,
+      },
+      programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Program',
+        default: null,
+      },
+      courseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        default: null,
+      },
+      studyYear: {
+        type: Number,
+        default: null,
+      },
+      sectionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Section',
+        default: null,
+      },
       departments: [{ type: String, trim: true }],
       years: [{ type: String, trim: true }],
       sections: [{ type: String, trim: true }],
@@ -88,6 +118,11 @@ const contentSchema = new mongoose.Schema(
 contentSchema.index({ contentType: 1, status: 1, publishAt: -1 });
 contentSchema.index({ startsAt: 1, endsAt: 1 });
 contentSchema.index({ category: 1, priority: 1 });
+contentSchema.index({ 'targetAudience.collegeId': 1 });
+contentSchema.index({ 'targetAudience.departmentId': 1 });
+contentSchema.index({ 'targetAudience.programId': 1 });
+contentSchema.index({ 'targetAudience.courseId': 1 });
+contentSchema.index({ 'targetAudience.sectionId': 1 });
 contentSchema.index(
   { 'source.legacyModel': 1, 'source.legacyId': 1 },
   {

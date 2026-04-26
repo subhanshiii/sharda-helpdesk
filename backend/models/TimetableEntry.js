@@ -28,17 +28,17 @@ const timetableEntrySchema = new mongoose.Schema(
     department: {
       type: String,
       trim: true,
-      required: [true, 'Department is required'],
+      default: 'General',
     },
     year: {
       type: String,
       trim: true,
-      required: [true, 'Year is required'],
+      default: '',
     },
     section: {
       type: String,
       trim: true,
-      required: [true, 'Section is required'],
+      default: 'General',
     },
     sectionId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -84,6 +84,20 @@ const timetableEntrySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   { timestamps: true }

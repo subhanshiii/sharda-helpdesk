@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { FiUpload, FiX } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, PageHeader } from '../components/ui';
+import VisibilitySection from '../components/content/VisibilitySection';
 
 export default function CreateAssignmentPage() {
   const navigate = useNavigate();
@@ -13,9 +14,14 @@ export default function CreateAssignmentPage() {
     subject: '',
     dueDate: '',
     maxScore: 100,
-    audienceDepartments: '',
-    audienceYears: '',
-    audienceSections: '',
+    audienceTiers: [],
+    audienceRoles: [],
+    audienceCollegeId: '',
+    audienceDepartmentId: '',
+    audienceProgramId: '',
+    audienceCourseId: '',
+    audienceStudyYear: '',
+    audienceSectionId: '',
     allowLateSubmissions: false,
   });
   const [files, setFiles] = useState([]);
@@ -82,20 +88,7 @@ export default function CreateAssignmentPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label className="label">Departments</label>
-              <input className="input" value={form.audienceDepartments} onChange={(event) => setForm((prev) => ({ ...prev, audienceDepartments: event.target.value }))} placeholder="CSE, IT" />
-            </div>
-            <div>
-              <label className="label">Years</label>
-              <input className="input" value={form.audienceYears} onChange={(event) => setForm((prev) => ({ ...prev, audienceYears: event.target.value }))} placeholder="2, 3" />
-            </div>
-            <div>
-              <label className="label">Sections</label>
-              <input className="input" value={form.audienceSections} onChange={(event) => setForm((prev) => ({ ...prev, audienceSections: event.target.value }))} placeholder="A, B" />
-            </div>
-          </div>
+          <VisibilitySection form={form} onChange={(key, value) => setForm((prev) => ({ ...prev, [key]: value }))} />
 
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input type="checkbox" checked={form.allowLateSubmissions} onChange={(event) => setForm((prev) => ({ ...prev, allowLateSubmissions: event.target.checked }))} />
