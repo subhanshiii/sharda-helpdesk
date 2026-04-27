@@ -5,7 +5,12 @@
 const Ticket = require('../models/Ticket');
 const User   = require('../models/User');
 const { del, delPattern, withCache, TTL, KEYS } = require('../config/cache');
-const { isSupportRole, normalizeRole } = require('../utils/roleHelpers');
+const {
+  buildRoleInQuery,
+  getStoredRolesForRole,
+  isSupportRole,
+  normalizeRole,
+} = require('../utils/roleHelpers');
 
 const getStats = async (user) => {
   const cacheKey = KEYS.stats(user.id, user.role);
@@ -51,8 +56,8 @@ const getStats = async (user) => {
     let adminStats = {};
     if (isSupportRole(user.role)) {
       const [totalUsers, totalStaff] = await Promise.all([
-        User.countDocuments({ role: 'student' }),
-        User.countDocuments({ role: { $in: ['staff', 'admin', 'agent', 'faculty'] } }),
+        User.countDocuments({ role: buildRoleInQuery(['student']) }),
+        User.countDocuments({ role: buildRoleInQuery(['faculty', 'staff', 'admin']) }),
       ]);
       adminStats = { totalUsers, totalStaff };
     }
@@ -74,8 +79,8 @@ const invalidateStatsCache = async (userId, userRole) => {
       del(KEYS.stats(userId, userRole)),
       delPattern('stats:admin:*'),
       delPattern('stats:staff:*'),
-      delPattern('stats:agent:*'),
       delPattern('stats:faculty:*'),
+      ...getStoredRolesForRole(userRole).map((role) => delPattern(`stats:${role}:*`)),
     ]);
   } catch (err) {
     console.warn('Stats cache invalidation error:', err.message);

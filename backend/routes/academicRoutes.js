@@ -14,7 +14,7 @@ const {
   updateAttendanceSession,
   deleteAttendanceSession,
 } = require('../controllers/academicOpsController');
-const { protect, permissionMiddleware, anyPermissionMiddleware } = require('../middleware/auth');
+const { verifyAuth, permissionMiddleware, anyPermissionMiddleware, checkPermission } = require('../middleware/auth');
 
 const academicReadAccess = (req, res, next) => {
   const resource = req.params.resource;
@@ -30,7 +30,7 @@ const academicReadAccess = (req, res, next) => {
   )(req, res, next);
 };
 
-router.use(protect);
+router.use(verifyAuth);
 
 router.get('/reports/programs', permissionMiddleware('canManageAcademics'), academicController.getProgramReport);
 router.get('/reports/enrollments', permissionMiddleware('canManageAcademics'), academicController.getEnrollmentReport);
@@ -51,9 +51,9 @@ router.delete('/:resource(colleges|departments|programs|courses|years|academic-s
 
 router.get('/timetable', getTimetable);
 router.get('/timetable/:id', getTimetableEntry);
-router.post('/timetable', permissionMiddleware('canManageTimetable'), createTimetableEntry);
-router.put('/timetable/:id', permissionMiddleware('canManageTimetable'), updateTimetableEntry);
-router.delete('/timetable/:id', permissionMiddleware('canManageTimetable'), deleteTimetableEntry);
+router.post('/timetable', checkPermission('create', 'timetable'), createTimetableEntry);
+router.put('/timetable/:id', checkPermission('edit', 'timetable'), updateTimetableEntry);
+router.delete('/timetable/:id', checkPermission('delete', 'timetable'), deleteTimetableEntry);
 
 router.get('/attendance/options', getAttendanceOptions);
 router.get('/attendance', getAttendanceSessions);

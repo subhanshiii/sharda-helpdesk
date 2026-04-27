@@ -14,10 +14,12 @@ const buildLifecycleSnapshot = ({
   const isExpired = Boolean(expiryDate && new Date(expiryDate) <= now);
   const verificationComplete = Boolean(emailVerified);
   const credentialReady = verificationComplete && !passwordNeedsSetup;
+  const accessApproved = verificationComplete && credentialReady && status === 'approved';
   const assignmentRequired = ['student', 'faculty'].includes(normalizedRole);
-  const assignmentReady = assignmentRequired ? Boolean(isAssigned) : true;
-  const accessApproved = status === 'approved';
-  const operationallyActive = accessApproved && isActive && !isExpired;
+  const rawAssignmentReady = assignmentRequired ? Boolean(isAssigned) : true;
+  const assignmentReady = accessApproved && rawAssignmentReady;
+  const hierarchyComplete = verificationComplete && credentialReady && accessApproved && assignmentReady;
+  const operationallyActive = hierarchyComplete && isActive && !isExpired;
 
   const stages = [
     {
@@ -36,30 +38,52 @@ const buildLifecycleSnapshot = ({
       key: 'credentials',
       label: 'Password Ready',
       complete: credentialReady,
-      description: credentialReady ? 'User can authenticate with a managed password.' : 'Password setup still needs to be completed.',
+      description: credentialReady
+        ? 'User can authenticate with a managed password.'
+        : !verificationComplete
+          ? 'Complete email verification before the password step can be finished.'
+          : 'Password setup still needs to be completed.',
+    },
+    {
+      key: 'approval',
+      label: 'Admin Approved',
+      complete: accessApproved,
+      description: !verificationComplete
+        ? 'Complete email verification before admin approval can be treated as ready.'
+        : !credentialReady
+          ? 'Complete password setup before admin approval can be treated as ready.'
+          : accessApproved
+            ? 'The account has been approved for access.'
+            : `Account status is ${status || 'pending'}.`,
     },
     {
       key: 'assignment',
       label: assignmentRequired ? 'Assignment Ready' : 'Assignment Not Required',
       complete: assignmentReady,
-      description: assignmentRequired
-        ? assignmentReady
-          ? 'Academic assignment is linked and ready.'
-          : `Waiting for ${normalizedRole === 'student' ? 'section enrollment' : 'teaching assignment'}.`
-        : 'This role does not require academic assignment.',
+      description: !verificationComplete
+        ? 'Complete email verification before academic mapping can be treated as ready.'
+        : !credentialReady
+          ? 'Complete password setup before academic mapping can be treated as ready.'
+          : !accessApproved
+            ? 'Complete admin approval before academic mapping can be treated as ready.'
+            : assignmentRequired
+              ? assignmentReady
+                ? 'Academic assignment is linked and ready.'
+                : `Waiting for ${normalizedRole === 'student' ? 'section enrollment' : 'teaching assignment'}.`
+              : 'This role does not require academic assignment.',
     },
     {
       key: 'active',
-      label: 'Access Active',
+      label: 'Account Access',
       complete: operationallyActive,
       description: operationallyActive
-        ? 'User can sign in and access assigned modules.'
+        ? 'Account access is allowed.'
         : isExpired
           ? 'Account access has expired.'
           : !isActive
-            ? 'Account is currently inactive.'
-            : accessApproved
-              ? 'Waiting on remaining readiness checks.'
+            ? 'Account access is currently denied.'
+            : hierarchyComplete
+              ? 'Account access can be enabled by marking the account active.'
               : `Account status is ${status || 'pending'}.`,
     },
   ];
@@ -70,7 +94,9 @@ const buildLifecycleSnapshot = ({
       ? 'pending_verification'
       : !credentialReady
         ? 'password_setup'
-        : !assignmentReady
+        : !accessApproved
+          ? 'pending_approval'
+          : !assignmentReady
           ? 'assignment_pending'
           : status === 'rejected'
             ? 'rejected'
@@ -89,6 +115,8 @@ const buildLifecycleSnapshot = ({
     stages,
     requiresAssignment: assignmentRequired,
     assignmentReady,
+    accessApproved,
+    hierarchyComplete,
     credentialReady,
     verificationComplete,
     operationallyActive,

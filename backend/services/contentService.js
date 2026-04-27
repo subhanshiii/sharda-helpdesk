@@ -128,7 +128,7 @@ const ensureLegacyContentSynced = async () => {
     ];
 
     if (operations.length > 0) {
-      await Content.bulkWrite(operations, { ordered: false });
+      await Content.bulkWrite(operations, { ordered: false, timestamps: false });
     }
 
     syncComplete = true;

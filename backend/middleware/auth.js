@@ -2,6 +2,9 @@ const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
 const Permission = require('../models/Permission');
 const { DEFAULT_ROLE_PERMISSIONS, ADMIN_TIER_ORDER, buildResolvedPermissions, resolveEffectiveTier } = require('../utils/permissionDefaults');
+const { isSeededSuperAdmin } = require('../utils/initialAdmin');
+const { canAccessResource, normalizeResourcePermissions } = require('../utils/rbacPolicy');
+const { normalizeRole } = require('../utils/roleHelpers');
 
 const isSuperAdmin = (user) => resolveEffectiveTier(user?.role, user?.adminTier) === 'super_admin';
 const normalizeTier = (role, tier) => resolveEffectiveTier(role, tier) || 'none';
@@ -16,6 +19,10 @@ const loadAuthenticatedUser = async (token) => {
     const error = new Error('User no longer exists');
     error.statusCode = 401;
     throw error;
+  }
+
+  if (isSeededSuperAdmin(user)) {
+    return user;
   }
 
   if (!user.isActive) {
@@ -93,11 +100,22 @@ const buildUnauthorizedResponse = (res, err) => {
 
 const resolveRequestPermissions = async (user) => {
   const permissionDoc = await Permission.getRolePermissions(user.role);
-  return buildResolvedPermissions(
+  const permissions = buildResolvedPermissions(
     user.role,
     permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[user.role],
     user.adminTier
   );
+  const resourcePermissions = normalizeResourcePermissions(
+    user.role,
+    permissionDoc?.resourcePermissions,
+    user.adminTier
+  );
+
+  return {
+    permissions,
+    resourcePermissions,
+    can: (action, resource) => canAccessResource({ role: user.role, resourcePermissions, adminTier: user.adminTier }, action, resource),
+  };
 };
 
 exports.loadAuthenticatedUser = loadAuthenticatedUser;
@@ -134,7 +152,10 @@ exports.protectFileAccess = async (req, res, next) => {
 
 // ── authorize: role-based access control ──────────────
 exports.authorize = (...roles) => (req, res, next) => {
-  if (!roles.includes(req.user.role)) {
+  const normalizedUserRole = normalizeRole(req.user?.role);
+  const normalizedRoles = roles.map((role) => normalizeRole(role));
+
+  if (!normalizedRoles.includes(normalizedUserRole)) {
     return res.status(403).json({
       success: false,
       message: `Access denied. Required role: ${roles.join(' or ')}. Your role: ${req.user.role}`,
@@ -149,10 +170,12 @@ exports.permissionMiddleware = (permissionKey) => async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
-    const permissions = await resolveRequestPermissions(req.user);
-    req.permissions = permissions;
+    const access = await resolveRequestPermissions(req.user);
+    req.permissions = access.permissions;
+    req.resourcePermissions = access.resourcePermissions;
+    req.can = access.can;
 
-    if (!permissions[permissionKey]) {
+    if (!access.permissions[permissionKey]) {
       return res.status(403).json({
         success: false,
         message: `Access denied. Missing permission: ${permissionKey}`,
@@ -171,10 +194,12 @@ exports.anyPermissionMiddleware = (...permissionKeys) => async (req, res, next) 
       return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
     }
 
-    const permissions = await resolveRequestPermissions(req.user);
-    req.permissions = permissions;
+    const access = await resolveRequestPermissions(req.user);
+    req.permissions = access.permissions;
+    req.resourcePermissions = access.resourcePermissions;
+    req.can = access.can;
 
-    if (!permissionKeys.some((permissionKey) => permissions[permissionKey])) {
+    if (!permissionKeys.some((permissionKey) => access.permissions[permissionKey])) {
       return res.status(403).json({
         success: false,
         message: `Access denied. One of these permissions is required: ${permissionKeys.join(', ')}`,
@@ -207,6 +232,32 @@ exports.requireMinTier = (tier) => (req, res, next) => {
   }
 
   next();
+};
+
+exports.verifyAuth = exports.protect;
+exports.checkRole = (...roles) => exports.authorize(...roles);
+exports.checkPermission = (action, resource) => async (req, res, next) => {
+  try {
+    if (!req.user?.role) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please log in.' });
+    }
+
+    const access = await resolveRequestPermissions(req.user);
+    req.permissions = access.permissions;
+    req.resourcePermissions = access.resourcePermissions;
+    req.can = access.can;
+
+    if (!access.can(action, resource)) {
+      return res.status(403).json({
+        success: false,
+        message: `You do not have permission to ${action} ${resource}.`,
+      });
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
 exports.isSuperAdmin = isSuperAdmin;

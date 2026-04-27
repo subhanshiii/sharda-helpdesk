@@ -273,7 +273,7 @@ const populateMap = {
     { path: 'facultyMembers', select: 'name email systemId role' },
   ],
   enrollments: [
-    { path: 'student', select: 'systemId name email role department section' },
+    { path: 'student', select: 'systemId name email role department section status isActive emailVerified passwordNeedsSetup expiryDate' },
     {
       path: 'section',
       populate: [

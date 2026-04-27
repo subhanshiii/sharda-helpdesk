@@ -46,6 +46,7 @@ const ensureInitialAdmin = async (logger = console) => {
     status: 'approved',
     isActive: true,
     emailVerified: true,
+    passwordNeedsSetup: false,
     department: payload.department,
     expiryDate: payload.expiryDate,
   };

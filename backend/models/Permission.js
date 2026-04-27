@@ -5,6 +5,7 @@ const {
   DEFAULT_ROLE_PERMISSIONS,
   sanitizePermissions,
 } = require('../utils/permissionDefaults');
+const { getDefaultResourcePermissions, normalizeResourcePermissions } = require('../utils/rbacPolicy');
 const { normalizeRole } = require('../utils/roleHelpers');
 
 const permissionsSchemaDefinition = PERMISSION_KEYS.reduce((schema, key) => {
@@ -22,6 +23,10 @@ const permissionSchema = new mongoose.Schema(
       trim: true,
     },
     permissions: permissionsSchemaDefinition,
+    resourcePermissions: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,
@@ -39,6 +44,7 @@ permissionSchema.statics.getRolePermissions = async function (role) {
       $setOnInsert: {
         role: resolvedRole,
         permissions: sanitizePermissions(resolvedRole, defaults),
+        resourcePermissions: getDefaultResourcePermissions(resolvedRole),
       },
     },
     { new: true, upsert: true }
@@ -46,8 +52,15 @@ permissionSchema.statics.getRolePermissions = async function (role) {
 
   if (!doc.permissions) {
     doc.permissions = sanitizePermissions(resolvedRole, defaults);
-    await doc.save();
   }
+
+  if (!doc.resourcePermissions || typeof doc.resourcePermissions !== 'object') {
+    doc.resourcePermissions = getDefaultResourcePermissions(resolvedRole);
+  } else {
+    doc.resourcePermissions = normalizeResourcePermissions(resolvedRole, doc.resourcePermissions);
+  }
+
+  await doc.save();
 
   return doc;
 };

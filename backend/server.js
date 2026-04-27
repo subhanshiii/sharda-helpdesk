@@ -14,6 +14,7 @@ const { backfillMissingSystemIds } = require('./services/userProvisioningService
 const { runAutomaticStudentPromotions } = require('./services/academicPromotionService');
 const { backfillAcademicSessionRefs, migrateAcademicIndexes } = require('./utils/academicSetupService');
 const { migrateAssignmentIndexes } = require('./utils/assignmentMigration');
+const { backfillDerivedAcademicFields } = require('./utils/userAcademicContext');
 const AcademicSession = require('./models/AcademicSession');
 
 // Load security middleware (graceful if packages missing)
@@ -107,6 +108,7 @@ app.use('/api/academic-calendar', require('./routes/academicCalendarRoutes'));
 app.use('/api/chat-groups',       require('./routes/groupChatRoutes'));  // ← NEW
 app.use('/api/permissions',       require('./routes/permissionRoutes'));
 app.use('/api/motivation',        require('./routes/motivationRoutes'));
+app.use('/api/resources',         require('./routes/resourceRoutes'));
 
 // Queue routes (optional)
 try { app.use('/api/queue', require('./routes/queueRoutes')); } catch {}
@@ -136,6 +138,7 @@ const startServer = async () => {
     await migrateAcademicIndexes();
     await migrateAssignmentIndexes();
     await backfillAcademicSessionRefs();
+    await backfillDerivedAcademicFields();
     await backfillMissingSystemIds();
     await ensureInitialAdmin(logger);
     const promotionSummary = await runAutomaticStudentPromotions();

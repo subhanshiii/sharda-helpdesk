@@ -9,26 +9,26 @@ const {
   submitAssignment,
   gradeSubmission,
 } = require('../controllers/assignmentController');
-const { protect, permissionMiddleware } = require('../middleware/auth');
+const { verifyAuth, checkPermission } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 router
   .route('/')
-  .get(protect, getAssignments)
-  .post(protect, permissionMiddleware('canManageAssignments'), upload.array('attachments', 5), createAssignment);
+  .get(verifyAuth, getAssignments)
+  .post(verifyAuth, checkPermission('create', 'assignments'), upload.array('attachments', 5), createAssignment);
 
 router
   .route('/:id')
-  .get(protect, getAssignment)
-  .put(protect, permissionMiddleware('canManageAssignments'), upload.array('attachments', 5), updateAssignment)
-  .delete(protect, permissionMiddleware('canManageAssignments'), deleteAssignment);
+  .get(verifyAuth, getAssignment)
+  .put(verifyAuth, checkPermission('edit', 'assignments'), upload.array('attachments', 5), updateAssignment)
+  .delete(verifyAuth, checkPermission('delete', 'assignments'), deleteAssignment);
 
 router
   .route('/:id/submissions')
-  .post(protect, permissionMiddleware('canSubmitAssignments'), upload.array('attachments', 5), submitAssignment);
+  .post(verifyAuth, submitAssignment);
 
 router
   .route('/:id/submissions/:submissionId/grade')
-  .put(protect, permissionMiddleware('canManageAssignments'), gradeSubmission);
+  .put(verifyAuth, checkPermission('edit', 'assignments'), gradeSubmission);
 
 module.exports = router;

@@ -9,6 +9,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const { sendEmailVerificationEmail } = require('../utils/emailService');
 const { validationResult } = require('express-validator');
+const { isSeededSuperAdmin } = require('../utils/initialAdmin');
 const {
   createVerificationToken,
   findUserByIdentifier,
@@ -140,6 +141,10 @@ const sendTokenResponse = (user, statusCode, res) => {
 const validateAccountForLogin = (user) => {
   if (!user) {
     return { ok: false, statusCode: 404, message: 'Account does not exist. Please register.' };
+  }
+
+  if (isSeededSuperAdmin(user)) {
+    return { ok: true };
   }
 
   if (!user.isActive) {

@@ -1,11 +1,11 @@
 const express = require('express');
 const router  = express.Router();
 const { getEvents, getAllEvents, createEvent, deleteEvent } = require('../controllers/academicCalendarController');
-const { protect, permissionMiddleware } = require('../middleware/auth');
+const { verifyAuth, checkPermission } = require('../middleware/auth');
 
-router.get('/',        protect, getEvents);
-router.get('/all',     protect, getAllEvents);
-router.post('/',       protect, permissionMiddleware('canPostNotice'), createEvent);
-router.delete('/:id',  protect, permissionMiddleware('canPostNotice'), deleteEvent);
+router.get('/', verifyAuth, getEvents);
+router.get('/all', verifyAuth, getAllEvents);
+router.post('/', verifyAuth, checkPermission('create', 'events'), createEvent);
+router.delete('/:id', verifyAuth, checkPermission('delete', 'events'), deleteEvent);
 
 module.exports = router;

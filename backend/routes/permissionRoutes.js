@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { getPermissions, updateRolePermissions } = require('../controllers/permissionController');
-const { protect, permissionMiddleware } = require('../middleware/auth');
+const { verifyAuth, checkPermission } = require('../middleware/auth');
 
-router.get('/', protect, getPermissions);
-router.put('/:role', protect, permissionMiddleware('canManagePermissions'), updateRolePermissions);
+router.get('/', verifyAuth, getPermissions);
+router.put('/:role', verifyAuth, checkPermission('manage', 'permissions'), updateRolePermissions);
 
 module.exports = router;

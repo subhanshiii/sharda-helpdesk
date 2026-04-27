@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 const { buildAudienceVisibilityQuery, buildTargetAudiencePayload, buildVisibilityFilterQuery } = require('../utils/visibility');
 const { buildResolvedPermissions, DEFAULT_ROLE_PERMISSIONS } = require('../utils/permissionDefaults');
+const { canAccessResource } = require('../utils/rbacPolicy');
 
 const normalizeValue = (value) => String(value ?? '').trim().toLowerCase();
 
@@ -35,6 +36,23 @@ const getResolvedPermissions = (user) => buildResolvedPermissions(
   DEFAULT_ROLE_PERMISSIONS[normalizeRole(user?.role)] || {},
   user?.adminTier
 );
+
+const canAssignmentAction = (user, action) => {
+  const role = normalizeRole(user?.role);
+  return canAccessResource({
+    role,
+    resourcePermissions: role === 'admin'
+      ? { assignments: { view: true, create: true, edit: true, delete: true } }
+      : {
+          assignments: {
+            view: ['student', 'faculty'].includes(role),
+            create: role === 'faculty',
+            edit: role === 'faculty',
+            delete: false,
+          },
+        },
+  }, action, 'assignments');
+};
 
 const ensureAssignmentModuleAccess = (user) => {
   if (!user) {
@@ -270,8 +288,7 @@ const getAssignmentById = async (assignmentId, user) => {
 
 const createAssignment = async (body, user, files) => {
   ensureAssignmentModuleAccess(user);
-  const permissions = getResolvedPermissions(user);
-  if (!permissions.canManageAssignments) {
+  if (!canAssignmentAction(user, 'create')) {
     const error = new Error('Not authorized to create assignments');
     error.statusCode = 403;
     throw error;

@@ -10,20 +10,35 @@ const {
 } = require('../utils/permissionDefaults');
 const { FEATURE_REGISTRY } = require('../utils/featureRegistry');
 const { ADMIN_TIER_DEFINITIONS } = require('../utils/adminTierRegistry');
+const {
+  ACTION_DEFINITIONS,
+  RESOURCE_DEFINITIONS,
+  ROLE_SUMMARIES,
+  getDefaultResourcePermissions,
+  normalizeResourcePermissions,
+} = require('../utils/rbacPolicy');
 const { normalizeRole } = require('../utils/roleHelpers');
 
 const getRolePayload = async (role) => {
   const resolvedRole = normalizeRole(role);
   const permissionDoc = resolvedRole === 'admin' ? null : await Permission.getRolePermissions(role);
+  const resourcePermissions = normalizeResourcePermissions(
+    resolvedRole,
+    resolvedRole === 'admin'
+      ? getDefaultResourcePermissions(resolvedRole)
+      : permissionDoc?.resourcePermissions || getDefaultResourcePermissions(resolvedRole)
+  );
 
   return {
     role: resolvedRole,
+    summary: ROLE_SUMMARIES[resolvedRole] || null,
     permissions: sanitizePermissions(
       resolvedRole,
       resolvedRole === 'admin'
         ? buildAdminTierPermissions('admin')
         : permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[resolvedRole]
     ),
+    resourcePermissions,
     updatedAt: permissionDoc?.updatedAt || null,
   };
 };
@@ -35,6 +50,11 @@ exports.getPermissions = async (req, res, next) => {
   try {
     const currentRole = normalizeRole(req.user.role);
     const currentPermissionsDoc = await Permission.getRolePermissions(currentRole);
+    const currentResourcePermissions = normalizeResourcePermissions(
+      currentRole,
+      currentPermissionsDoc?.resourcePermissions || getDefaultResourcePermissions(currentRole),
+      req.user.adminTier
+    );
     const currentPermissions = buildResolvedPermissions(
       currentRole,
       currentPermissionsDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[currentRole],
@@ -46,8 +66,12 @@ exports.getPermissions = async (req, res, next) => {
       currentRole,
       currentAdminTier: effectiveTier,
       currentPermissions,
+      currentResourcePermissions,
       availablePermissions: PERMISSION_KEYS,
       permissionDefinitions: FEATURE_REGISTRY,
+      actionDefinitions: ACTION_DEFINITIONS,
+      resourceDefinitions: RESOURCE_DEFINITIONS,
+      roleSummaries: ROLE_SUMMARIES,
       adminTierDefinitions: ADMIN_TIER_DEFINITIONS.map((tier) => ({
         ...tier,
         permissions: sanitizePermissions('admin', buildAdminTierPermissions(tier.key)),
@@ -83,6 +107,10 @@ exports.updateRolePermissions = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
 
+    const resourcePermissions = normalizeResourcePermissions(
+      role,
+      req.body.resourcePermissions || req.body.permissionsMatrix || {}
+    );
     const permissions = sanitizePermissions(role, req.body.permissions || {});
 
     // Keep the system recoverable even if an admin edits permissions aggressively.
@@ -91,7 +119,7 @@ exports.updateRolePermissions = async (req, res, next) => {
     }
     const permissionDoc = await Permission.findOneAndUpdate(
       { role },
-      { role, permissions },
+      { role, permissions, resourcePermissions },
       { new: true, upsert: true, runValidators: true }
     );
 
@@ -100,6 +128,7 @@ exports.updateRolePermissions = async (req, res, next) => {
       data: {
         role: permissionDoc.role,
         permissions: sanitizePermissions(role, permissionDoc.permissions),
+        resourcePermissions: normalizeResourcePermissions(role, permissionDoc.resourcePermissions),
         updatedAt: permissionDoc.updatedAt,
       },
     });

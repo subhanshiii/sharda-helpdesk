@@ -4941,3 +4941,1316 @@ Error: listen EADDRINUSE: address already in use :::8080
   "version": "4.0.0",
   "environment": "development"
 }
+[08:24:24] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:24:24 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 41871,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 133185536,
+      "heapTotal": 108085248,
+      "heapUsed": 57095304,
+      "external": 20995427,
+      "arrayBuffers": 18479910
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.4150390625,
+      3.65771484375,
+      4.23046875
+    ],
+    "uptime": 1610134
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[08:24:55] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:24:55 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 41904,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 132022272,
+      "heapTotal": 109133824,
+      "heapUsed": 48784872,
+      "external": 20994773,
+      "arrayBuffers": 18479256
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.5283203125,
+      3.673828125,
+      4.2138671875
+    ],
+    "uptime": 1610165
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[08:25:35] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:25:35 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 42155,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 134479872,
+      "heapTotal": 109395968,
+      "heapUsed": 48807016,
+      "external": 20995543,
+      "arrayBuffers": 18480026
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.1181640625,
+      3.5419921875,
+      4.13916015625
+    ],
+    "uptime": 1610205
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[08:29:09] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:29:09 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 42763,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 129499136,
+      "heapTotal": 109395968,
+      "heapUsed": 49729992,
+      "external": 21007959,
+      "arrayBuffers": 18492442
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.61376953125,
+      3.57568359375,
+      4.015625
+    ],
+    "uptime": 1610419
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[08:53:14] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:53:14 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 44364,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 134922240,
+      "heapTotal": 109658112,
+      "heapUsed": 48952944,
+      "external": 21020918,
+      "arrayBuffers": 18480085
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.955078125,
+      3.02001953125,
+      3.13232421875
+    ],
+    "uptime": 1611864
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[08:58:42] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 08:58:42 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 45016,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 132956160,
+      "heapTotal": 110444544,
+      "heapUsed": 49233352,
+      "external": 21022571,
+      "arrayBuffers": 18481738
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.68017578125,
+      2.49658203125,
+      2.81005859375
+    ],
+    "uptime": 1612192
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:17:56] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:17:56 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 47262,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 124534784,
+      "heapTotal": 72957952,
+      "heapUsed": 49639192,
+      "external": 21032683,
+      "arrayBuffers": 18491850
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.03076171875,
+      2.35009765625,
+      2.36669921875
+    ],
+    "uptime": 1613346
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:21:49] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:21:49 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 47712,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 131334144,
+      "heapTotal": 109920256,
+      "heapUsed": 49134576,
+      "external": 21021803,
+      "arrayBuffers": 18480970
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.1083984375,
+      2.029296875,
+      2.20556640625
+    ],
+    "uptime": 1613579
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:23:36] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:23:36 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 47965,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 128221184,
+      "heapTotal": 73220096,
+      "heapUsed": 48925936,
+      "external": 21020651,
+      "arrayBuffers": 18479818
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.30126953125,
+      2.16162109375,
+      2.2373046875
+    ],
+    "uptime": 1613686
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:26:10] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:26:10 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 48415,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 126992384,
+      "heapTotal": 73220096,
+      "heapUsed": 49114832,
+      "external": 21021419,
+      "arrayBuffers": 18480586
+    }
+  },
+  "os": {
+    "loadavg": [
+      5.24560546875,
+      4.48681640625,
+      3.2626953125
+    ],
+    "uptime": 1613840
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:47:27] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:47:27 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 51223,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 133726208,
+      "heapTotal": 110444544,
+      "heapUsed": 49271720,
+      "external": 21030763,
+      "arrayBuffers": 18489930
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.02734375,
+      2.513671875,
+      2.7265625
+    ],
+    "uptime": 1615117
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[09:50:46] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 09:50:46 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 51791,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 132071424,
+      "heapTotal": 110182400,
+      "heapUsed": 49192280,
+      "external": 21022187,
+      "arrayBuffers": 18481354
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.43017578125,
+      2.73291015625,
+      2.7587890625
+    ],
+    "uptime": 1615316
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[10:01:07] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1940:16)\n    at listenInCluster (node:net:1997:12)\n    at Server.listen (node:net:2102:7)\n    at startServer (/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js:144:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 10:01:07 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 53436,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 133251072,
+      "heapTotal": 108085248,
+      "heapUsed": 57929608,
+      "external": 21022811,
+      "arrayBuffers": 18481978
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.6611328125,
+      2.30322265625,
+      2.4541015625
+    ],
+    "uptime": 1615937
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1940,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1997,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2102,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 144,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 105,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[10:13:14] [31merror[39m: uncaughtException: Route.post() requires a callback function but got a [object Undefined]
+Error: Route.post() requires a callback function but got a [object Undefined]
+    at Route.<computed> [as post] (/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/route.js:216:15)
+    at proto.<computed> [as post] (/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/index.js:521:19)
+    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js:16:8)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.require (node:internal/modules/cjs/loader:1503:12)
+  {
+  "error": {},
+  "stack": "Error: Route.post() requires a callback function but got a [object Undefined]\n    at Route.<computed> [as post] (/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/route.js:216:15)\n    at proto.<computed> [as post] (/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/index.js:521:19)\n    at Object.<anonymous> (/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js:16:8)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)\n    at Object..js (node:internal/modules/cjs/loader:1893:10)\n    at Module.load (node:internal/modules/cjs/loader:1480:32)\n    at Module._load (node:internal/modules/cjs/loader:1299:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)\n    at Module.require (node:internal/modules/cjs/loader:1503:12)",
+  "exception": true,
+  "date": "Mon Apr 27 2026 10:13:14 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 54978,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/work/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+    "version": "v24.8.0",
+    "argv": [
+      "/opt/homebrew/Cellar/node/24.8.0/bin/node",
+      "/Users/work/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 113295360,
+      "heapTotal": 65421312,
+      "heapUsed": 38542432,
+      "external": 20779627,
+      "arrayBuffers": 18297511
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.85302734375,
+      3.255859375,
+      3.00341796875
+    ],
+    "uptime": 1616664
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/route.js",
+      "function": "Route.<computed> [as post]",
+      "line": 216,
+      "method": "<computed> [as post]",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/node_modules/express/lib/router/index.js",
+      "function": "proto.<computed> [as post]",
+      "line": 521,
+      "method": "<computed> [as post]",
+      "native": false
+    },
+    {
+      "column": 8,
+      "file": "/Users/work/IdeaProjects/sharda-helpdesk/backend/routes/authRoutes.js",
+      "function": null,
+      "line": 16,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1760,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Object..js",
+      "line": 1893,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1480,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1299,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:diagnostics_channel",
+      "function": "TracingChannel.traceSync",
+      "line": 322,
+      "method": "traceSync",
+      "native": false
+    },
+    {
+      "column": 24,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "wrapModuleLoad",
+      "line": 244,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1503,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}

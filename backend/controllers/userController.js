@@ -6,7 +6,7 @@ const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
 const Section = require('../models/Section');
 const { del, KEYS } = require('../config/cache');
-const { isSupportRole, normalizeRole } = require('../utils/roleHelpers');
+const { buildRoleInQuery, isSupportRole, normalizeRole, ROLE_ORDER } = require('../utils/roleHelpers');
 const { buildLifecycleSnapshot } = require('../utils/userLifecycle');
 const {
   createManagedUser,
@@ -17,9 +17,15 @@ const {
 } = require('../services/userProvisioningService');
 const { runAutomaticStudentPromotions } = require('../services/academicPromotionService');
 const { resolveEffectiveTier } = require('../utils/permissionDefaults');
+const {
+  EMPTY_ACADEMIC_FIELDS,
+  deriveAcademicFields,
+  populateUserAcademicContext,
+  buildDerivedAcademicDisplay,
+} = require('../utils/userAcademicContext');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MANAGED_ROLES = ['student', 'faculty', 'staff', 'admin'];
+const MANAGED_ROLES = ROLE_ORDER;
 const SCOPED_TIERS = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
 
 const sanitizeUserDoc = (user) => serializeManagedUser(user);
@@ -42,12 +48,12 @@ const normalizeUserPayload = (body = {}) => {
     role: normalizedRole,
     adminTier: normalizedTier && normalizedTier !== 'none' ? normalizedTier : null,
     systemId: body.systemId,
-    collegeId: body.collegeId || null,
-    department: body.department || '',
-    departmentId: body.departmentId || null,
-    programId: body.programId || null,
-    year: normalizedRole === 'student' ? (body.year || '') : '',
-    section: normalizedRole === 'student' ? (body.section || '') : '',
+    collegeId: null,
+    department: '',
+    departmentId: null,
+    programId: ['faculty', 'staff'].includes(normalizedRole) ? (body.programId || null) : null,
+    year: '',
+    section: '',
     sectionId: normalizedRole === 'student' ? (body.sectionId || null) : null,
     expiryDate: body.expiryDate || null,
     status: body.status || 'pending',
@@ -71,34 +77,16 @@ const normalizeUserPayload = (body = {}) => {
   return payload;
 };
 
-const applyStudentSectionContext = async (payload) => {
-  if (normalizeRole(payload.role) !== 'student' || !payload.sectionId) {
-    return payload;
-  }
-
-  const sectionDoc = await Section.findById(payload.sectionId)
-    .populate({
-      path: 'department',
-      select: 'name college',
-      populate: { path: 'college', select: 'name code' },
-    })
-    .populate('program', 'name code')
-    .populate('academicSession', 'label yearNumber')
-    .lean();
-
-  if (!sectionDoc) {
-    const error = new Error('Selected section was not found');
-    error.statusCode = 404;
-    throw error;
-  }
+const applyDerivedAcademicContext = async (payload) => {
+  const nextFields = await deriveAcademicFields({
+    role: payload.role,
+    sectionId: payload.sectionId || null,
+    programId: payload.programId || null,
+  });
 
   return {
     ...payload,
-    collegeId: sectionDoc.department?.college?._id || payload.collegeId || null,
-    department: sectionDoc.department?.name || payload.department || '',
-    programId: sectionDoc.program?._id || payload.programId || null,
-    year: sectionDoc.studyYear ? String(sectionDoc.studyYear) : (payload.year || ''),
-    section: sectionDoc.name || payload.section || '',
+    ...nextFields,
   };
 };
 
@@ -172,14 +160,19 @@ const buildUserDetail = async (user) => {
     .populate({
       path: 'sectionId',
       populate: [
-        { path: 'program', select: 'name code' },
+        { path: 'program', select: 'name code department', populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } } },
         { path: 'course', select: 'name code' },
         { path: 'academicSession', select: 'label yearNumber' },
         { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
       ],
     })
+    .populate({
+      path: 'programId',
+      select: 'name code department',
+      populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+    })
     .populate('collegeId', 'name code')
-    .populate('programId', 'name code')
+    .populate('departmentId', 'name code college')
     .lean();
 
   const adminScopes = normalizeRole(user.role) === 'admin'
@@ -200,6 +193,10 @@ const buildUserDetail = async (user) => {
     .lean();
 
   const sectionContext = enrollment?.section || populatedUser?.sectionId || null;
+  const academicDerived = buildDerivedAcademicDisplay({
+    ...populatedUser,
+    sectionId: sectionContext || populatedUser?.sectionId || null,
+  });
   const [subjectAssignments, teachingAssignments, recentTickets, recentNotifications] = await Promise.all([
     sectionContext?._id
       ? SectionSubject.find({ section: sectionContext._id, isActive: true })
@@ -229,6 +226,7 @@ const buildUserDetail = async (user) => {
 
   return {
     ...sanitizeUserDoc(populatedUser),
+    academicDerived,
     adminScopes,
     lifecycle: buildLifecycleSnapshot({
       role: populatedUser.role,
@@ -238,7 +236,7 @@ const buildUserDetail = async (user) => {
       isActive: populatedUser.isActive,
       expiryDate: populatedUser.expiryDate,
       isAssigned: normalizeRole(populatedUser.role) === 'student'
-        ? Boolean(enrollment?.section || populatedUser?.sectionId)
+        ? Boolean(enrollment?._id && enrollment?.status === 'active' && enrollment?.section?._id)
         : normalizeRole(populatedUser.role) === 'faculty'
           ? teachingAssignments.length > 0
           : true,
@@ -340,26 +338,17 @@ const invalidateUserCaches = async (identifier) => {
 };
 
 const buildUserListItem = (user) => {
-  const normalizedRole = normalizeRole(user.role);
+  const academicDerived = buildDerivedAcademicDisplay(user);
   const liveSection = user.sectionId && typeof user.sectionId === 'object' ? user.sectionId : null;
-  const sectionDepartment = liveSection?.department?.name || '';
-  const sectionYear = liveSection?.studyYear ? String(liveSection.studyYear) : '';
-  const sectionName = liveSection?.name || '';
-
-  const academicDisplay = normalizedRole === 'student'
-    ? {
-        department: sectionDepartment,
-        year: sectionYear,
-        section: sectionName,
-      }
-    : {
-        department: user.department || '',
-        year: user.year || '',
-        section: user.section || '',
-      };
+  const academicDisplay = {
+    department: academicDerived.department?.name || user.department || '',
+    year: academicDerived.year || user.year || '',
+    section: academicDerived.section || user.section || '',
+  };
 
   return {
     ...sanitizeUserDoc(user),
+    academicDerived,
     sectionContext: liveSection ? {
       id: liveSection._id,
       name: liveSection.name,
@@ -372,17 +361,6 @@ const buildUserListItem = (user) => {
     academicDisplay,
   };
 };
-
-const populateAcademicSectionContext = (query) => query.populate({
-  path: 'sectionId',
-  select: 'name studyYear department program course academicSession',
-  populate: [
-    { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
-    { path: 'program', select: 'name code' },
-    { path: 'course', select: 'name code' },
-    { path: 'academicSession', select: 'label yearNumber' },
-  ],
-});
 
 exports.getUsers = async (req, res, next) => {
   try {
@@ -422,10 +400,15 @@ exports.getUsers = async (req, res, next) => {
           select: 'name studyYear department program course academicSession',
           populate: [
             { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
-            { path: 'program', select: 'name code' },
+            { path: 'program', select: 'name code department', populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } } },
             { path: 'course', select: 'name code' },
             { path: 'academicSession', select: 'label yearNumber' },
           ],
+        })
+        .populate({
+          path: 'programId',
+          select: 'name code department',
+          populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
         })
         .sort({ createdAt: -1 })
         .skip((numericPage - 1) * numericLimit)
@@ -491,7 +474,7 @@ exports.createUser = async (req, res, next) => {
     }
 
     const payload = normalizeUserPayload(req.body);
-    const resolvedPayload = await applyStudentSectionContext(payload);
+    const resolvedPayload = await applyDerivedAcademicContext(payload);
 
     const { user, verification } = await createManagedUser(resolvedPayload);
     if (normalizeRole(user.role) === 'student' && user.sectionId) {
@@ -620,7 +603,7 @@ exports.updateUser = async (req, res, next) => {
     }
 
     const previousSectionId = user.sectionId ? String(user.sectionId) : '';
-    const normalized = await applyStudentSectionContext(
+    const normalized = await applyDerivedAcademicContext(
       normalizeUserPayload({ ...user.toObject(), ...req.body, password: undefined, systemId: user.systemId })
     );
     if (normalizeRole(normalized.role) === 'student' && req.body.sectionId !== undefined && !normalized.sectionId) {
@@ -655,7 +638,7 @@ exports.setUserPassword = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Only the super admin can set account passwords' });
     }
 
-    const user = await findUserByIdentifier(req.params.id).select('+password');
+    const user = await findUserByIdentifier(req.params.id, '+password');
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -667,12 +650,17 @@ exports.setUserPassword = async (req, res, next) => {
 
     user.password = password;
     user.passwordNeedsSetup = false;
+    user.emailVerified = true;
     await user.save();
     await invalidateUserCaches(String(user._id));
 
+    const signInMessage = user.status === 'approved'
+      ? 'Password updated successfully. Email verification has been marked complete.'
+      : 'Password updated successfully. Email verification has been marked complete, but this account still needs admin approval before sign-in.';
+
     return res.status(200).json({
       success: true,
-      message: 'Password updated successfully',
+      message: signInMessage,
       data: sanitizeUserDoc(user),
     });
   } catch (error) {
@@ -775,7 +763,7 @@ exports.uploadUserAvatar = async (req, res, next) => {
 
 exports.getAgents = async (req, res, next) => {
   try {
-    const data = await User.find({ role: { $in: ['staff', 'admin', 'agent'] }, isActive: true, status: 'approved' })
+    const data = await User.find({ role: buildRoleInQuery(['staff', 'admin']), isActive: true, status: 'approved' })
       .select('systemId name email role department')
       .sort({ name: 1 })
       .lean();
@@ -864,7 +852,7 @@ exports.getIdentityAlerts = async (req, res, next) => {
         .select('systemId name email role status updatedAt avatar profileImage avatarChoice')
         .sort({ updatedAt: -1 })
         .lean(),
-      populateAcademicSectionContext(
+      populateUserAcademicContext(
         User.find(mappingQuery)
         .select('systemId name email role department year section sectionId status avatar profileImage avatarChoice')
         .sort({ createdAt: -1 })

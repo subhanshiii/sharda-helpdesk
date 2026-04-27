@@ -10,10 +10,30 @@ const Submission = require('../models/Submission');
 const Event = require('../models/Event');
 const Content = require('../models/Content');
 const Announcement = require('../models/Announcement');
+const Resource = require('../models/Resource');
+const Permission = require('../models/Permission');
 const ticketService = require('./ticketService');
 const { getAssignmentById, getAssignmentAccess } = require('./assignmentService');
+const { canAccessResource, normalizeResourcePermissions } = require('../utils/rbacPolicy');
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const assertResourceLibraryAccess = async (user) => {
+  const permissionDoc = await Permission.getRolePermissions(user.role);
+  const resourcePermissions = normalizeResourcePermissions(
+    user.role,
+    permissionDoc?.resourcePermissions,
+    user.adminTier
+  );
+
+  if (canAccessResource({ role: user.role, resourcePermissions, adminTier: user.adminTier }, 'view', 'resources')) {
+    return;
+  }
+
+  const err = new Error('Not authorized to access this resource file');
+  err.statusCode = 403;
+  throw err;
+};
 
 /**
  * @throws Error with statusCode 403 or 404
@@ -68,6 +88,10 @@ const assertGeneralUploadAccess = async (user, safeName) => {
   const urlRx = new RegExp(`${escapeRegex(safeName)}(?:\\?.*)?$`);
   if (await Content.exists({ 'attachments.fileUrl': { $regex: urlRx } })) return;
   if (await Announcement.exists({ 'attachments.fileUrl': { $regex: urlRx } })) return;
+  if (await Resource.exists({ fileUrl: { $regex: urlRx } })) {
+    await assertResourceLibraryAccess(user);
+    return;
+  }
 
   const notFound = new Error('File not found');
   notFound.statusCode = 404;
