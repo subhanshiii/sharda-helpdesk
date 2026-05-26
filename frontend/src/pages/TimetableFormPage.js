@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import API from '../utils/api';
 import { Alert, FullPageSpinner, PageHeader } from '../components/ui';
 import { FiArrowLeft } from 'react-icons/fi';
@@ -9,6 +9,7 @@ import TimetableEntryForm from '../components/academics/TimetableEntryForm';
 export default function TimetableFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(true);
@@ -16,6 +17,7 @@ export default function TimetableFormPage() {
   const [item, setItem] = useState(null);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [teachingAssignments, setTeachingAssignments] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [programs, setPrograms] = useState([]);
@@ -35,6 +37,7 @@ export default function TimetableFormPage() {
           API.get('/academics/courses?paginate=false'),
           API.get('/academics/sections'),
           API.get('/academics/subjects'),
+          API.get('/academics/teaching-assignments'),
         ];
 
         if (isEdit) {
@@ -48,6 +51,7 @@ export default function TimetableFormPage() {
           coursesRes,
           sectionsRes,
           subjectsRes,
+          teachingAssignmentsRes,
           entryRes,
         ] = await Promise.all(requests);
 
@@ -59,6 +63,7 @@ export default function TimetableFormPage() {
         setCourses(coursesRes.data?.data || []);
         setSections(sectionsRes.data?.data || []);
         setSubjects(subjectsRes.data?.data || []);
+        setTeachingAssignments(teachingAssignmentsRes.data?.data || []);
         setItem(entryRes?.data?.data || null);
       } catch (requestError) {
         if (!mounted) return;
@@ -96,8 +101,11 @@ export default function TimetableFormPage() {
       <TimetableEntryForm
         item={item}
         user={user}
+        prefilledSectionId={searchParams.get('sectionId') || ''}
+        prefilledSubjectId={searchParams.get('subjectId') || ''}
         sections={sections}
         subjects={subjects}
+        teachingAssignments={teachingAssignments}
         colleges={colleges}
         departments={departments}
         programs={programs}

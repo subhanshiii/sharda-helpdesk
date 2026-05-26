@@ -1,15 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
+import { subjectMatchesCourse } from '../../utils/academicScope';
 
 const ADVANCED_RESOURCES = [
   { key: 'subjects', label: 'Subjects', fields: ['code', 'name', 'department', 'program', 'course', 'academicSession', 'credits'] },
-  { key: 'section-subjects', label: 'Teaching Assignments', fields: ['section', 'subject', 'faculty', 'semester'] },
   { key: 'enrollments', label: 'Enrollments', fields: ['student', 'section', 'academicSession', 'semester', 'status'] },
 ];
 
 const ADVANCED_DEFAULT_FORMS = {
   subjects: { code: '', name: '', department: '', program: '', course: '', academicSession: '', credits: 0 },
-  'section-subjects': { section: '', subject: '', faculty: '', semester: '' },
   enrollments: { student: '', section: '', academicSession: '', semester: '', status: 'active' },
 };
 
@@ -92,7 +91,7 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
     (options.subjects || []).filter((subject) => {
       if (form.department && String(subject.department?._id || subject.department) !== String(form.department)) return false;
       if (form.program && String(subject.program?._id || subject.program) !== String(form.program)) return false;
-      if (form.course && String(subject.course?._id || subject.course) !== String(form.course)) return false;
+      if (form.course && !subjectMatchesCourse(subject, form.course)) return false;
       if (form.academicSession && String(subject.academicSession?._id || subject.academicSession) !== String(form.academicSession)) return false;
       return true;
     })
@@ -120,39 +119,10 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
         next.program = '';
         next.course = '';
         next.academicSession = '';
-        if (resource.key === 'section-subjects') next.subject = '';
       }
       if (field === 'program') {
         next.course = '';
         next.academicSession = '';
-        if (resource.key === 'section-subjects') {
-          next.section = '';
-          next.subject = '';
-        }
-      }
-      if (field === 'course') {
-        if (resource.key === 'section-subjects') {
-          next.section = '';
-          next.subject = '';
-        }
-      }
-      if (field === 'academicSession' && resource.key === 'section-subjects') {
-        next.section = '';
-        next.subject = '';
-      }
-      if (field === 'section' && resource.key === 'section-subjects') {
-        const selectedSection = (options.sections || []).find((section) => String(section._id) === String(value));
-        next.department = selectedSection?.department?._id || selectedSection?.department || current.department;
-        next.program = selectedSection?.program?._id || selectedSection?.program || current.program;
-        next.course = selectedSection?.course?._id || selectedSection?.course || current.course;
-        next.academicSession = selectedSection?.academicSession?._id || selectedSection?.academicSession || current.academicSession;
-      }
-      if (field === 'subject' && resource.key === 'section-subjects') {
-        const selectedSubject = (options.subjects || []).find((subject) => String(subject._id) === String(value));
-        next.department = selectedSubject?.department?._id || selectedSubject?.department || current.department;
-        next.program = selectedSubject?.program?._id || selectedSubject?.program || current.program;
-        next.course = selectedSubject?.course?._id || selectedSubject?.course || current.course;
-        next.academicSession = selectedSubject?.academicSession?._id || selectedSubject?.academicSession || current.academicSession;
       }
       if (field === 'section' && resource.key === 'enrollments') {
         const selectedSection = (options.sections || []).find((section) => String(section._id) === String(value));
@@ -239,10 +209,9 @@ function AdvancedResourceSection({ resource, items, options, onCreate, onDelete 
 
       {error ? <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-      {(resource.key === 'subjects' || resource.key === 'section-subjects' || resource.key === 'enrollments') ? (
+      {(resource.key === 'subjects' || resource.key === 'enrollments') ? (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {resource.key === 'subjects' ? 'Subjects sit under a course and academic session, then get delivered through section-teaching assignments.' : null}
-          {resource.key === 'section-subjects' ? 'Teaching assignments connect a subject to a delivery section. Selecting a section or subject will automatically align the related hierarchy fields.' : null}
+          {resource.key === 'subjects' ? 'Subjects sit under a program and academic session, then link to one or more courses through the centralized subject workspace.' : null}
           {resource.key === 'enrollments' ? 'Enrollments attach students to sections. The academic session is inferred from the selected section when available.' : null}
         </div>
       ) : null}

@@ -15,7 +15,7 @@ const buildLifecycleSnapshot = ({
   const verificationComplete = Boolean(emailVerified);
   const credentialReady = verificationComplete && !passwordNeedsSetup;
   const accessApproved = verificationComplete && credentialReady && status === 'approved';
-  const assignmentRequired = ['student', 'faculty'].includes(normalizedRole);
+  const assignmentRequired = ['student', 'faculty', 'staff', 'admin'].includes(normalizedRole);
   const rawAssignmentReady = assignmentRequired ? Boolean(isAssigned) : true;
   const assignmentReady = accessApproved && rawAssignmentReady;
   const hierarchyComplete = verificationComplete && credentialReady && accessApproved && assignmentReady;
@@ -68,8 +68,8 @@ const buildLifecycleSnapshot = ({
             ? 'Complete admin approval before academic mapping can be treated as ready.'
             : assignmentRequired
               ? assignmentReady
-                ? 'Academic assignment is linked and ready.'
-                : `Waiting for ${normalizedRole === 'student' ? 'section enrollment' : 'teaching assignment'}.`
+                ? 'Required placement is linked and ready.'
+                : `Waiting for ${normalizedRole === 'student' ? 'section enrollment' : 'department ownership'}.`
               : 'This role does not require academic assignment.',
     },
     {

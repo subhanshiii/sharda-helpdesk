@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 
+const OBJECT_ID = mongoose.Schema.Types.ObjectId;
+
 /**
  * Group Model
- * Represents a department/year/section group (e.g., CSE-2B, MBA-1A)
+ * Represents a collaborative chat group with optional audience-building rules.
  */
 const groupSchema = new mongoose.Schema(
   {
@@ -13,7 +15,6 @@ const groupSchema = new mongoose.Schema(
       maxlength: [100, 'Group name cannot exceed 100 characters'],
     },
 
-    // e.g. "CSE", "MBA", "ECE" — used for filtering
     department: {
       type: String,
       trim: true,
@@ -29,6 +30,38 @@ const groupSchema = new mongoose.Schema(
     section: {
       type: String,
       trim: true,
+    },
+
+    selectionRules: {
+      roles: [
+        {
+          type: String,
+          enum: ['student', 'faculty', 'staff', 'admin', 'agent'],
+        },
+      ],
+      departmentIds: [
+        {
+          type: OBJECT_ID,
+          ref: 'Department',
+        },
+      ],
+      sectionIds: [
+        {
+          type: OBJECT_ID,
+          ref: 'Section',
+        },
+      ],
+      autoIncludeFiltered: {
+        type: Boolean,
+        default: false,
+      },
+    },
+
+    audienceSignature: {
+      type: String,
+      trim: true,
+      default: 'all',
+      index: true,
     },
 
     // Optional description shown in group info
@@ -51,22 +84,18 @@ const groupSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Members array — each member has a role within the group
     members: [
       {
         user: {
-          type: mongoose.Schema.Types.ObjectId,
+          type: OBJECT_ID,
           ref: 'User',
           required: true,
         },
-        // Role within this group: admin, staff, faculty, or student
-        // Keep "teacher" for backward compatibility with older records.
         role: {
           type: String,
-          enum: ['admin', 'staff', 'faculty', 'agent', 'teacher', 'student'],
-          default: 'student',
+          enum: ['admin', 'member', 'staff', 'faculty', 'agent', 'teacher', 'student'],
+          default: 'member',
         },
-        // When they joined the group
         joinedAt: {
           type: Date,
           default: Date.now,
@@ -93,15 +122,17 @@ const groupSchema = new mongoose.Schema(
 );
 
 // ── Indexes for faster queries ─────────────────────────
-groupSchema.index({ 'members.user': 1 });        // Find groups for a user
-groupSchema.index({ department: 1, year: 1 });   // Filter by dept + year
-groupSchema.index({ createdBy: 1 });              // Find groups by creator
-groupSchema.index( // FIXED: prevent duplicate active groups with the same name from the same creator at the database level.
-  { name: 1, createdBy: 1, isActive: 1 },
+groupSchema.index({ 'members.user': 1 });
+groupSchema.index({ department: 1, year: 1 });
+groupSchema.index({ createdBy: 1 });
+groupSchema.index({ 'selectionRules.roles': 1 });
+groupSchema.index({ 'selectionRules.departmentIds': 1 });
+groupSchema.index({ 'selectionRules.sectionIds': 1 });
+groupSchema.index(
+  { name: 1, createdBy: 1, audienceSignature: 1, isActive: 1 },
   { unique: true, partialFilterExpression: { isActive: true } }
 );
 
-// ── Virtual: member count ──────────────────────────────
 groupSchema.virtual('memberCount').get(function () {
   return this.members.length;
 });

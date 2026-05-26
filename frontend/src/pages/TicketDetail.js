@@ -10,6 +10,7 @@ import {
   FullPageSpinner, Avatar, Alert, ConfirmDialog,
 } from '../components/ui';
 import { formatDate, formatRelative, getAssetUrl, getRoleColor, getRoleLabel, STATUSES, PRIORITIES, CATEGORIES } from '../utils/helpers';
+import { isAdminUser } from '../utils/access';
 import { FiSend, FiArrowLeft, FiEdit2, FiTrash2, FiPaperclip, FiLock, FiCheck, FiWifi } from 'react-icons/fi';
 
 // ── Reply bubble ──────────────────────────────────────
@@ -265,7 +266,7 @@ export default function TicketDetail() {
             <button onClick={() => setEditing(!editing)} className="btn-secondary py-1.5 px-3">
               <FiEdit2 size={14}/> {editing ? 'Cancel' : 'Edit'}
             </button>
-            {user?.role === 'admin' && (
+            {isAdminUser(user) && (
               <button onClick={() => setDeleteState({ open: true, loading: false })} className="btn-danger py-1.5 px-3"><FiTrash2 size={14}/></button>
             )}
           </div>

@@ -15,6 +15,7 @@ const { runAutomaticStudentPromotions } = require('./services/academicPromotionS
 const { backfillAcademicSessionRefs, migrateAcademicIndexes } = require('./utils/academicSetupService');
 const { migrateAssignmentIndexes } = require('./utils/assignmentMigration');
 const { backfillDerivedAcademicFields } = require('./utils/userAcademicContext');
+const { migrateGroupChatIndexes } = require('./utils/groupChatMigration');
 const AcademicSession = require('./models/AcademicSession');
 
 // Load security middleware (graceful if packages missing)
@@ -137,6 +138,7 @@ const startServer = async () => {
     await connectDB();
     await migrateAcademicIndexes();
     await migrateAssignmentIndexes();
+    await migrateGroupChatIndexes(logger);
     await backfillAcademicSessionRefs();
     await backfillDerivedAcademicFields();
     await backfillMissingSystemIds();

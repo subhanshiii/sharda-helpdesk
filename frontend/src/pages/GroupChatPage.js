@@ -8,6 +8,7 @@ import GroupSidebar from '../components/chat/GroupSidebar';
 import ChatWindow from '../components/chat/ChatWindow';
 import CreateGroupModal from '../components/chat/CreateGroupModal';
 import GroupInfoModal from '../components/chat/GroupInfoModal';
+import { isAdminUser } from '../utils/access';
 import { FiMessageSquare, FiUsers, FiMenu } from 'react-icons/fi';
 
 export default function GroupChatPage() {
@@ -24,7 +25,7 @@ export default function GroupChatPage() {
   const [isOnline, setIsOnline] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminUser(user);
   const canCreateGroup = hasPermission('canManageGroups');
   const activeGroupRole = activeGroup?.myRole || activeGroup?.members?.find(
     (member) => member.user?._id === user?._id
@@ -178,17 +179,17 @@ export default function GroupChatPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-          <p className="text-sm text-gray-400">Loading groups...</p>
+          <p className="theme-text-muted text-sm">Loading groups...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-white" style={{ height: 'calc(100vh - 8rem)' }}>
+    <div className="theme-surface flex h-full overflow-hidden rounded-[30px] border border-[color:var(--border-soft)] shadow-[var(--shadow-card)]" style={{ height: 'calc(100vh - 8rem)' }}>
 
       {showCreate && (
         <CreateGroupModal
@@ -211,7 +212,7 @@ export default function GroupChatPage() {
       )}
 
       {/* ── Sidebar ── */}
-      <div className={`${showSidebar ? 'flex' : 'hidden'} md:flex flex-col w-72 flex-shrink-0`}>
+      <div className={`${showSidebar ? 'flex' : 'hidden'} md:flex w-72 flex-shrink-0 flex-col xl:w-80`}>
         <GroupSidebar
           groups={groups}
           activeGroup={activeGroup}
@@ -229,12 +230,12 @@ export default function GroupChatPage() {
         {activeGroup ? (
           <>
             {/* Mobile: back button */}
-            <div className="md:hidden flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-100">
+            <div className="theme-surface-soft md:hidden flex items-center gap-2 border-b border-[color:var(--border-soft)] px-4 py-3">
               <button onClick={() => setShowSidebar(true)}
-                className="p-1.5 text-gray-500 hover:text-blue-600 rounded-lg">
+                className="theme-ghost-button rounded-xl p-1.5 theme-text-muted">
                 <FiMenu size={20} />
               </button>
-              <span className="text-sm font-medium text-gray-700">{activeGroup.name}</span>
+              <span className="theme-text-strong text-sm font-medium">{activeGroup.name}</span>
             </div>
             <ChatWindow
               group={activeGroup}
@@ -244,16 +245,16 @@ export default function GroupChatPage() {
         ) : (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-3xl mb-5 shadow-lg">
+            <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-cyan-500 text-3xl text-white shadow-lg">
               💬
             </div>
-            <h2 className="font-display text-2xl font-bold text-gray-900 mb-2">Group Chat</h2>
-            <p className="text-gray-500 text-sm max-w-xs leading-relaxed mb-6">
+            <h2 className="theme-text-strong mb-2 font-display text-2xl font-bold">Group Chat</h2>
+            <p className="theme-text-muted mb-6 max-w-xs text-sm leading-relaxed">
               Select a group from the sidebar to start chatting with your department or class.
             </p>
             {groups.length === 0 && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 rounded-xl text-sm text-blue-700">
+                <div className="theme-surface-soft theme-text-main flex items-center gap-2 rounded-xl px-4 py-3 text-sm">
                   <FiUsers size={16} />
                   {isAdmin
                     ? 'No groups yet. Create the first group!'

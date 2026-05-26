@@ -87,9 +87,9 @@ export const StatCard = ({ label, value, icon, gradient, trend }) => (
     <div className={`absolute top-0 right-0 w-24 h-24 rounded-full opacity-10 -translate-y-8 translate-x-8 ${gradient || 'bg-blue-500'}`} />
     <div className="flex items-start justify-between relative">
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</p>
-        <p className="font-display text-3xl font-black text-gray-900">{value ?? 0}</p>
-        {trend && <p className="text-xs text-gray-400 mt-1">{trend}</p>}
+        <p className="theme-text-muted mb-1 text-xs font-semibold uppercase tracking-wider">{label}</p>
+        <p className="theme-text-strong font-display text-3xl font-black">{value ?? 0}</p>
+        {trend && <p className="theme-text-muted mt-1 text-xs">{trend}</p>}
       </div>
       <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-sm ${gradient || 'bg-blue-50'}`}>
         {icon}

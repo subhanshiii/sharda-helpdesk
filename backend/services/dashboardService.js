@@ -5,7 +5,7 @@ const DashboardPreference = require('../models/DashboardPreference');
 const TimetableEntry = require('../models/TimetableEntry');
 const AttendanceSession = require('../models/AttendanceSession');
 const Enrollment = require('../models/Enrollment');
-const SectionSubject = require('../models/SectionSubject');
+const SubjectSectionTeacher = require('../models/SubjectSectionTeacher');
 const { listAssignments } = require('./assignmentService');
 const { listContent } = require('./contentService');
 const { getStats } = require('./statsService');
@@ -125,9 +125,9 @@ const getAttendanceSummary = async (user) => {
       query.section = user.section;
     }
   } else if (role === 'faculty') {
-    const assignedSectionIds = await SectionSubject.find({
+    const assignedSectionIds = await SubjectSectionTeacher.find({
       isActive: true,
-      $or: [{ faculty: user.id }, { facultyMembers: user.id }],
+      teacher: user.id,
     }).distinct('section');
     query.$or = [{ faculty: user.id }, ...(assignedSectionIds.length ? [{ sectionId: { $in: assignedSectionIds } }] : [])];
   }

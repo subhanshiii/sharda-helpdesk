@@ -3,10 +3,15 @@ const AttendanceSession = require('../models/AttendanceSession');
 const Enrollment = require('../models/Enrollment');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
-const SectionSubject = require('../models/SectionSubject');
+const TeachingAssignment = require('../models/TeachingAssignment');
 const User = require('../models/User');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 const { buildTimetableQuery } = require('../utils/timetableQuery');
+const {
+  getFacultySectionIds,
+  getTeachingAssignments,
+  syncTeachingAssignmentsForSection,
+} = require('../utils/teachingAssignments');
 
 const canManageAcademicOps = (user) => ['faculty', 'admin'].includes(normalizeRole(user.role));
 
@@ -43,55 +48,46 @@ const ensureFacultySectionAccess = async (user, sectionId, subjectId = null) => 
     return;
   }
 
-  const query = {
+  const teachingAssignment = await TeachingAssignment.findOne({
     isActive: true,
     section: sectionId,
-    $or: [
-      { faculty: user.id },
-      { facultyMembers: user.id },
-    ],
-  };
+    teacher: user.id,
+    ...(subjectId ? { subject: subjectId } : {}),
+  }).lean();
 
-  if (subjectId) {
-    query.subject = subjectId;
-  }
+  if (teachingAssignment) return;
 
-  const assignment = await SectionSubject.findOne(query).lean();
-  if (!assignment) {
+  {
     const error = new Error('Faculty can only access sections assigned to them');
     error.statusCode = 403;
     throw error;
   }
 };
 
-const toMinutes = (value = '') => {
-  const [hours, minutes] = String(value).split(':').map(Number);
-  return (hours * 60) + (minutes || 0);
-};
-
-const overlaps = (startA, endA, startB, endB) => startA < endB && startB < endA;
-
-const buildTimetablePayload = async (body, userId, userDoc = null) => {
+const resolveTeachingContext = async (body, userId, userDoc = null) => {
   const payload = {
     ...body,
-    faculty: body.faculty || userId,
+    faculty: body.faculty || null,
     subjectId: body.subjectId || null,
     sectionId: body.sectionId || null,
+    teachingAssignmentId: body.teachingAssignmentId || null,
+    academicSessionId: body.academicSessionId || null,
   };
 
+  let section = null;
   if (payload.sectionId) {
-    const section = await Section.findById(payload.sectionId).populate('department academicSession');
+    section = await Section.findById(payload.sectionId).populate('department academicSession');
     if (!section) {
       const error = new Error('Section not found');
       error.statusCode = 404;
       throw error;
     }
+
     payload.section = section.name;
     payload.department = section.department?.name || body.department || '';
     payload.year = body.year || String(section.academicSession?.yearNumber || section.studyYear || '');
+    payload.academicSessionId = section.academicSession?._id || section.academicSession || null;
   } else {
-    // Backward compatibility: use body fields if not using sectionId
-    // Allow empty values for admins who don't have specific department/year/section
     payload.department = body.department || userDoc?.department || '';
     payload.year = body.year || userDoc?.year || '';
     payload.section = body.section || userDoc?.section || '';
@@ -108,12 +104,73 @@ const buildTimetablePayload = async (body, userId, userDoc = null) => {
     payload.subjectCode = body.subjectCode || subject.code || '';
   }
 
+  if (payload.sectionId && payload.subjectId) {
+    const eligibleAssignments = await getTeachingAssignments({
+      section: payload.sectionId,
+      subject: payload.subjectId,
+    });
+
+    const filteredAssignments = normalizeRole(userDoc?.role) === 'faculty'
+      ? eligibleAssignments.filter((assignment) => String(assignment.teacher?._id || assignment.teacher) === String(userId))
+      : eligibleAssignments;
+
+    if (!filteredAssignments.length) {
+      const error = new Error('No teaching assignment is linked to the selected section and subject');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    let matchedAssignment = null;
+    if (payload.teachingAssignmentId) {
+      matchedAssignment = filteredAssignments.find((assignment) => String(assignment._id) === String(payload.teachingAssignmentId));
+      if (!matchedAssignment) {
+        const error = new Error('Selected teaching assignment is not valid for this section and subject');
+        error.statusCode = 400;
+        throw error;
+      }
+    } else if (payload.faculty) {
+      matchedAssignment = filteredAssignments.find((assignment) => String(assignment.teacher?._id || assignment.teacher) === String(payload.faculty));
+      if (!matchedAssignment) {
+        const error = new Error('Selected teacher is not linked to the chosen section and subject');
+        error.statusCode = 400;
+        throw error;
+      }
+    } else if (filteredAssignments.length === 1) {
+      [matchedAssignment] = filteredAssignments;
+    } else if (normalizeRole(userDoc?.role) === 'faculty') {
+      [matchedAssignment] = filteredAssignments;
+    } else {
+      const error = new Error('Multiple teachers are linked to this section and subject. Select the assigned teacher.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (matchedAssignment) {
+      payload.faculty = matchedAssignment.teacher?._id || matchedAssignment.teacher || payload.faculty || userId;
+      payload.teachingAssignmentId = matchedAssignment._id;
+      payload.academicSessionId = matchedAssignment.academicSession?._id || matchedAssignment.academicSession || payload.academicSessionId;
+    }
+  }
+
   if (!payload.subjectCode && body.subjectCode) {
     payload.subjectCode = String(body.subjectCode).trim();
   }
 
+  if (!payload.faculty) {
+    payload.faculty = userId;
+  }
+
   return payload;
 };
+
+const toMinutes = (value = '') => {
+  const [hours, minutes] = String(value).split(':').map(Number);
+  return (hours * 60) + (minutes || 0);
+};
+
+const overlaps = (startA, endA, startB, endB) => startA < endB && startB < endA;
+
+const buildTimetablePayload = async (body, userId, userDoc = null) => resolveTeachingContext(body, userId, userDoc);
 
 const ensureTimetableConflicts = async (payload, excludeId = null) => {
   const baseQuery = {
@@ -153,6 +210,38 @@ const ensureTimetableConflicts = async (payload, excludeId = null) => {
   }
 };
 
+exports.getTeachingAssignments = async (req, res, next) => {
+  try {
+    const role = normalizeRole(req.user.role);
+    const filters = {
+      section: req.query.sectionId || null,
+      subject: req.query.subjectId || null,
+      academicSession: req.query.academicSessionId || null,
+      teacher: role === 'faculty' ? req.user.id : (req.query.teacherId || null),
+    };
+
+    if (role === 'student') {
+      const enrollment = await getActiveEnrollment(req.user.id);
+      if (!enrollment?.section?._id) {
+        return res.status(200).json({ success: true, count: 0, data: [] });
+      }
+      filters.section = enrollment.section._id;
+    }
+
+    let assignments = await getTeachingAssignments(filters);
+
+    // If a section has linked planning data but stale assignments, rebuild once on demand.
+    if (!assignments.length && filters.section) {
+      await syncTeachingAssignmentsForSection(filters.section);
+      assignments = await getTeachingAssignments(filters);
+    }
+
+    res.status(200).json({ success: true, count: assignments.length, data: assignments });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getTimetable = async (req, res, next) => {
   try {
     const query = await buildTimetableQuery(req.user, {
@@ -164,8 +253,22 @@ exports.getTimetable = async (req, res, next) => {
       sectionId: req.query.sectionId,
     });
 
+    if (req.query.subjectId) {
+      query.subjectId = req.query.subjectId;
+    }
+
+    if (req.query.dayOfWeek) {
+      query.dayOfWeek = req.query.dayOfWeek;
+    }
+
+    if (req.query.teacherId && normalizeRole(req.user.role) !== 'faculty') {
+      query.faculty = req.query.teacherId;
+    }
+
     const entries = await TimetableEntry.find(query)
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate({
         path: 'sectionId',
         select: 'name studyYear program course department academicSession',
@@ -213,6 +316,8 @@ exports.createTimetableEntry = async (req, res, next) => {
 
     const populated = await TimetableEntry.findById(entry._id)
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')
       .lean();
@@ -232,6 +337,8 @@ exports.getTimetableEntry = async (req, res, next) => {
 
     const entry = await TimetableEntry.findOne(query)
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate({
         path: 'sectionId',
         select: 'name studyYear program course department academicSession',
@@ -271,6 +378,8 @@ exports.updateTimetableEntry = async (req, res, next) => {
 
     const updated = await TimetableEntry.findOneAndUpdate(query, payload, { new: true, runValidators: true })
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')
       .lean();
@@ -387,6 +496,37 @@ exports.getAttendanceSessions = async (req, res, next) => {
   try {
     const role = normalizeRole(req.user.role);
     const query = { isDeleted: false };  // FIX #11: Soft delete support
+    const hasDateFilter = Boolean(req.query.date || req.query.fromDate || req.query.toDate);
+
+    if (req.query.subjectId) {
+      query.subjectId = req.query.subjectId;
+    }
+
+    if (req.query.sectionId && role !== 'student') {
+      query.sectionId = req.query.sectionId;
+    }
+
+    if (req.query.date) {
+      const start = new Date(req.query.date);
+      const end = new Date(req.query.date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      query.date = { $gte: start, $lte: end };
+    } else if (hasDateFilter) {
+      const start = req.query.fromDate ? new Date(req.query.fromDate) : null;
+      const end = req.query.toDate ? new Date(req.query.toDate) : null;
+      if (start && !Number.isNaN(start.getTime())) {
+        start.setHours(0, 0, 0, 0);
+      }
+      if (end && !Number.isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+      }
+      if (start || end) {
+        query.date = {};
+        if (start) query.date.$gte = start;
+        if (end) query.date.$lte = end;
+      }
+    }
 
     if (role === 'student') {
       const enrollment = await getActiveEnrollment(req.user.id);
@@ -418,6 +558,8 @@ exports.getAttendanceSessions = async (req, res, next) => {
     // FIX #13: Optimize queries - use projection to limit fields returned
     const sessions = await AttendanceSession.find(query)
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate('records.student', 'name email')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')
@@ -428,7 +570,22 @@ exports.getAttendanceSessions = async (req, res, next) => {
 
     const data = role === 'student'
       ? sessions.map((session) => ({
-          ...session,
+          _id: session._id,
+          title: session.title,
+          subject: session.subject,
+          subjectId: session.subjectId,
+          teachingAssignmentId: session.teachingAssignmentId,
+          academicSessionId: session.academicSessionId,
+          department: session.department,
+          year: session.year,
+          section: session.section,
+          sectionId: session.sectionId,
+          date: session.date,
+          faculty: session.faculty,
+          topic: session.topic,
+          createdBy: session.createdBy,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
           myRecord: session.records.find((record) => record.student?._id?.toString() === req.user.id) || null,
         }))
       : sessions;
@@ -449,15 +606,19 @@ exports.createAttendanceSession = async (req, res, next) => {
     await ensureFacultySectionAccess(req.user, payload.sectionId, payload.subjectId);
     
     // CRITICAL FIX #1: Prevent duplicate attendance for same session
-    if (payload.sectionId && payload.date && payload.title) {
+    if (payload.sectionId && payload.subjectId && payload.date) {
+      const start = new Date(payload.date);
+      const end = new Date(payload.date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
       const existing = await AttendanceSession.findOne({
         sectionId: payload.sectionId,
-        date: { $gte: new Date(payload.date).setHours(0, 0, 0, 0), $lt: new Date(payload.date).setHours(23, 59, 59, 999) },
-        title: payload.title,
+        subjectId: payload.subjectId,
+        date: { $gte: start, $lte: end },
         isDeleted: false,
       });
       if (existing) {
-        const error = new Error('Attendance already marked for this session today. Update the existing record instead.');
+        const error = new Error('Attendance already exists for this section, subject, and date. Update the existing record instead.');
         error.statusCode = 409;
         throw error;
       }
@@ -485,7 +646,7 @@ exports.createAttendanceSession = async (req, res, next) => {
 
     const session = await AttendanceSession.create({
       ...payload,
-      faculty: req.user.id,
+      faculty: payload.faculty || req.user.id,
       createdBy: req.user.id,
       records: recordsArray,
       isDeleted: false,
@@ -493,6 +654,8 @@ exports.createAttendanceSession = async (req, res, next) => {
 
     const populated = await AttendanceSession.findById(session._id)
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate('records.student', 'name email department year section')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')
@@ -520,6 +683,8 @@ exports.updateAttendanceSession = async (req, res, next) => {
       title: payload.title,
       subject: payload.subject,
       subjectId: payload.subjectId,
+      teachingAssignmentId: payload.teachingAssignmentId || null,
+      academicSessionId: payload.academicSessionId || null,
       department: payload.department,
       year: payload.year,
       section: payload.section,
@@ -529,6 +694,23 @@ exports.updateAttendanceSession = async (req, res, next) => {
     };
 
     if (Array.isArray(req.body.records)) {
+      if (payload.sectionId && req.body.records.length > 0) {
+        const validStudentIds = await Enrollment.find({
+          section: payload.sectionId,
+          status: 'active',
+        }).distinct('student');
+
+        const invalidStudent = req.body.records.find(
+          (record) => !validStudentIds.some((id) => String(id) === String(record.student))
+        );
+
+        if (invalidStudent) {
+          const error = new Error('Attendance records contain a student who is not enrolled in the selected section');
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+
       update.records = req.body.records.map((record) => ({
         student: record.student,
         status: record.status,
@@ -538,6 +720,8 @@ exports.updateAttendanceSession = async (req, res, next) => {
 
     const updated = await AttendanceSession.findOneAndUpdate(query, update, { new: true, runValidators: true })
       .populate('faculty', 'name email role department')
+      .populate('teachingAssignmentId')
+      .populate('academicSessionId', 'label yearNumber')
       .populate('records.student', 'name email department year section')
       .populate('sectionId', 'name')
       .populate('subjectId', 'name code')

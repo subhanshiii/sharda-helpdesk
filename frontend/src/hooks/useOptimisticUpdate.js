@@ -78,7 +78,7 @@ export const useDebounce = (value, delay = 500) => {
  */
 export const usePagination = (initialPage = 1, initialLimit = 10) => {
   const [page,  setPage]  = useState(initialPage);
-  const [limit] = useState(initialLimit);
+  const limit = initialLimit;
   const [total, setTotal] = useState(0);
 
   const totalPages  = Math.ceil(total / limit);

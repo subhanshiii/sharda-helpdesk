@@ -71,6 +71,12 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    orgUnitId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OrgUnit',
+      default: null,
+      index: true,
+    },
     collegeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'College',

@@ -173,42 +173,42 @@ export default function AccountApprovalsPage() {
           (alerts.expiringUsers || []).length +
           combinedBlockedUsers.length +
           (alerts.missingAcademicMapping || []).length,
-        title: 'Identity Alerts Overview',
+        title: 'Account Readiness Overview',
         subtitle: roleFilter
-          ? `Monitoring verification, access, and lifecycle signals for ${ROLE_FILTERS.find((entry) => entry.value === roleFilter)?.label || 'the selected role'}.`
-          : 'Monitoring verification, access, and lifecycle signals across the full identity directory.',
+          ? `Monitoring verification, sign-in access, and academic readiness for ${ROLE_FILTERS.find((entry) => entry.value === roleFilter)?.label || 'the selected role'}.`
+          : 'Monitoring verification, sign-in access, and academic readiness across the full identity directory.',
         tone: 'bg-white border border-gray-200',
         groups: [
           {
-            title: 'Pending Verification',
-            subtitle: 'Provisioned users who still need to verify their email.',
+            title: 'Email Not Verified',
+            subtitle: 'Users who still need to confirm their email before sign-in is allowed.',
             items: alerts.unverifiedUsers || [],
-            emptyText: 'All provisioned accounts are verified.',
+            emptyText: 'All listed accounts have verified email.',
             metaRenderer: (item) => `Created ${formatDate(item.createdAt)}`,
           },
           {
-            title: 'Recent Logins',
-            subtitle: 'Latest approved identities that signed in successfully.',
+            title: 'Recent Sign-ins',
+            subtitle: 'Latest approved accounts that signed in successfully.',
             items: alerts.recentLogins || [],
             emptyText: 'No recent sign-in activity yet.',
             metaRenderer: (item) => `Last login ${formatDate(item.lastLogin)}`,
           },
           {
-            title: 'Expiring Soon',
-            subtitle: 'Accounts that expire within the next 14 days.',
+            title: 'Access Expiring Soon',
+            subtitle: 'Accounts whose access expires within the next 14 days.',
             items: alerts.expiringUsers || [],
             emptyText: 'No accounts are nearing expiry.',
             metaRenderer: (item) => `Expires ${formatDate(item.expiryDate)}`,
           },
           {
             title: 'Inactive or Blocked',
-            subtitle: 'Inactive, rejected, or suspended identities.',
+            subtitle: 'Accounts that are inactive, rejected, or suspended.',
             items: combinedBlockedUsers,
             emptyText: 'No inactive or blocked accounts.',
             metaRenderer: (item) => `${item.status || 'inactive'} · Updated ${formatDate(item.updatedAt)}`,
           },
           {
-            title: 'Student Mapping Issues',
+            title: 'Missing Academic Mapping',
             subtitle: 'Students missing section mapping that can break academic visibility.',
             items: alerts.missingAcademicMapping || [],
             emptyText: 'All students have valid academic mapping.',
@@ -218,29 +218,29 @@ export default function AccountApprovalsPage() {
       },
       {
         key: 'pending-verification',
-        label: 'Pending Verification',
+        label: 'Email Not Verified',
         count: alerts.summary?.unverifiedCount || 0,
-        title: 'Pending Verification',
-        subtitle: 'Users who still need to verify their email before their access record is complete.',
+        title: 'Email Not Verified',
+        subtitle: 'Users who still need to confirm their email before they can finish account readiness.',
         tone: 'bg-amber-50/70 border border-amber-100',
         groups: [{
-          title: 'Pending Verification',
-          subtitle: 'Provisioned users who still need to verify their email.',
+          title: 'Email Not Verified',
+          subtitle: 'Users who still need to confirm their email before sign-in is allowed.',
           items: alerts.unverifiedUsers || [],
-          emptyText: 'All provisioned accounts are verified.',
+          emptyText: 'All listed accounts have verified email.',
           metaRenderer: (item) => `Created ${formatDate(item.createdAt)}`,
         }],
       },
       {
         key: 'recent-logins',
-        label: 'Recent Logins',
+        label: 'Recent Sign-ins',
         count: alerts.summary?.recentLoginCount || 0,
-        title: 'Recent Logins',
-        subtitle: 'Latest approved identities that signed in successfully.',
+        title: 'Recent Sign-ins',
+        subtitle: 'Latest approved accounts that signed in successfully.',
         tone: 'bg-emerald-50/70 border border-emerald-100',
         groups: [{
-          title: 'Recent Logins',
-          subtitle: 'Latest approved identities that signed in successfully.',
+          title: 'Recent Sign-ins',
+          subtitle: 'Latest approved accounts that signed in successfully.',
           items: alerts.recentLogins || [],
           emptyText: 'No recent sign-in activity yet.',
           metaRenderer: (item) => `Last login ${formatDate(item.lastLogin)}`,
@@ -248,14 +248,14 @@ export default function AccountApprovalsPage() {
       },
       {
         key: 'inactive',
-        label: 'Inactive Accounts',
+        label: 'Inactive or Blocked',
         count: alerts.summary?.inactiveCount || 0,
-        title: 'Inactive Accounts',
-        subtitle: 'Accounts marked inactive or otherwise removed from operational access.',
+        title: 'Inactive or Blocked',
+        subtitle: 'Accounts that are inactive or otherwise removed from sign-in access.',
         tone: 'bg-red-50/70 border border-red-100',
         groups: [{
-          title: 'Inactive Accounts',
-          subtitle: 'Inactive, rejected, or suspended identities.',
+          title: 'Inactive or Blocked',
+          subtitle: 'Accounts that are inactive, rejected, or suspended.',
           items: combinedBlockedUsers,
           emptyText: 'No inactive or blocked accounts.',
           metaRenderer: (item) => `${item.status || 'inactive'} · Updated ${formatDate(item.updatedAt)}`,
@@ -263,14 +263,14 @@ export default function AccountApprovalsPage() {
       },
       {
         key: 'expiring',
-        label: 'Expiring Soon',
+        label: 'Access Expiring Soon',
         count: alerts.summary?.expiringSoonCount || 0,
-        title: 'Expiring Soon',
+        title: 'Access Expiring Soon',
         subtitle: 'Accounts that need access renewal attention soon.',
         tone: 'bg-orange-50/70 border border-orange-100',
         groups: [{
-          title: 'Expiring Soon',
-          subtitle: 'Accounts that expire within the next 14 days.',
+          title: 'Access Expiring Soon',
+          subtitle: 'Accounts whose access expires within the next 14 days.',
           items: alerts.expiringUsers || [],
           emptyText: 'No accounts are nearing expiry.',
           metaRenderer: (item) => `Expires ${formatDate(item.expiryDate)}`,
@@ -278,14 +278,14 @@ export default function AccountApprovalsPage() {
       },
       {
         key: 'blocked',
-        label: 'Blocked Accounts',
+        label: 'Rejected or Suspended',
         count: alerts.summary?.blockedCount || 0,
-        title: 'Blocked Accounts',
-        subtitle: 'Rejected and suspended identities that need admin attention.',
+        title: 'Rejected or Suspended',
+        subtitle: 'Accounts blocked by approval status and needing admin attention.',
         tone: 'bg-slate-50 border border-slate-200',
         groups: [{
-          title: 'Blocked Accounts',
-          subtitle: 'Rejected and suspended identities.',
+          title: 'Rejected or Suspended',
+          subtitle: 'Accounts currently blocked by approval status.',
           items: (alerts.blockedUsers || []),
           emptyText: 'No blocked accounts.',
           metaRenderer: (item) => `${item.status || 'blocked'} · Updated ${formatDate(item.updatedAt)}`,
@@ -293,13 +293,13 @@ export default function AccountApprovalsPage() {
       },
       {
         key: 'mapping',
-        label: 'Mapping Issues',
+        label: 'Missing Academic Mapping',
         count: alerts.summary?.mappingIssuesCount || 0,
-        title: 'Student Mapping Issues',
+        title: 'Missing Academic Mapping',
         subtitle: 'Students missing section or academic mapping that can break downstream visibility.',
         tone: 'bg-blue-50/70 border border-blue-100',
         groups: [{
-          title: 'Student Mapping Issues',
+          title: 'Missing Academic Mapping',
           subtitle: 'Students missing section mapping that can break academic visibility.',
           items: alerts.missingAcademicMapping || [],
           emptyText: 'All students have valid academic mapping.',
@@ -317,7 +317,7 @@ export default function AccountApprovalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Identity Alerts"
-        description="Review verification, access, and lifecycle signals from one operational identity monitor."
+        description="Review verification, sign-in access, and academic readiness from one operational identity monitor."
         action={(
           <div className="flex flex-wrap items-center gap-3">
             <select className="input min-w-[170px]" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
@@ -340,19 +340,19 @@ export default function AccountApprovalsPage() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <SummaryCard icon={FiClock} label="Pending Verification" value={alerts.summary?.unverifiedCount || 0} tone={isDark ? 'border border-amber-900/60 bg-amber-950/60' : 'bg-amber-50/60 border border-amber-100'} active={activeView === 'pending-verification'} onClick={() => setActiveView('pending-verification')} isDark={isDark} />
-            <SummaryCard icon={FiUserCheck} label="Recent Logins" value={alerts.summary?.recentLoginCount || 0} tone={isDark ? 'border border-emerald-900/60 bg-emerald-950/60' : 'bg-emerald-50/60 border border-emerald-100'} active={activeView === 'recent-logins'} onClick={() => setActiveView('recent-logins')} isDark={isDark} />
-            <SummaryCard icon={FiUserX} label="Inactive Accounts" value={alerts.summary?.inactiveCount || 0} tone={isDark ? 'border border-red-900/60 bg-red-950/60' : 'bg-red-50/60 border border-red-100'} active={activeView === 'inactive'} onClick={() => setActiveView('inactive')} isDark={isDark} />
-            <SummaryCard icon={FiAlertCircle} label="Expiring Soon" value={alerts.summary?.expiringSoonCount || 0} tone={isDark ? 'border border-orange-900/60 bg-orange-950/60' : 'bg-orange-50/60 border border-orange-100'} active={activeView === 'expiring'} onClick={() => setActiveView('expiring')} isDark={isDark} />
-            <SummaryCard icon={FiShield} label="Blocked Accounts" value={alerts.summary?.blockedCount || 0} tone={isDark ? 'border border-slate-700 bg-slate-900/70' : 'bg-slate-50 border border-slate-100'} active={activeView === 'blocked'} onClick={() => setActiveView('blocked')} isDark={isDark} />
-            <SummaryCard icon={FiUserCheck} label="Mapping Issues" value={alerts.summary?.mappingIssuesCount || 0} tone={isDark ? 'border border-blue-900/60 bg-blue-950/60' : 'bg-blue-50/60 border border-blue-100'} active={activeView === 'mapping'} onClick={() => setActiveView('mapping')} isDark={isDark} />
+            <SummaryCard icon={FiClock} label="Email Not Verified" value={alerts.summary?.unverifiedCount || 0} tone={isDark ? 'border border-amber-900/60 bg-amber-950/60' : 'bg-amber-50/60 border border-amber-100'} active={activeView === 'pending-verification'} onClick={() => setActiveView('pending-verification')} isDark={isDark} />
+            <SummaryCard icon={FiUserCheck} label="Recent Sign-ins" value={alerts.summary?.recentLoginCount || 0} tone={isDark ? 'border border-emerald-900/60 bg-emerald-950/60' : 'bg-emerald-50/60 border border-emerald-100'} active={activeView === 'recent-logins'} onClick={() => setActiveView('recent-logins')} isDark={isDark} />
+            <SummaryCard icon={FiUserX} label="Inactive or Blocked" value={alerts.summary?.inactiveCount || 0} tone={isDark ? 'border border-red-900/60 bg-red-950/60' : 'bg-red-50/60 border border-red-100'} active={activeView === 'inactive'} onClick={() => setActiveView('inactive')} isDark={isDark} />
+            <SummaryCard icon={FiAlertCircle} label="Access Expiring Soon" value={alerts.summary?.expiringSoonCount || 0} tone={isDark ? 'border border-orange-900/60 bg-orange-950/60' : 'bg-orange-50/60 border border-orange-100'} active={activeView === 'expiring'} onClick={() => setActiveView('expiring')} isDark={isDark} />
+            <SummaryCard icon={FiShield} label="Rejected or Suspended" value={alerts.summary?.blockedCount || 0} tone={isDark ? 'border border-slate-700 bg-slate-900/70' : 'bg-slate-50 border border-slate-100'} active={activeView === 'blocked'} onClick={() => setActiveView('blocked')} isDark={isDark} />
+            <SummaryCard icon={FiUserCheck} label="Missing Academic Mapping" value={alerts.summary?.mappingIssuesCount || 0} tone={isDark ? 'border border-blue-900/60 bg-blue-950/60' : 'bg-blue-50/60 border border-blue-100'} active={activeView === 'mapping'} onClick={() => setActiveView('mapping')} isDark={isDark} />
           </div>
 
           <section className={`card p-5 ${isDark ? 'border-slate-800 bg-slate-950' : (activeSection?.tone || 'border border-gray-200 bg-white')}`}>
             <div className={`flex flex-col gap-3 pb-4 sm:flex-row sm:items-end sm:justify-between ${isDark ? 'border-b border-slate-800' : 'border-b border-gray-100'}`}>
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>Identity Monitor</p>
-                <h2 className={`mt-2 font-display text-2xl font-bold ${isDark ? 'text-slate-50' : 'text-gray-900'}`}>{activeSection?.title || 'Identity Alerts Overview'}</h2>
+                <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>Account Readiness</p>
+                <h2 className={`mt-2 font-display text-2xl font-bold ${isDark ? 'text-slate-50' : 'text-gray-900'}`}>{activeSection?.title || 'Account Readiness Overview'}</h2>
                 <p className={`mt-1 text-sm ${isDark ? 'text-slate-300' : 'text-gray-500'}`}>{activeSection?.subtitle}</p>
               </div>
               <button type="button" onClick={() => setActiveView('all')} className={`btn-secondary ${activeView === 'all' ? 'border-blue-300 text-blue-700' : ''}`}>

@@ -25,6 +25,7 @@ const subjectSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // DEPRECATED: kept for backward compatibility only. CourseSubject is the source of truth.
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
@@ -35,6 +36,13 @@ const subjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession',
       required: true,
+      index: true,
+    },
+    term: {
+      type: Number,
+      min: 1,
+      max: 12,
+      default: 1,
       index: true,
     },
     credits: {

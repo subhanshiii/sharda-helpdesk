@@ -24,6 +24,13 @@ const enrollmentSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    term: {
+      type: Number,
+      min: 1,
+      max: 12,
+      default: null,
+      index: true,
+    },
     status: {
       type: String,
       enum: ['active', 'inactive', 'completed', 'withdrawn'],

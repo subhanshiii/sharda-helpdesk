@@ -19,6 +19,7 @@ import {
 } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, HelpTooltip, Modal } from '../components/ui';
+import { subjectMatchesCourse } from '../utils/academicScope';
 
 const TREE_ACTIONS = {
   college: ['department'],
@@ -57,6 +58,16 @@ const emptyInlineForm = {
   values: {},
 };
 
+const emptyOrgUnitForm = {
+  id: '',
+  name: '',
+  code: '',
+  type: 'operational',
+  collegeId: '',
+  linkedDepartmentId: '',
+  description: '',
+};
+
 const formatEntityName = (entity) => {
   if (!entity) return '—';
   if (entity.name && entity.code) return `${entity.name} (${entity.code})`;
@@ -75,7 +86,7 @@ const getProgramSubjects = (program, subjects = []) => (
 );
 
 const getCourseSubjects = (course, subjects = []) => (
-  subjects.filter((subject) => getEntityId(subject.course) === getEntityId(course))
+  subjects.filter((subject) => subjectMatchesCourse(subject, getEntityId(course)))
 );
 
 const getSessionSections = (session, sections = []) => (
@@ -100,6 +111,11 @@ const buildActiveStudentRecords = (enrollments = []) => {
       name: student.name || 'Student',
       systemId: student.systemId || '',
       email: student.email || '',
+      status: student.status || 'pending',
+      isActive: student.isActive !== false,
+      emailVerified: Boolean(student.emailVerified),
+      passwordNeedsSetup: Boolean(student.passwordNeedsSetup),
+      expiryDate: student.expiryDate || null,
       semester: entry.semester || '',
       section: entry.section || null,
       academicSession: entry.academicSession || entry.section?.academicSession || null,
@@ -112,6 +128,29 @@ const buildActiveStudentRecords = (enrollments = []) => {
   });
 
   return [...records.values()];
+};
+
+const canShowAcademicMappingOptions = (student) => {
+  if (!student) return false;
+  if (student.status !== 'approved') return false;
+  return true;
+};
+
+const groupSubjectsByTerm = (subjects = []) => {
+  const groups = new Map();
+  (subjects || []).forEach((subject) => {
+    const termKey = Number.isFinite(subject?.term) ? subject.term : 0;
+    const list = groups.get(termKey) || [];
+    list.push(subject);
+    groups.set(termKey, list);
+  });
+  return [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([term, items]) => ({
+      term: term || null,
+      label: term ? `Semester ${term}` : 'Unassigned semester',
+      subjects: items,
+    }));
 };
 
 const getColumnMeta = (type, item) => {
@@ -173,7 +212,7 @@ const getAssignedFacultyMembers = (entry) => {
 const DetailPill = ({ label, value }) => (
   <div className="flex h-full flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-    <p className="mt-2 text-sm font-semibold leading-5 text-gray-900">{value || '—'}</p>
+    <p className="mt-2 break-words text-sm font-semibold leading-5 text-gray-900">{value || '—'}</p>
   </div>
 );
 
@@ -189,27 +228,38 @@ const SummaryCard = ({ card, active, onClick }) => (
   </button>
 );
 
-const FocusMetric = ({ label, value, tone = 'slate' }) => (
-  <div className={`rounded-2xl border px-4 py-4 ${
-    tone === 'blue'
-      ? 'border-blue-100 bg-blue-50'
-      : tone === 'emerald'
-        ? 'border-emerald-100 bg-emerald-50'
-        : 'border-slate-200 bg-slate-50'
-  }`}>
-    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-    <p className="mt-2 text-xl font-black text-slate-900">{value || '—'}</p>
+const FocusMetricStack = ({ items = [] }) => (
+  <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-3">
+      {items.map((item, index) => {
+        const toneClass = item.tone === 'blue'
+          ? 'bg-blue-50 border-blue-100'
+          : item.tone === 'emerald'
+            ? 'bg-emerald-50 border-emerald-100'
+            : 'bg-slate-50 border-slate-200';
+
+        return (
+          <div
+            key={item.label}
+            className={`rounded-2xl border px-4 py-4 ${toneClass} ${index !== items.length - 1 ? '' : ''}`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
+            <p className="mt-2 break-words text-base font-bold leading-6 text-slate-900">{item.value || '—'}</p>
+          </div>
+        );
+      })}
+    </div>
   </div>
 );
 
-const FocusPanel = ({ eyebrow, title, description, children }) => (
-  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+const FocusPanel = ({ eyebrow, title, description, children, bodyClassName = '' }) => (
+  <div className="flex h-full min-w-0 flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
     <div className="mb-5 space-y-2">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
-      <h4 className="text-base font-bold leading-6 text-slate-900">{title}</h4>
+      <h4 className="break-words text-base font-bold leading-6 text-slate-900">{title}</h4>
       {description ? <p className="text-sm leading-6 text-slate-500">{description}</p> : null}
     </div>
-    {children}
+    <div className={`min-w-0 ${bodyClassName}`.trim()}>{children}</div>
   </div>
 );
 
@@ -217,18 +267,22 @@ const LinkedRecordButton = ({ title, subtitle, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-blue-200 hover:bg-blue-50"
+    className="flex w-full flex-col items-start gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left transition hover:border-blue-200 hover:bg-blue-50"
   >
-    <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-slate-900">{title}</span>
-    <span className="max-w-[42%] text-right text-xs leading-5 text-slate-500">{subtitle}</span>
+    <span className="min-w-0 break-words text-sm font-semibold leading-5 text-slate-900">{title}</span>
+    <span className="min-w-0 break-words text-xs leading-5 text-slate-500">{subtitle}</span>
   </button>
 );
 
-const ToolbarButton = ({ children, primary = false, className = '', ...props }) => (
+const ToolbarButton = ({ children, primary = false, active = false, className = '', ...props }) => (
   <button
     type="button"
     {...props}
-    className={`${primary ? 'btn-primary' : 'btn-secondary'} inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap px-3 ${className}`.trim()}
+    className={`${primary
+      ? 'btn-primary'
+      : active
+        ? 'border border-slate-900 bg-slate-900 text-white hover:bg-slate-800 hover:text-white'
+        : 'btn-secondary'} inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-semibold ${className}`.trim()}
   >
     {children}
   </button>
@@ -604,6 +658,198 @@ function HierarchyExplorer({
   );
 }
 
+const OrganizationUnitCard = ({ unit, onEdit, onDelete, onOpenProfile }) => {
+  const roleBuckets = [
+    { key: 'faculty', label: 'Faculty', items: unit.membersByRole?.faculty || [] },
+    { key: 'staff', label: 'Staff', items: unit.membersByRole?.staff || [] },
+    { key: 'admin', label: 'Admins', items: unit.membersByRole?.admin || [] },
+  ];
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${unit.type === 'academic' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                {unit.type}
+              </span>
+              {unit.linkedDepartmentId?.name ? (
+                <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
+                  Linked to {unit.linkedDepartmentId.name}
+                </span>
+              ) : null}
+            </div>
+            <div>
+              <h3 className="font-display text-xl font-bold text-slate-900">{unit.name}</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {[unit.code, unit.collegeId?.name || '', unit.description || 'Department ownership for non-student roles.'].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{unit.memberCounts?.total || 0} members</span>
+            <button type="button" onClick={() => onEdit(unit)} className="btn-secondary text-xs">Edit</button>
+            <button type="button" onClick={() => onDelete(unit)} className="btn-secondary text-xs text-red-600 hover:text-red-700">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 p-5 xl:grid-cols-3">
+        {roleBuckets.map((bucket) => (
+          <div key={bucket.key} className="rounded-3xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{bucket.label}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{bucket.items.length} linked</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <FiUsers size={16} />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {bucket.items.length ? bucket.items.map((member) => (
+                <button
+                  key={member._id}
+                  type="button"
+                  onClick={() => onOpenProfile(member)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  <Avatar user={member} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
+                    <p className="truncate text-xs text-slate-500">{[member.systemId || member.email || '', member.adminTier || member.status || ''].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  {member.inferredOrgUnit ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                      inferred
+                    </span>
+                  ) : null}
+                </button>
+              )) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-400">
+                  No {bucket.label.toLowerCase()} assigned yet.
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+function OrganizationWorkspace({
+  organizationUnits,
+  organizationSummary,
+  organizationLoading,
+  collegeOptions,
+  departmentOptions,
+  onRefresh,
+  onCreate,
+  onEdit,
+  onDelete,
+  onOpenProfile,
+}) {
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  const filteredUnits = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return organizationUnits.filter((unit) => {
+      if (typeFilter && unit.type !== typeFilter) return false;
+      if (!normalizedQuery) return true;
+      return [unit.name, unit.code, unit.description, unit.linkedDepartmentId?.name, unit.collegeId?.name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [organizationUnits, query, typeFilter]);
+
+  const summaryCards = [
+    { label: 'Units', value: organizationSummary.total || 0 },
+    { label: 'Academic Units', value: organizationSummary.academic || 0 },
+    { label: 'Operational Units', value: organizationSummary.operational || 0 },
+    { label: 'Faculty', value: organizationSummary.faculty || 0 },
+    { label: 'Staff', value: organizationSummary.staff || 0 },
+    { label: 'Admins', value: organizationSummary.admin || 0 },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {summaryCards.map((card) => (
+          <div key={card.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{card.label}</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="card p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_200px_auto_auto]">
+          <label className="relative block">
+            <FiSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              className="input pl-10"
+              placeholder="Search academic or operational units"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <select className="input" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option value="">All Types</option>
+            <option value="academic">Academic</option>
+            <option value="operational">Operational</option>
+          </select>
+          <ToolbarButton primary onClick={onCreate}>
+            <FiPlus size={15} />
+            Add Department Unit
+          </ToolbarButton>
+          <ToolbarButton onClick={onRefresh}>
+            <FiRefreshCw size={15} />
+            Refresh
+          </ToolbarButton>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
+          Academic departments control teaching structure like programs, sections, subjects, timetable, and attendance. Organization units control where faculty, staff, and admins belong operationally. When an organization unit is marked academic, it can link back to one academic department such as CSE so people placement stays understandable without changing the teaching hierarchy.
+        </div>
+      </div>
+
+      {organizationLoading ? (
+        <div className="card p-8">
+          <FullPageSpinner label="Loading organization view..." />
+        </div>
+      ) : filteredUnits.length ? (
+        <div className="space-y-5">
+          {filteredUnits.map((unit) => (
+            <OrganizationUnitCard
+              key={unit._id}
+              unit={unit}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onOpenProfile={onOpenProfile}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="card p-8">
+          <EmptyState
+            icon="🏢"
+            title="No organization units match yet"
+            description={organizationUnits.length
+              ? 'Try clearing the current search or type filter.'
+              : 'Create your first academic or operational unit to start placing faculty, staff, and admins.'}
+            action={!organizationUnits.length ? <button type="button" onClick={onCreate} className="btn-primary">Add First Department Unit</button> : null}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AcademicStructurePage() {
   const navigate = useNavigate();
   const [treeData, setTreeData] = useState([]);
@@ -627,10 +873,19 @@ export default function AcademicStructurePage() {
     subjects: [],
     faculty: [],
     students: [],
-    'section-subjects': [],
     enrollments: [],
   });
+  const [organizationUnits, setOrganizationUnits] = useState([]);
+  const [organizationSummary, setOrganizationSummary] = useState({
+    total: 0,
+    academic: 0,
+    operational: 0,
+    faculty: 0,
+    staff: 0,
+    admin: 0,
+  });
   const [loading, setLoading] = useState(true);
+  const [organizationLoading, setOrganizationLoading] = useState(true);
   const [error, setError] = useState('');
   const [quickSetupOpen, setQuickSetupOpen] = useState(false);
   const [quickSetupForm, setQuickSetupForm] = useState(emptyQuickSetup);
@@ -639,13 +894,16 @@ export default function AcademicStructurePage() {
   const [inlineSaving, setInlineSaving] = useState(false);
   const [inlineError, setInlineError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState({ open: false, resource: '', item: null, loading: false });
+  const [mappingRemovalState, setMappingRemovalState] = useState({ open: false, student: null, loading: false });
   const [selectedSection, setSelectedSection] = useState(null);
-  const [assignmentRowId, setAssignmentRowId] = useState('');
+  const [sectionStudentSelection, setSectionStudentSelection] = useState('');
+  const [sectionActionSaving, setSectionActionSaving] = useState({ student: false });
   const [activeScreen, setActiveScreen] = useState('structure');
   const [previousScreen, setPreviousScreen] = useState('structure');
   const [facultySubjectsTab, setFacultySubjectsTab] = useState('subjects');
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [facultySectionFilterId, setFacultySectionFilterId] = useState('');
+  const [facultySubjectsQuery, setFacultySubjectsQuery] = useState('');
   const [selectedCollegeId, setSelectedCollegeId] = useState('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [selectedProgramId, setSelectedProgramId] = useState('');
@@ -659,6 +917,11 @@ export default function AcademicStructurePage() {
   const [recordsCollegeFilter, setRecordsCollegeFilter] = useState('');
   const [recordsDepartmentFilter, setRecordsDepartmentFilter] = useState('');
   const [expandedCatalogColleges, setExpandedCatalogColleges] = useState({});
+  const [structureMode, setStructureMode] = useState('academic');
+  const [orgUnitFormOpen, setOrgUnitFormOpen] = useState(false);
+  const [orgUnitForm, setOrgUnitForm] = useState(emptyOrgUnitForm);
+  const [orgUnitFormSaving, setOrgUnitFormSaving] = useState(false);
+  const [orgUnitFormError, setOrgUnitFormError] = useState('');
 
   const loadAcademicWorkspace = useCallback(async () => {
     setLoading(true);
@@ -679,7 +942,6 @@ export default function AcademicStructurePage() {
         subjects: workspaceData.options?.subjects || [],
         faculty: workspaceData.options?.faculty || [],
         students: workspaceData.options?.students || [],
-        'section-subjects': workspaceData.options?.['section-subjects'] || [],
         enrollments: workspaceData.options?.enrollments || [],
       });
     } catch (requestError) {
@@ -689,9 +951,31 @@ export default function AcademicStructurePage() {
     }
   }, []);
 
+  const loadOrganizationWorkspace = useCallback(async () => {
+    setOrganizationLoading(true);
+    try {
+      const response = await API.get('/academics/org-units');
+      const payload = response.data?.data || {};
+      setOrganizationUnits(payload.units || []);
+      setOrganizationSummary(payload.summary || {
+        total: 0,
+        academic: 0,
+        operational: 0,
+        faculty: 0,
+        staff: 0,
+        admin: 0,
+      });
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Failed to load organization structure');
+    } finally {
+      setOrganizationLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadAcademicWorkspace();
-  }, [loadAcademicWorkspace]);
+    loadOrganizationWorkspace();
+  }, [loadAcademicWorkspace, loadOrganizationWorkspace]);
 
   useEffect(() => {
     if (!treeData.length) {
@@ -878,7 +1162,7 @@ export default function AcademicStructurePage() {
       return (options.subjects || []).filter((subject) => {
         if (!useGlobalList && selectedDepartmentId && String(subject.department?._id || subject.department) !== String(selectedDepartmentId)) return false;
         if (!useGlobalList && selectedProgramId && String(subject.program?._id || subject.program) !== String(selectedProgramId)) return false;
-        if (!useGlobalList && selectedCourseId && String(subject.course?._id || subject.course) !== String(selectedCourseId)) return false;
+        if (!useGlobalList && selectedCourseId && !subjectMatchesCourse(subject, selectedCourseId)) return false;
         return matches(subject);
       });
     }
@@ -989,21 +1273,16 @@ export default function AcademicStructurePage() {
     }
 
     if (focusLevel === 'subject') {
-      const parentProgram = options.programs.find((program) => String(program._id) === String(item.program?._id || item.program || ''));
-      const parentDepartment = options.departments.find((department) => String(department._id) === String(item.department?._id || item.department || parentProgram?.department?._id || parentProgram?.department || ''));
-      setSelectedCollegeId(parentDepartment?.college?._id || parentDepartment?.college || '');
-      setSelectedDepartmentId(parentDepartment?._id || item.department?._id || item.department || '');
-      setSelectedProgramId(parentProgram?._id || item.program?._id || item.program || '');
-      setSelectedCourseId(item.course?._id || item.course || '');
-      setSelectedSessionId(item.academicSession?._id || item.academicSession || '');
-      setSelectedSubject(item);
+      if (item?._id) {
+        navigate(`/academics/subjects/${item._id}`);
+      }
       return;
     }
 
     if (focusLevel === 'student') {
       setSelectedStudentId(item._id);
     }
-  }, [focusLevel, options.departments, options.programs]);
+  }, [focusLevel, navigate, options.departments, options.programs]);
 
   const focusHierarchyFromItem = (type, item) => {
     if (!item) return;
@@ -1120,15 +1399,21 @@ export default function AcademicStructurePage() {
       const selectedSession = options.academicSessions.find(
         (session) => String(session.program?._id || session.program) === String(parentItem?.program || selectedProgramId || '')
       );
+      const initialCourseIds = parentType === 'course' && parentItem?._id
+        ? [String(parentItem._id)]
+        : selectedCourseId
+          ? [String(selectedCourseId)]
+          : [];
       base.values = {
         code: '',
         name: '',
         department: parentItem?.department || selectedDepartmentId || '',
         program: parentItem?.program || selectedProgramId || '',
-        course: parentType === 'course' ? parentItem?._id || '' : selectedCourseId || '',
+        courseIds: initialCourseIds,
         academicSession: selectedSession?._id || '',
         credits: 0,
         type: 'core',
+        term: 1,
       };
     }
 
@@ -1202,6 +1487,109 @@ export default function AcademicStructurePage() {
         }
       : focusMeta;
 
+  const buildInlineValidationError = (resource, values) => {
+    const normalizedName = String(values?.name || '').trim();
+    const normalizedCode = String(values?.code || '').trim();
+
+    if (resource === 'college') {
+      if (!normalizedName || !normalizedCode) return 'College name and code are required.';
+      return '';
+    }
+
+    if (resource === 'department') {
+      if (!values?.college) return 'Select a college before saving the department.';
+      if (!normalizedName || !normalizedCode) return 'Department name and code are required.';
+      return '';
+    }
+
+    if (resource === 'program') {
+      if (!values?.department) return 'Select a department before saving the program.';
+      if (!normalizedName || !normalizedCode) return 'Program name and code are required.';
+      return '';
+    }
+
+    if (resource === 'course') {
+      if (!values?.department) return 'Select a department before saving the course.';
+      if (!values?.program) return 'Select a program before saving the course.';
+      if (!normalizedName || !normalizedCode) return 'Course name and code are required.';
+      return '';
+    }
+
+    if (resource === 'session') {
+      if (!values?.program) return 'Select a program before saving the academic session.';
+      if (!String(values?.label || '').trim()) return 'Academic session label is required.';
+      if (!Number(values?.yearNumber)) return 'Study year is required for the academic session.';
+      return '';
+    }
+
+    if (resource === 'section') {
+      if (!values?.department) return 'Select a department before saving the section.';
+      if (!values?.program) return 'Select a program before saving the section.';
+      if (!values?.course) return 'Select a course before saving the section.';
+      if (!values?.academicSession) return 'Select an academic session before saving the section.';
+      if (!String(values?.name || '').trim()) return 'Section name is required.';
+      return '';
+    }
+
+    if (resource === 'subject') {
+      if (!normalizedCode || !normalizedName) return 'Subject code and name are required.';
+      if (!values?.department) return 'Select a department before saving the subject.';
+      if (!values?.program) return 'Select a program before saving the subject.';
+      if (!Array.isArray(values?.courseIds) || !values.courseIds.length) return 'Select at least one linked course before saving the subject.';
+      if (!values?.academicSession) return 'Select an academic session before saving the subject.';
+      const normalizedTerm = Number(values?.term);
+      if (!Number.isFinite(normalizedTerm) || normalizedTerm < 1 || normalizedTerm > 12) return 'Subject term must be between 1 and 12.';
+      return '';
+    }
+
+    return '';
+  };
+
+  const buildInlineRequestError = (requestError) => {
+    const status = requestError?.response?.status;
+    const message = requestError?.response?.data?.message || requestError?.message || 'Failed to save academic record';
+
+    if (status === 403) {
+      return `${message} Check that your academic scope matches the selected hierarchy before creating this record.`;
+    }
+
+    if (status === 400) {
+      return `${message} Review the required hierarchy fields and linked records, then try again.`;
+    }
+
+    return message;
+  };
+
+  const buildInlineFieldErrors = (resource, values) => {
+    const errors = {};
+
+    if (resource === 'subject') {
+      if (!String(values?.code || '').trim()) errors.code = 'Subject code is required.';
+      if (!String(values?.name || '').trim()) errors.name = 'Subject name is required.';
+      if (!values?.department) errors.department = 'Select a department.';
+      if (!values?.program) errors.program = 'Select a program.';
+      if (!Array.isArray(values?.courseIds) || !values.courseIds.length) errors.courseIds = 'Select at least one linked course.';
+      if (!values?.academicSession) errors.academicSession = 'Select an academic session.';
+
+      const normalizedTerm = Number(values?.term);
+      if (!Number.isFinite(normalizedTerm) || normalizedTerm < 1 || normalizedTerm > 12) {
+        errors.term = 'Term must be between 1 and 12.';
+      }
+    }
+
+    return errors;
+  };
+
+  const inlineFieldErrors = inlineError
+    ? buildInlineFieldErrors(inlineForm.resource, inlineForm.values || {})
+    : {};
+
+  const getInlineFieldClassName = (fieldName) => (
+    inlineFieldErrors[fieldName]
+      ? 'input border-red-300 bg-red-50 text-red-900 placeholder:text-red-400 focus:border-red-400 focus:ring-red-200'
+      : 'input'
+  );
+
   const openEditForm = (resourceType, item) => {
     const resourceMap = {
       college: 'college',
@@ -1240,10 +1628,17 @@ export default function AcademicStructurePage() {
                     name: item.name || '',
                     department: item.department?._id || item.department || '',
                     program: item.program?._id || item.program || '',
-                    course: item.course?._id || item.course || '',
+                    courseIds: (() => {
+                      const courses = Array.isArray(item.courses) ? item.courses : [];
+                      const ids = courses.map((entry) => String(entry?._id || entry)).filter(Boolean);
+                      const legacy = item.course?._id || item.course;
+                      if (legacy && !ids.includes(String(legacy))) ids.push(String(legacy));
+                      return ids;
+                    })(),
                     academicSession: item.academicSession?._id || item.academicSession || '',
                     credits: item.credits ?? 0,
                     type: item.type || 'core',
+                    term: Number.isFinite(item.term) ? item.term : 1,
                   };
 
     setInlineError('');
@@ -1259,6 +1654,13 @@ export default function AcademicStructurePage() {
 
   const handleInlineSave = async (event) => {
     event.preventDefault();
+    const validationError = buildInlineValidationError(inlineForm.resource, inlineForm.values || {});
+    if (validationError) {
+      setInlineError(validationError);
+      toast.error(validationError);
+      return;
+    }
+
     setInlineSaving(true);
     setInlineError('');
     try {
@@ -1282,7 +1684,9 @@ export default function AcademicStructurePage() {
       setInlineForm(emptyInlineForm);
       await loadAcademicWorkspace();
     } catch (requestError) {
-      setInlineError(requestError.response?.data?.message || 'Failed to save academic record');
+      const message = buildInlineRequestError(requestError);
+      setInlineError(message);
+      toast.error(message);
     } finally {
       setInlineSaving(false);
     }
@@ -1323,25 +1727,105 @@ export default function AcademicStructurePage() {
     setConfirmDelete((current) => ({ ...current, loading: true }));
     try {
       await API.delete(`/academics/${confirmDelete.resource}/${confirmDelete.item._id}`);
-      toast.success('Academic record deleted');
+      toast.success(confirmDelete.resource === 'org-units' ? 'Department unit deleted' : 'Academic record deleted');
       setConfirmDelete({ open: false, resource: '', item: null, loading: false });
-      await loadAcademicWorkspace();
+      if (confirmDelete.resource === 'org-units') {
+        await loadOrganizationWorkspace();
+      } else {
+        await loadAcademicWorkspace();
+      }
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Delete failed');
       setConfirmDelete((current) => ({ ...current, loading: false }));
     }
   };
 
+  const openOrgUnitCreate = useCallback(() => {
+    setOrgUnitForm(emptyOrgUnitForm);
+    setOrgUnitFormError('');
+    setOrgUnitFormOpen(true);
+  }, []);
+
+  const openOrgUnitEdit = useCallback((unit) => {
+    if (!unit) return;
+    setOrgUnitForm({
+      id: unit._id,
+      name: unit.name || '',
+      code: unit.code || '',
+      type: unit.type || 'operational',
+      collegeId: String(unit.collegeId?._id || unit.collegeId || unit.linkedDepartmentId?.college?._id || unit.linkedDepartmentId?.college || ''),
+      linkedDepartmentId: String(unit.linkedDepartmentId?._id || unit.linkedDepartmentId || ''),
+      description: unit.description || '',
+    });
+    setOrgUnitFormError('');
+    setOrgUnitFormOpen(true);
+  }, []);
+
+  const handleOrgUnitSave = useCallback(async (event) => {
+    event.preventDefault();
+    setOrgUnitFormSaving(true);
+    setOrgUnitFormError('');
+
+    try {
+      const payload = {
+        name: orgUnitForm.name,
+        code: orgUnitForm.code,
+        type: orgUnitForm.type,
+        collegeId: orgUnitForm.collegeId || null,
+        linkedDepartmentId: orgUnitForm.type === 'academic' ? (orgUnitForm.linkedDepartmentId || null) : null,
+        description: orgUnitForm.description,
+      };
+
+      if (orgUnitForm.id) {
+        await API.put(`/academics/org-units/${orgUnitForm.id}`, payload);
+        toast.success('Department unit updated');
+      } else {
+        await API.post('/academics/org-units', payload);
+        toast.success('Department unit created');
+      }
+
+      setOrgUnitFormOpen(false);
+      setOrgUnitForm(emptyOrgUnitForm);
+      await loadOrganizationWorkspace();
+    } catch (requestError) {
+      setOrgUnitFormError(requestError.response?.data?.message || 'Failed to save department unit');
+    } finally {
+      setOrgUnitFormSaving(false);
+    }
+  }, [loadOrganizationWorkspace, orgUnitForm]);
+
   const sectionAssignments = useMemo(() => {
     if (!selectedSection?._id) return [];
-    return (options['section-subjects'] || []).filter(
-      (entry) => String(entry.section?._id || entry.section) === String(selectedSection._id)
-    );
-  }, [options, selectedSection]);
+    return (options.subjects || [])
+      .filter((subject) => {
+        if (String(subject.program?._id || subject.program) !== String(selectedSection.program?._id || selectedSection.program)) return false;
+        if (selectedSection.course && !subjectMatchesCourse(subject, selectedSection.course?._id || selectedSection.course)) return false;
+        if (String(subject.academicSession?._id || subject.academicSession) !== String(selectedSection.academicSession?._id || selectedSection.academicSession)) return false;
+        return true;
+      })
+      .map((subject) => {
+        const sectionTeachers = (subject.sectionTeachers || [])
+          .filter((mapping) => String(mapping.section?._id || mapping.section) === String(selectedSection._id))
+          .map((mapping) => mapping.teacher)
+          .filter(Boolean);
+        const assignedTeachers = sectionTeachers.length ? sectionTeachers : (subject.teachers || []);
+
+        return {
+          _id: `${selectedSection._id}-${subject._id}`,
+          section: selectedSection,
+          subject,
+          semester: selectedSection.studyYear ? `Year ${selectedSection.studyYear}` : '',
+          faculty: assignedTeachers[0] || null,
+          facultyMembers: assignedTeachers,
+        };
+      });
+  }, [options.subjects, selectedSection]);
   const sectionStudents = useMemo(() => {
     if (!selectedSection?._id) return [];
     return (options.enrollments || []).filter(
-      (entry) => String(entry.section?._id || entry.section) === String(selectedSection._id) && entry.status === 'active'
+      (entry) => String(entry.section?._id || entry.section) === String(selectedSection._id)
+        && entry.status === 'active'
+        && entry.student?.status === 'approved'
     );
   }, [options.enrollments, selectedSection]);
   const sectionFacultyMembers = useMemo(() => {
@@ -1355,35 +1839,142 @@ export default function AcademicStructurePage() {
     });
     return [...facultyMap.values()];
   }, [sectionAssignments]);
-  const sectionSubjectOptions = useMemo(() => options['section-subjects'] || [], [options]);
+  const sectionStudentIds = useMemo(
+    () => new Set(sectionStudents.map((entry) => String(entry.student?._id || ''))),
+    [sectionStudents]
+  );
+  const activelyMappedStudentIds = useMemo(
+    () => new Set((options.enrollments || [])
+      .filter((entry) => entry.status === 'active')
+      .map((entry) => String(entry.student?._id || entry.student || ''))
+      .filter(Boolean)),
+    [options.enrollments]
+  );
+  const availableSectionSubjects = useMemo(() => {
+    return sectionAssignments.map((entry) => entry.subject).filter(Boolean);
+  }, [sectionAssignments]);
+  const availableSectionStudents = useMemo(() => (
+    (options.students || []).filter((student) => {
+      if (student.status !== 'approved') return false;
+      if (student.isActive === false) return false;
+      const studentId = String(student._id || '');
+      if (!studentId) return false;
+      if (sectionStudentIds.has(studentId)) return false;
+      if (activelyMappedStudentIds.has(studentId)) return false;
+      return true;
+    })
+  ), [activelyMappedStudentIds, options.students, sectionStudentIds]);
+  const sectionCapacityLeft = useMemo(() => {
+    const capacity = Number(selectedSection?.capacity || 0);
+    if (!capacity) return '—';
+    return Math.max(capacity - sectionStudents.length, 0);
+  }, [sectionStudents.length, selectedSection?.capacity]);
 
-  const handleFacultyAssignment = async (sectionSubjectId, facultyIds) => {
+  useEffect(() => {
+    setSectionStudentSelection('');
+  }, [selectedSection?._id]);
+
+  const handleSectionStudentCreate = async () => {
+    if (!selectedSection?._id || !sectionStudentSelection) return;
+    setSectionActionSaving((current) => ({ ...current, student: true }));
     try {
-      await API.patch(`/academics/section-subjects/${sectionSubjectId}`, { facultyIds });
-      toast.success('Faculty assignment updated');
-      setAssignmentRowId('');
+      await API.post('/academics/enrollments', {
+        student: sectionStudentSelection,
+        section: selectedSection._id,
+        academicSession: selectedSection.academicSession?._id || selectedSection.academicSession,
+        semester: selectedSection.studyYear ? `Year ${selectedSection.studyYear}` : '',
+        status: 'active',
+      });
+      toast.success('Student mapped to section');
+      setSectionStudentSelection('');
       await loadAcademicWorkspace();
     } catch (requestError) {
-      toast.error(requestError.response?.data?.message || 'Failed to update faculty assignment');
+      toast.error(requestError.response?.data?.message || 'Failed to map student to section');
+    } finally {
+      setSectionActionSaving((current) => ({ ...current, student: false }));
+    }
+  };
+
+  const requestStudentMappingRemoval = (student) => {
+    if (!student?.systemId) return;
+    setMappingRemovalState({ open: true, student, loading: false });
+  };
+
+  const handleStudentMappingRemoval = async () => {
+    if (!mappingRemovalState.student?.systemId) return;
+    setMappingRemovalState((current) => ({ ...current, loading: true }));
+    try {
+      await API.put(`/users/${mappingRemovalState.student.systemId}`, { sectionId: '' });
+      toast.success('Academic mapping removed');
+      if (String(selectedStudentId) === String(mappingRemovalState.student._id || mappingRemovalState.student.student?._id || '')) {
+        setSelectedStudentId('');
+      }
+      setMappingRemovalState({ open: false, student: null, loading: false });
+      await loadAcademicWorkspace();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to remove academic mapping');
+      setMappingRemovalState((current) => ({ ...current, loading: false }));
     }
   };
 
   const filteredSubjects = useMemo(() => {
+    const normalizedQuery = facultySubjectsQuery.trim().toLowerCase();
     return (options.subjects || []).filter((subject) => {
       if (selectedDepartmentId && String(subject.department?._id || subject.department) !== String(selectedDepartmentId)) return false;
       if (selectedProgramId && String(subject.program?._id || subject.program) !== String(selectedProgramId)) return false;
-      if (selectedCourseId && String(subject.course?._id || subject.course) !== String(selectedCourseId)) return false;
+      if (selectedCourseId && !subjectMatchesCourse(subject, selectedCourseId)) return false;
       if (facultySectionFilterId) {
-        const subjectSectionAssignments = (options['section-subjects'] || []).filter(
-          (entry) => String(entry.subject?._id || entry.subject) === String(subject._id)
+        const subjectSectionAssignments = (subject.sectionTeachers || []).filter(
+          (entry) => String(entry.section?._id || entry.section) === String(facultySectionFilterId)
         );
-        if (!subjectSectionAssignments.some((entry) => String(entry.section?._id || entry.section) === String(facultySectionFilterId))) {
+        const sectionRecord = (options.sections || []).find(
+          (section) => String(section._id) === String(facultySectionFilterId)
+        );
+        const matchesScopedCourse = sectionRecord?.course
+          ? subjectMatchesCourse(subject, String(sectionRecord.course?._id || sectionRecord.course))
+          : false;
+        if (!subjectSectionAssignments.length && !matchesScopedCourse) {
           return false;
         }
       }
+      if (normalizedQuery) {
+        const haystack = [
+          subject.name,
+          subject.code,
+          subject.program?.name,
+          subject.department?.name,
+          subject.academicSession?.label,
+          ...(subject.teachers || []).map((teacher) => teacher.name || teacher.email),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [facultySectionFilterId, options, selectedCourseId, selectedDepartmentId, selectedProgramId]);
+  }, [facultySectionFilterId, facultySubjectsQuery, options, selectedCourseId, selectedDepartmentId, selectedProgramId]);
+
+  const sectionSubjectOptions = useMemo(() => (
+    (options.subjects || []).flatMap((subject) => {
+      const generalAssignments = (subject.teachers || []).map((teacher) => ({
+        _id: `${subject._id}-${teacher._id}-general`,
+        subject,
+        section: null,
+        faculty: teacher,
+        facultyMembers: [teacher],
+      }));
+      const sectionAssignmentsForSubject = (subject.sectionTeachers || []).map((mapping) => ({
+        _id: mapping._id,
+        subject,
+        section: mapping.section,
+        faculty: mapping.teacher,
+        facultyMembers: mapping.teacher ? [mapping.teacher] : [],
+      }));
+
+      return [...generalAssignments, ...sectionAssignmentsForSubject];
+    })
+  ), [options.subjects]);
 
   const facultyCards = useMemo(() => {
     return (options.faculty || []).map((faculty) => {
@@ -1392,15 +1983,30 @@ export default function AcademicStructurePage() {
           && (!facultySectionFilterId || String(entry.section?._id || entry.section) === String(facultySectionFilterId))
       );
       return { faculty, assignments };
+    }).filter(({ faculty, assignments }) => {
+      const normalizedQuery = facultySubjectsQuery.trim().toLowerCase();
+      if (!normalizedQuery) return true;
+      const facultyMatches = [faculty.name, faculty.email, faculty.systemId]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      if (facultyMatches) return true;
+      return assignments.some((assignment) => (
+        [assignment.subject?.name, assignment.subject?.code]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery))
+      ));
     });
-  }, [facultySectionFilterId, options.faculty, sectionSubjectOptions]);
+  }, [facultySectionFilterId, facultySubjectsQuery, options.faculty, sectionSubjectOptions]);
 
   const selectedSubjectAssignments = useMemo(() => {
     if (!selectedSubject?._id) return [];
-    return (options['section-subjects'] || []).filter(
-      (entry) => String(entry.subject?._id || entry.subject) === String(selectedSubject._id)
-    );
-  }, [options, selectedSubject]);
+    return (selectedSubject.sectionTeachers || []).map((entry) => ({
+      _id: entry._id,
+      section: entry.section,
+      faculty: entry.teacher,
+      facultyMembers: entry.teacher ? [entry.teacher] : [],
+    }));
+  }, [selectedSubject]);
   const selectedProgramSections = useMemo(() => getProgramSections(selectedProgram), [selectedProgram]);
   const selectedProgramSubjects = useMemo(() => getProgramSubjects(selectedProgram, options.subjects), [options.subjects, selectedProgram]);
   const selectedCourseSubjects = useMemo(() => getCourseSubjects(selectedCourse, options.subjects), [options.subjects, selectedCourse]);
@@ -1412,28 +2018,34 @@ export default function AcademicStructurePage() {
     goScreen('sectionDetail');
   };
 
+  const openSectionStudentsPage = (section) => {
+    if (!section?._id) return;
+    navigate(`/academics/sections/${section._id}/students`);
+  };
+
+  const openSubjectTeacherPage = (section) => {
+    if (!section?._id) {
+      navigate('/academics/subject-management');
+      return;
+    }
+    navigate(`/academics/subject-management?sectionId=${section._id}`);
+  };
+
   const openSubjectDetail = (subject) => {
-    setSelectedSubject(subject);
-    goScreen('subjectDetail');
+    if (!subject?._id) return;
+    navigate(`/academics/subjects/${subject._id}`);
   };
 
   const openFacultySubjects = () => {
     setFacultySubjectsTab('subjects');
+    setFacultySectionFilterId('');
+    setFacultySubjectsQuery('');
     goScreen('facultySubjects');
   };
 
   const handleFacultyOpen = (faculty) => {
     navigate(`/admin/users/${faculty.systemId}`);
   };
-
-  const focusContextItems = [
-    { label: 'College', value: selectedCollege?.name || 'Not selected' },
-    { label: 'Department', value: selectedDepartment?.name || 'Not selected' },
-    { label: 'Program', value: selectedProgram?.name || 'Not selected' },
-    { label: 'Course', value: selectedCourse?.name || 'Not selected' },
-    { label: 'Session', value: selectedSession?.label || 'Not selected' },
-    { label: 'Current View', value: extendedFocusMeta.title },
-  ];
 
   const focusMetrics = focusedEntity ? (
     focusLevel === 'program'
@@ -1480,10 +2092,6 @@ export default function AcademicStructurePage() {
                   ]
                 : []
   ) : [];
-  const focusMetricsGridClass = focusLevel === 'student'
-    ? 'grid gap-3 sm:grid-cols-2'
-    : 'grid gap-3 sm:grid-cols-2 xl:grid-cols-4';
-
   const getDeleteResource = (type) => ({
     college: 'colleges',
     department: 'departments',
@@ -1497,7 +2105,7 @@ export default function AcademicStructurePage() {
   if (loading) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 xl:min-h-[calc(100vh-9rem)] xl:max-h-[calc(100vh-7.5rem)]">
       <ConfirmDialog
         open={confirmDelete.open}
         title="Delete academic record"
@@ -1506,6 +2114,16 @@ export default function AcademicStructurePage() {
         loading={confirmDelete.loading}
         onConfirm={handleDelete}
         onClose={() => setConfirmDelete({ open: false, resource: '', item: null, loading: false })}
+      />
+
+      <ConfirmDialog
+        open={mappingRemovalState.open}
+        title="Remove academic mapping"
+        description={`Remove ${mappingRemovalState.student?.name || 'this student'} from the current section? This will clear the active section enrollment.`}
+        confirmLabel="Remove Mapping"
+        loading={mappingRemovalState.loading}
+        onConfirm={handleStudentMappingRemoval}
+        onClose={() => setMappingRemovalState({ open: false, student: null, loading: false })}
       />
 
       <Modal
@@ -1597,11 +2215,11 @@ export default function AcademicStructurePage() {
             {inlineForm.resource === 'section' ? (
               <div className="grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <select className="input" value={inlineForm.values.department || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, department: e.target.value, program: '', course: '', academicSession: '' } }))} required>
+                  <select className={getInlineFieldClassName('department')} value={inlineForm.values.department || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, department: e.target.value, program: '', course: '', academicSession: '' } }))} required>
                     <option value="">Select Department</option>
                     {options.departments.map((department) => <option key={department._id} value={department._id}>{formatEntityName(department)}</option>)}
                   </select>
-                  <select className="input" value={inlineForm.values.program || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, program: e.target.value, course: '', academicSession: '' } }))} required>
+                  <select className={getInlineFieldClassName('program')} value={inlineForm.values.program || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, program: e.target.value, course: '', academicSession: '' } }))} required>
                     <option value="">Select Program</option>
                     {options.programs
                       .filter((program) => !inlineForm.values.department || String(program.department?._id || program.department) === String(inlineForm.values.department))
@@ -1635,8 +2253,8 @@ export default function AcademicStructurePage() {
             {inlineForm.resource === 'subject' ? (
               <div className="grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <input className="input" placeholder="Subject Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
-                  <input className="input" placeholder="Subject Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
+                  <input className={getInlineFieldClassName('code')} placeholder="Subject Code" value={inlineForm.values.code || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, code: e.target.value.toUpperCase() } }))} required />
+                  <input className={getInlineFieldClassName('name')} placeholder="Subject Name" value={inlineForm.values.name || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, name: e.target.value } }))} required />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <select className="input" value={inlineForm.values.department || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, department: e.target.value, program: '', course: '', academicSession: '' } }))} required>
@@ -1651,20 +2269,61 @@ export default function AcademicStructurePage() {
                   </select>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <select className="input" value={inlineForm.values.course || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, course: e.target.value } }))}>
-                    <option value="">Select Course</option>
-                    {options.courses
-                      .filter((course) => !inlineForm.values.program || String(course.program?._id || course.program) === String(inlineForm.values.program))
-                      .map((course) => <option key={course._id} value={course._id}>{formatEntityName(course)}</option>)}
-                  </select>
-                  <select className="input" value={inlineForm.values.academicSession || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, academicSession: e.target.value } }))} required>
+                  <label className="block">
+                    <span className="label">Linked courses</span>
+                    <select
+                      className={`${getInlineFieldClassName('courseIds')} min-h-[7rem]`}
+                      multiple
+                      value={Array.isArray(inlineForm.values.courseIds) ? inlineForm.values.courseIds : []}
+                      onChange={(e) => setInlineForm((c) => ({
+                        ...c,
+                        values: {
+                          ...c.values,
+                          courseIds: Array.from(e.target.selectedOptions).map((option) => option.value),
+                        },
+                      }))}
+                      required
+                    >
+                      {options.courses
+                        .filter((course) => !inlineForm.values.program || String(course.program?._id || course.program) === String(inlineForm.values.program))
+                        .map((course) => <option key={course._id} value={course._id}>{formatEntityName(course)}</option>)}
+                    </select>
+                  </label>
+                  <select className={getInlineFieldClassName('academicSession')} value={inlineForm.values.academicSession || ''} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, academicSession: e.target.value } }))} required>
                     <option value="">Select Academic Session</option>
                     {options.academicSessions
                       .filter((session) => !inlineForm.values.program || String(session.program?._id || session.program) === String(inlineForm.values.program))
                       .map((session) => <option key={session._id} value={session._id}>{session.label} · Year {session.yearNumber}</option>)}
                   </select>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <p className="rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--text-muted)]">
+                  Subjects created here and in Subject Directory use the same shared subject records.
+                </p>
+                {Object.keys(inlineFieldErrors).length ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    Complete the highlighted fields before saving this subject.
+                  </div>
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <input
+                    className={getInlineFieldClassName('term')}
+                    type="number"
+                    min="1"
+                    max="12"
+                    placeholder="Term / Semester"
+                    value={inlineForm.values.term ?? 1}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setInlineForm((c) => ({
+                        ...c,
+                        values: {
+                          ...c.values,
+                          term: Number.isFinite(next) && next >= 1 && next <= 12 ? next : 1,
+                        },
+                      }));
+                    }}
+                    required
+                  />
                   <input className="input" type="number" min="0" placeholder="Credits" value={inlineForm.values.credits ?? 0} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, credits: Number(e.target.value) || 0 } }))} />
                   <select className="input" value={inlineForm.values.type || 'core'} onChange={(e) => setInlineForm((c) => ({ ...c, values: { ...c.values, type: e.target.value } }))}>
                     <option value="core">Core</option>
@@ -1779,20 +2438,168 @@ export default function AcademicStructurePage() {
         </div>
       </Modal>
 
+      <Modal open={orgUnitFormOpen} onClose={() => setOrgUnitFormOpen(false)} panelClassName="max-w-2xl">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-bold text-gray-900">
+                {orgUnitForm.id ? 'Edit Department Unit' : 'Add Department Unit'}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Keep the teaching hierarchy separate from people placement. Use academic departments for curriculum structure, and department units for faculty, staff, and admin home ownership.
+              </p>
+            </div>
+            <button type="button" onClick={() => setOrgUnitFormOpen(false)} className="rounded-2xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+              <FiX size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleOrgUnitSave} className="mt-6 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <input
+                className="input"
+                placeholder="Department Unit Name"
+                value={orgUnitForm.name}
+                onChange={(event) => setOrgUnitForm((current) => ({ ...current, name: event.target.value }))}
+                required
+              />
+              <input
+                className="input"
+                placeholder="Code"
+                value={orgUnitForm.code}
+                onChange={(event) => setOrgUnitForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))}
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <select
+                className="input"
+                value={orgUnitForm.type}
+                onChange={(event) => setOrgUnitForm((current) => ({
+                  ...current,
+                  type: event.target.value,
+                  linkedDepartmentId: event.target.value === 'academic' ? current.linkedDepartmentId : '',
+                }))}
+              >
+                <option value="operational">Operational</option>
+                <option value="academic">Academic</option>
+              </select>
+              <select
+                className="input"
+                value={orgUnitForm.collegeId}
+                onChange={(event) => setOrgUnitForm((current) => ({ ...current, collegeId: event.target.value }))}
+              >
+                <option value="">Select College (Optional)</option>
+                {options.colleges.map((college) => (
+                  <option key={college._id} value={college._id}>{formatEntityName(college)}</option>
+                ))}
+              </select>
+            </div>
+
+            {orgUnitForm.type === 'academic' ? (
+              <select
+                className="input"
+                value={orgUnitForm.linkedDepartmentId}
+                onChange={(event) => setOrgUnitForm((current) => ({ ...current, linkedDepartmentId: event.target.value }))}
+              >
+                <option value="">Link Existing Academic Department (Optional)</option>
+                {options.departments
+                  .filter((department) => !orgUnitForm.collegeId || String(department.college?._id || department.college) === String(orgUnitForm.collegeId))
+                  .map((department) => (
+                    <option key={department._id} value={department._id}>{formatEntityName(department)}</option>
+                  ))}
+              </select>
+            ) : null}
+
+            <textarea
+              className="input min-h-[110px]"
+              placeholder="Description"
+              value={orgUnitForm.description}
+              onChange={(event) => setOrgUnitForm((current) => ({ ...current, description: event.target.value }))}
+            />
+
+            {orgUnitFormError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{orgUnitFormError}</div> : null}
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setOrgUnitFormOpen(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={orgUnitFormSaving} className="btn-primary">
+                {orgUnitFormSaving ? 'Saving...' : orgUnitForm.id ? 'Save Changes' : 'Create Unit'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
       <div className="space-y-4">
         <div className="min-w-0">
           <p className="font-display text-lg font-semibold leading-8 text-gray-900 sm:text-xl">
-            {activeScreen === 'structure'
-              ? 'Build and navigate the university hierarchy with a cleaner, faster workspace.'
-              : activeScreen === 'facultySubjects'
-                ? 'Browse subjects and faculty relationships from the same academic workspace without losing context.'
-                : activeScreen === 'sectionDetail'
-                  ? 'Review section details, student membership, and faculty ownership in one focused academic view.'
-                  : 'Inspect subject mappings, assigned faculty, and linked sections from the same academic workspace.'}
+            {structureMode === 'organization'
+              ? 'Manage the ownership side of the institution separately, so faculty, staff, and admins have a department home without changing the student delivery tree.'
+              : activeScreen === 'structure'
+                ? 'Build and navigate the university hierarchy with a cleaner, faster workspace.'
+                : activeScreen === 'facultySubjects'
+                  ? 'Browse subjects and faculty relationships from the same academic workspace without losing context.'
+                  : activeScreen === 'sectionDetail'
+                    ? 'Review section details, student membership, and inherited subject coverage in one focused academic view.'
+                    : 'Inspect subject mappings, assigned faculty, and linked sections from the same academic workspace.'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {activeScreen === 'structure' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="inline-flex items-center rounded-full p-1 shadow-sm"
+            style={{
+              backgroundColor: 'var(--theme-toggle-bg)',
+              border: '1px solid var(--theme-toggle-border)',
+              boxShadow: 'var(--theme-toggle-shadow)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setStructureMode('academic')}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              style={structureMode === 'academic'
+                ? {
+                    background: 'var(--page-accent-panel)',
+                    color: 'var(--page-accent-panel-text)',
+                    boxShadow: 'var(--shadow-card)',
+                  }
+                : {
+                    color: 'var(--theme-toggle-text)',
+                  }}
+            >
+              Academic
+            </button>
+            <button
+              type="button"
+              onClick={() => setStructureMode('organization')}
+              className="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              style={structureMode === 'organization'
+                ? {
+                    background: 'var(--page-accent-panel)',
+                    color: 'var(--page-accent-panel-text)',
+                    boxShadow: 'var(--shadow-card)',
+                  }
+                : {
+                    color: 'var(--theme-toggle-text)',
+                  }}
+            >
+              Organizational
+            </button>
+          </div>
+
+          {structureMode === 'organization' ? (
+            <>
+              <ToolbarButton primary onClick={openOrgUnitCreate}>
+                <FiPlus size={15} />
+                Add Department Unit
+              </ToolbarButton>
+              <ToolbarButton onClick={loadOrganizationWorkspace}>
+                <FiRefreshCw size={15} />
+                Refresh
+              </ToolbarButton>
+            </>
+          ) : activeScreen === 'structure' ? (
             <>
               <HelpTooltip title="Academic workspace help" items={WORKSPACE_HELP_ITEMS} />
               <ToolbarButton primary onClick={openFacultySubjects}>
@@ -1805,7 +2612,7 @@ export default function AcademicStructurePage() {
               </ToolbarButton>
               <ToolbarButton onClick={() => navigate('/academics/advanced')}>
                 <FiLayers size={15} />
-                Advanced Operations
+                Subject Directory
               </ToolbarButton>
               <ToolbarButton onClick={() => setQuickSetupOpen(true)}>
                 <FiPlus size={15} />
@@ -1833,6 +2640,21 @@ export default function AcademicStructurePage() {
 
       {error ? <Alert type="error" message={error} /> : null}
 
+      {structureMode === 'organization' ? (
+        <OrganizationWorkspace
+          organizationUnits={organizationUnits}
+          organizationSummary={organizationSummary}
+          organizationLoading={organizationLoading}
+          collegeOptions={options.colleges}
+          departmentOptions={options.departments}
+          onRefresh={loadOrganizationWorkspace}
+          onCreate={openOrgUnitCreate}
+          onEdit={openOrgUnitEdit}
+          onDelete={(unit) => setConfirmDelete({ open: true, resource: 'org-units', item: unit, loading: false })}
+          onOpenProfile={(member) => member?.systemId && navigate(`/admin/users/${member.systemId}`)}
+        />
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         {summaryCards.map((card) => (
           <SummaryCard
@@ -1863,7 +2685,7 @@ export default function AcademicStructurePage() {
       </div>
 
       {activeScreen === 'structure' ? (
-        <div className="space-y-6">
+        <div className="space-y-6 xl:flex xl:h-full xl:min-h-0 xl:flex-col">
           {!treeData.length ? (
             <div className="card p-8">
               <EmptyState
@@ -1876,14 +2698,14 @@ export default function AcademicStructurePage() {
           ) : null}
 
           {workspaceView === 'hierarchy' ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.94fr)] xl:items-start">
-              <div className="card flex overflow-hidden p-0 xl:h-[760px] xl:flex-col">
+            <div className="grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.94fr)] xl:items-stretch">
+              <div className="card flex overflow-hidden p-0 xl:h-full xl:min-h-0 xl:flex-col">
                 <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
                   <div className="space-y-4">
                     <div className="max-w-2xl space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Workspace Level</p>
                       <h3 className="font-display text-2xl font-bold text-slate-900">{extendedFocusMeta.title}</h3>
-                      <p className="truncate text-xs leading-5 text-slate-500" title={extendedFocusMeta.subtitle}>{extendedFocusMeta.subtitle}</p>
+                      <p className="break-words text-xs leading-5 text-slate-500" title={extendedFocusMeta.subtitle}>{extendedFocusMeta.subtitle}</p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <label className="relative block w-full min-w-0">
@@ -1970,16 +2792,17 @@ export default function AcademicStructurePage() {
                                 <ToolbarButton className="text-xs" onClick={() => selectFocusedItem(item)}>
                                   {['section', 'subject', 'student'].includes(focusLevel) ? 'Open' : 'Explore'}
                                 </ToolbarButton>
-                                {focusLevel !== 'student' ? (
+                                {focusLevel !== 'student' && focusLevel !== 'subject' ? (
                                   <>
                                     <ToolbarButton className="text-xs" onClick={() => openEditForm(focusLevel === 'session' ? 'session' : focusLevel, item)}>Edit</ToolbarButton>
                                     <ToolbarButton className="text-xs text-red-600 hover:text-red-700" onClick={() => setConfirmDelete({ open: true, resource: getDeleteResource(focusLevel === 'session' ? 'session' : focusLevel), item, loading: false })}>Delete</ToolbarButton>
                                   </>
-                                ) : (
+                                ) : focusLevel === 'student' ? (
                                   <ToolbarButton className="text-xs" onClick={() => navigate(`/admin/users/${item.systemId}`)} disabled={!item.systemId}>
                                     Open Profile
                                   </ToolbarButton>
-                                )}
+                                ) : null
+                                }
                               </>
                             )}
                           />
@@ -1994,31 +2817,22 @@ export default function AcademicStructurePage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-5 xl:h-[760px]">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {focusContextItems.map((item) => (
-                    <div key={item.label} className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-                      <p className="mt-2 truncate text-sm font-semibold leading-6 text-slate-900">{item.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="card flex flex-1 overflow-hidden p-0">
+              <div className="flex min-w-0 flex-col xl:h-full xl:min-h-0">
+                <div className="card flex min-w-0 flex-1 overflow-hidden p-0">
                   {focusedEntity ? (
                     <div className="flex h-full flex-1 flex-col">
-                      <div className="border-b border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 px-6 py-6 text-white">
+                      <div className="panel-accent border-b px-6 py-6">
                         <div className="flex flex-col gap-6">
                           <div className="flex items-start gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-white/10 text-white">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-white/10">
                               {getEntityIcon(focusLevel === 'session' ? 'session' : focusLevel)}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                              <p className="panel-accent-muted text-[11px] font-semibold uppercase tracking-[0.18em]">
                                 {focusLevel === 'session' ? 'Session Overview' : 'Selected Item'}
                               </p>
-                              <h3 className="mt-2 truncate font-display text-2xl font-bold">{formatEntityName(focusedEntity)}</h3>
-                              <p className="mt-2 max-w-2xl truncate text-sm text-white/70" title={getColumnMeta(focusLevel, focusedEntity)}>{getColumnMeta(focusLevel, focusedEntity)}</p>
+                              <h3 className="mt-2 break-words font-display text-2xl font-bold leading-tight">{formatEntityName(focusedEntity)}</h3>
+                              <p className="panel-accent-muted mt-2 max-w-2xl break-words text-sm leading-6" title={getColumnMeta(focusLevel, focusedEntity)}>{getColumnMeta(focusLevel, focusedEntity)}</p>
                             </div>
                           </div>
 
@@ -2032,8 +2846,24 @@ export default function AcademicStructurePage() {
                               </button>
                             ))}
                             {focusLevel === 'student' ? (
-                              <button type="button" onClick={() => focusedEntity.systemId && navigate(`/admin/users/${focusedEntity.systemId}`)} disabled={!focusedEntity.systemId} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
-                                Open Profile
+                              <>
+                                <button type="button" onClick={() => focusedEntity.systemId && navigate(`/admin/users/${focusedEntity.systemId}`)} disabled={!focusedEntity.systemId} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                  Open Profile
+                                </button>
+                                {canShowAcademicMappingOptions(focusedEntity) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => requestStudentMappingRemoval(focusedEntity)}
+                                    disabled={!focusedEntity.systemId || !focusedEntity.section}
+                                    className="inline-flex min-h-10 items-center rounded-full border border-white/25 bg-transparent px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Remove Mapping
+                                  </button>
+                                ) : null}
+                              </>
+                            ) : focusLevel === 'subject' ? (
+                              <button type="button" onClick={() => focusedEntity._id && navigate(`/academics/subjects/${focusedEntity._id}`)} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100">
+                                Open Subject Page
                               </button>
                             ) : (
                               <button type="button" onClick={() => openEditForm(focusLevel, focusedEntity)} className="inline-flex min-h-10 items-center rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-900 transition hover:bg-slate-100">
@@ -2048,32 +2878,80 @@ export default function AcademicStructurePage() {
                       </div>
 
                       <div className="flex-1 space-y-5 overflow-y-auto p-6">
-                        <div className={focusMetricsGridClass}>
-                          {focusMetrics.map((item) => (
-                            <FocusMetric key={item.label} label={item.label} value={item.value} tone={item.tone} />
-                          ))}
-                        </div>
+                        {focusMetrics.length ? (
+                          <FocusMetricStack items={focusMetrics} />
+                        ) : null}
 
-                        <div className="grid gap-4 xl:grid-cols-2">
+                        <div className="grid min-w-0 gap-4 xl:grid-cols-2 xl:items-stretch">
+                          {focusLevel === 'college' ? (
+                            <>
+                              <FocusPanel eyebrow="Departments" title="Departments in this College" description="Academic departments currently configured under this college." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.departments || []).length ? (focusedEntity.departments || []).map((department) => (
+                                    <LinkedRecordButton key={department._id} title={department.name} subtitle={`${(department.programs || []).length} programs`} onClick={() => selectFocusedItem(department)} />
+                                  )) : <p className="text-sm text-slate-500">No departments are attached to this college yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Programs" title="Programs in this College" description="Programs available across the departments in this college." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.departments || []).flatMap((department) => department.programs || []).length
+                                    ? (focusedEntity.departments || []).flatMap((department) => department.programs || []).map((program) => (
+                                      <LinkedRecordButton key={program._id} title={program.name} subtitle={`${(program.courses || []).length} courses`} onClick={() => selectFocusedItem(program)} />
+                                    ))
+                                    : <p className="text-sm text-slate-500">No programs are available under this college yet.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
+                          ) : null}
+
+                          {focusLevel === 'department' ? (
+                            <>
+                              <FocusPanel eyebrow="Programs" title="Programs in this Department" description="Programs currently connected to the selected department." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.programs || []).length ? (focusedEntity.programs || []).map((program) => (
+                                    <LinkedRecordButton key={program._id} title={program.name} subtitle={`${(program.courses || []).length} courses`} onClick={() => selectFocusedItem(program)} />
+                                  )) : <p className="text-sm text-slate-500">No programs are attached to this department yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Courses" title="Courses in this Department" description="Courses available through the department's programs." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.programs || []).flatMap((program) => program.courses || []).length
+                                    ? (focusedEntity.programs || []).flatMap((program) => program.courses || []).map((course) => (
+                                      <LinkedRecordButton key={course._id} title={course.name} subtitle={`${(course.sections || []).length} sections`} onClick={() => selectFocusedItem(course)} />
+                                    ))
+                                    : <p className="text-sm text-slate-500">No courses are attached to this department yet.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
+                          ) : null}
+
                           {focusLevel === 'program' ? (
                             <>
-                              <FocusPanel eyebrow="Sessions" title="Academic Sessions" description="Year-level sessions connected to this program.">
-                                <div className="flex flex-wrap gap-2">
+                              <FocusPanel eyebrow="Courses" title="Courses in this Program" description="Courses currently connected to this program." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.courses || []).length ? (focusedEntity.courses || []).map((course) => (
+                                    <LinkedRecordButton key={course._id} title={course.name} subtitle={`${(course.sections || []).length} sections`} onClick={() => selectFocusedItem(course)} />
+                                  )) : <p className="text-sm text-slate-500">No courses are attached to this program yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Sessions" title="Academic Sessions" description="Year-level sessions connected to this program." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
                                   {(options.academicSessions || [])
                                     .filter((session) => String(session.program?._id || session.program) === String(focusedEntity._id))
                                     .map((session) => (
-                                      <button
+                                      <LinkedRecordButton
                                         key={session._id}
-                                        type="button"
+                                        title={session.label}
+                                        subtitle={`Year ${session.yearNumber || '—'}`}
                                         onClick={() => {
                                           setSelectedSessionId(session._id);
                                           setFocusScopeMode('contextual');
                                           setFocusLevel('session');
                                         }}
-                                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${String(selectedSessionId) === String(session._id) ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-200 hover:bg-blue-50'}`}
-                                      >
-                                        {session.label} · Year {session.yearNumber}
-                                      </button>
+                                      />
                                     ))}
                                   {!((options.academicSessions || []).filter((session) => String(session.program?._id || session.program) === String(focusedEntity._id)).length) ? (
                                     <p className="text-sm text-slate-500">No academic sessions are linked to this program yet.</p>
@@ -2081,7 +2959,7 @@ export default function AcademicStructurePage() {
                                 </div>
                               </FocusPanel>
 
-                              <FocusPanel eyebrow="Direct Delivery" title="Sections Without Course" description="Program sections that are not mapped to a specific course.">
+                              <FocusPanel eyebrow="Direct Delivery" title="Sections Without Course" description="Program sections that are not mapped to a specific course." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 <div className="space-y-2">
                                   {(focusedEntity.standaloneSections || []).length ? (focusedEntity.standaloneSections || []).map((section) => (
                                     <LinkedRecordButton key={section._id} title={section.name} subtitle={section.academicSession?.label || 'Session'} onClick={() => openSectionDetail(section)} />
@@ -2093,7 +2971,7 @@ export default function AcademicStructurePage() {
 
                           {focusLevel === 'course' ? (
                             <>
-                              <FocusPanel eyebrow="Delivery" title="Sections in this Course" description="Operational teaching groups attached to this course.">
+                              <FocusPanel eyebrow="Delivery" title="Sections in this Course" description="Operational teaching groups attached to this course." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 <div className="space-y-2">
                                   {(focusedEntity.sections || []).length ? (focusedEntity.sections || []).map((section) => (
                                     <LinkedRecordButton key={section._id} title={section.name} subtitle={section.academicSession?.label || 'Session'} onClick={() => openSectionDetail(section)} />
@@ -2101,17 +2979,22 @@ export default function AcademicStructurePage() {
                                 </div>
                               </FocusPanel>
 
-                              <FocusPanel eyebrow="Curriculum" title="Subjects in this Course" description="Subject catalog available for this course.">
-                                <div className="flex flex-wrap gap-2">
-                                  {selectedCourseSubjects.length ? selectedCourseSubjects.slice(0, 8).map((subject) => (
-                                    <button
-                                      key={subject._id}
-                                      type="button"
-                                      onClick={() => openSubjectDetail(subject)}
-                                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
-                                    >
-                                      {subject.code}
-                                    </button>
+                              <FocusPanel eyebrow="Curriculum" title="Subjects in this Course" description="Subject catalog grouped by term." bodyClassName="max-h-72 overflow-y-auto pr-1">
+                                <div className="space-y-3">
+                                  {selectedCourseSubjects.length ? groupSubjectsByTerm(selectedCourseSubjects).map((group) => (
+                                    <div key={group.label} className="space-y-2">
+                                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{group.label}</p>
+                                      <div className="space-y-2">
+                                        {group.subjects.map((subject) => (
+                                          <LinkedRecordButton
+                                            key={subject._id}
+                                            title={subject.name || 'Subject'}
+                                            subtitle={[subject.code || 'No code', subject.term ? `Semester ${subject.term}` : ''].filter(Boolean).join(' · ')}
+                                            onClick={() => openSubjectDetail(subject)}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
                                   )) : <p className="text-sm text-slate-500">No subjects are linked to this course yet.</p>}
                                 </div>
                               </FocusPanel>
@@ -2119,30 +3002,47 @@ export default function AcademicStructurePage() {
                           ) : null}
 
                           {focusLevel === 'section' ? (
-                            <FocusPanel eyebrow="Teaching Delivery" title="Delivered Subjects" description="Subjects currently assigned to this section.">
-                              <div className="flex flex-wrap gap-2">
-                                {(options['section-subjects'] || []).filter((entry) => getEntityId(entry.section) === getEntityId(focusedEntity)).length
-                                  ? (options['section-subjects'] || [])
-                                    .filter((entry) => getEntityId(entry.section) === getEntityId(focusedEntity))
-                                    .slice(0, 8)
-                                    .map((entry) => (
-                                      <button
-                                        key={entry._id}
-                                        type="button"
-                                        onClick={() => entry.subject && openSubjectDetail(entry.subject)}
-                                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
-                                      >
-                                        {entry.subject?.code || entry.subject?.name || 'Subject'}
-                                      </button>
-                                    ))
-                                  : <p className="text-sm text-slate-500">No subjects are linked to this section yet.</p>}
-                              </div>
-                            </FocusPanel>
+                            <>
+                              <FocusPanel eyebrow="Teaching Delivery" title="Delivered Subjects" description="Subjects currently assigned to this section." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {sectionAssignments.length
+                                    ? sectionAssignments
+                                      .slice(0, 8)
+                                      .map((entry) => (
+                                        <LinkedRecordButton
+                                          key={entry._id}
+                                          title={entry.subject?.name || 'Subject'}
+                                          subtitle={entry.subject?.code || 'No code'}
+                                          onClick={() => entry.subject && openSubjectDetail(entry.subject)}
+                                        />
+                                      ))
+                                    : <p className="text-sm text-slate-500">No subjects are linked to this section yet.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Students" title="Active Students in this Section" description="Students currently enrolled and active in the selected section." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {sectionStudents.length ? sectionStudents.map((entry) => (
+                                    <LinkedRecordButton
+                                      key={entry._id}
+                                      title={entry.student?.name || 'Student'}
+                                      subtitle={entry.student?.systemId || entry.student?.email || 'No ID'}
+                                      onClick={() => {
+                                        const studentRecord = activeStudentRecords.find((record) => String(record._id) === String(entry.student?._id || ''));
+                                        if (studentRecord) {
+                                          selectFocusedItem(studentRecord);
+                                        }
+                                      }}
+                                    />
+                                  )) : <p className="text-sm text-slate-500">No active students are mapped to this section yet.</p>}
+                                </div>
+                              </FocusPanel>
+                            </>
                           ) : null}
 
                           {focusLevel === 'session' ? (
                             <>
-                              <FocusPanel eyebrow="Sections" title="Sections in this Session" description="Delivery groups active in the selected academic session.">
+                              <FocusPanel eyebrow="Sections" title="Sections in this Session" description="Delivery groups active in the selected academic session." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 <div className="space-y-2">
                                   {selectedSessionSections.length ? selectedSessionSections.slice(0, 6).map((section) => (
                                     <LinkedRecordButton key={section._id} title={section.name} subtitle={section.course?.name || 'No course'} onClick={() => openSectionDetail(section)} />
@@ -2150,17 +3050,15 @@ export default function AcademicStructurePage() {
                                 </div>
                               </FocusPanel>
 
-                              <FocusPanel eyebrow="Subjects" title="Subjects in this Session" description="Subjects available for delivery in the selected session.">
-                                <div className="flex flex-wrap gap-2">
+                              <FocusPanel eyebrow="Subjects" title="Subjects in this Session" description="Subjects available for delivery in the selected session." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
                                   {selectedSessionSubjects.length ? selectedSessionSubjects.slice(0, 8).map((subject) => (
-                                    <button
+                                    <LinkedRecordButton
                                       key={subject._id}
-                                      type="button"
+                                      title={subject.name || 'Subject'}
+                                      subtitle={subject.code || 'No code'}
                                       onClick={() => openSubjectDetail(subject)}
-                                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
-                                    >
-                                      {subject.code}
-                                    </button>
+                                    />
                                   )) : <p className="text-sm text-slate-500">No subjects are attached to this session yet.</p>}
                                 </div>
                               </FocusPanel>
@@ -2168,7 +3066,7 @@ export default function AcademicStructurePage() {
                           ) : null}
 
                           {focusLevel === 'subject' ? (
-                            <FocusPanel eyebrow="Assignments" title="Faculty and Section Delivery" description="Where this subject is being delivered and who is assigned to it.">
+                            <FocusPanel eyebrow="Assignments" title="Faculty and Section Delivery" description="Where this subject is being delivered and who is assigned to it." bodyClassName="max-h-64 overflow-y-auto pr-1">
                               <div className="space-y-2">
                                 {selectedSubjectAssignments.length ? selectedSubjectAssignments.slice(0, 6).map((assignment) => (
                                   <LinkedRecordButton
@@ -2191,13 +3089,24 @@ export default function AcademicStructurePage() {
                                 </div>
                               </FocusPanel>
 
-                              <FocusPanel eyebrow="Section" title="Current Section" description="Active section mapping for this student.">
+                              <FocusPanel eyebrow="Section" title="Current Section" description="Active section mapping for this student." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 {focusedEntity.section ? (
-                                  <LinkedRecordButton
-                                    title={focusedEntity.sectionName ? `Section ${focusedEntity.sectionName}` : 'Section'}
-                                    subtitle={focusedEntity.academicSession?.label || 'Session'}
-                                    onClick={() => openSectionDetail(focusedEntity.section)}
-                                  />
+                                  <div className="space-y-3">
+                                    <LinkedRecordButton
+                                      title={focusedEntity.sectionName ? `Section ${focusedEntity.sectionName}` : 'Section'}
+                                      subtitle={focusedEntity.academicSession?.label || 'Session'}
+                                      onClick={() => openSectionDetail(focusedEntity.section)}
+                                    />
+                                    {canShowAcademicMappingOptions(focusedEntity) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => requestStudentMappingRemoval(focusedEntity)}
+                                        className="btn-secondary text-red-600 hover:text-red-700"
+                                      >
+                                        Remove Mapping
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 ) : <p className="text-sm text-slate-500">This student does not have an active section mapping.</p>}
                               </FocusPanel>
                             </>
@@ -2291,6 +3200,71 @@ export default function AcademicStructurePage() {
               <DetailPill label="Assigned Teachers" value={sectionFacultyMembers.length} />
               <DetailPill label="Enrolled Students" value={sectionStudents.length} />
             </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <DetailPill label="Approved Intake Open" value={availableSectionStudents.length} />
+              <DetailPill label="Seats Remaining" value={sectionCapacityLeft} />
+              <DetailPill label="Course Subjects" value={availableSectionSubjects.length} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button type="button" onClick={() => openSectionStudentsPage(selectedSection)} className="btn-secondary">
+                <FiUsers size={15} />
+                View Enrolled Students
+              </button>
+              <button type="button" onClick={() => openSubjectTeacherPage(selectedSection)} className="btn-secondary">
+                <FiBookOpen size={15} />
+                Open Subject Management
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="card p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-gray-900">Inherited Subjects</h3>
+                  <p className="mt-1 text-sm text-gray-500">This section automatically inherits the full subject catalog from its course. Open any subject to manage teachers and section-specific overrides.</p>
+                </div>
+                <span className="badge border border-slate-200 bg-slate-100 text-slate-700">{availableSectionSubjects.length} subjects</span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {availableSectionSubjects.length ? availableSectionSubjects.map((subject) => (
+                  <button
+                    key={subject._id}
+                    type="button"
+                    onClick={() => openSubjectDetail(subject)}
+                    className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    {subject.code || 'SUBJ'} · {subject.name}
+                  </button>
+                )) : (
+                  <p className="text-sm text-gray-500">No inherited subjects are linked to this section's course yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="card p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-gray-900">Add Students</h3>
+                  <p className="mt-1 text-sm text-gray-500">Only approved student accounts with no active section mapping are listed here.</p>
+                </div>
+                <span className="badge border border-emerald-200 bg-emerald-100 text-emerald-700">{availableSectionStudents.length} approved</span>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <select className="input" value={sectionStudentSelection} onChange={(event) => setSectionStudentSelection(event.target.value)}>
+                  <option value="">Select approved student</option>
+                  {availableSectionStudents.map((student) => (
+                    <option key={student._id} value={student._id}>{student.name} · {student.systemId || student.email}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={handleSectionStudentCreate} disabled={!sectionStudentSelection || sectionActionSaving.student} className="btn-primary justify-center whitespace-nowrap">
+                  {sectionActionSaving.student ? 'Adding...' : 'Add Student'}
+                </button>
+              </div>
+              {!availableSectionStudents.length ? (
+                <p className="mt-3 text-sm text-gray-500">No approved unmapped student accounts are currently available.</p>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_340px]">
@@ -2298,10 +3272,10 @@ export default function AcademicStructurePage() {
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-display text-xl font-bold text-gray-900">Section Subjects</h3>
-                  <p className="mt-1 text-sm text-gray-500">Assign faculty inside the section context so the academic ownership is always visible.</p>
+                  <p className="mt-1 text-sm text-gray-500">These subjects come from the course automatically. Teacher ownership stays centralized on the subject detail page.</p>
                 </div>
-                <button type="button" onClick={() => setAssignmentRowId('')} className="btn-secondary text-xs">
-                  Reset Assigners
+                <button type="button" onClick={() => openSubjectTeacherPage(selectedSection)} className="btn-secondary text-xs">
+                  Open Subject Management
                 </button>
               </div>
 
@@ -2318,47 +3292,20 @@ export default function AcademicStructurePage() {
                             {(assignment.subject?.code || 'No subject code')}{assignment.semester ? ` · ${assignment.semester}` : ''}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {getAssignedFacultyMembers(assignment).length ? getAssignedFacultyMembers(assignment).map((faculty) => (
-                              <button key={faculty._id} type="button" onClick={() => handleFacultyOpen(faculty)} className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100">
-                                {faculty.name}
-                              </button>
-                            )) : (
-                              <span className="inline-flex rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">No faculty assigned</span>
-                            )}
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                              {getAssignedFacultyMembers(assignment).length
+                                ? `${getAssignedFacultyMembers(assignment).length} teacher${getAssignedFacultyMembers(assignment).length > 1 ? 's' : ''} assigned`
+                                : 'No teachers assigned'}
+                            </span>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-3">
-                          {assignmentRowId === assignment._id ? (
-                            <div className="min-w-[240px] rounded-2xl border border-gray-200 bg-white p-3">
-                              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Assign Faculty</p>
-                              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-                                {options.faculty.map((faculty) => {
-                                  const isChecked = getAssignedFacultyMembers(assignment).some((entry) => String(entry._id) === String(faculty._id));
-                                  return (
-                                    <label key={faculty._id} className="flex items-center gap-2 text-sm text-gray-700">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={(event) => {
-                                          const nextFacultyIds = event.target.checked
-                                            ? [...getAssignedFacultyMembers(assignment).map((entry) => entry._id), faculty._id]
-                                            : getAssignedFacultyMembers(assignment).filter((entry) => String(entry._id) !== String(faculty._id)).map((entry) => entry._id);
-                                          handleFacultyAssignment(assignment._id, nextFacultyIds);
-                                        }}
-                                      />
-                                      <span>{faculty.name}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : null}
                           <button
                             type="button"
-                            onClick={() => setAssignmentRowId((current) => current === assignment._id ? '' : assignment._id)}
+                            onClick={() => openSubjectDetail(assignment.subject)}
                             className="btn-secondary text-xs"
                           >
-                            Assign
+                            Open Subject
                           </button>
                         </div>
                       </div>
@@ -2367,74 +3314,22 @@ export default function AcademicStructurePage() {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                  No subject mappings exist for this section yet.
+                  No inherited subjects are available for this section yet.
                 </div>
               )}
             </div>
 
             <div className="space-y-6">
               <div className="card p-6">
-                <h3 className="font-display text-lg font-bold text-gray-900">Enrolled Students</h3>
-                <p className="mt-1 text-sm text-gray-500">Names, IDs, and direct profile links are available here so section review stays operational.</p>
-                <div className="mt-4 space-y-3">
-                  {sectionStudents.length ? sectionStudents.map((enrollment) => (
-                    <div key={enrollment._id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-gray-900">{enrollment.student?.name || 'Student'}</p>
-                          <p className="mt-1 text-sm text-gray-500">{enrollment.student?.systemId || 'No ID'}{enrollment.semester ? ` · ${enrollment.semester}` : ''}</p>
-                        </div>
-                        {enrollment.student?.systemId ? (
-                          <button type="button" onClick={() => navigate(`/admin/users/${enrollment.student.systemId}`)} className="btn-secondary text-xs">
-                            Open Profile
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                      No active students are enrolled in this section yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="card p-6">
-                <h3 className="font-display text-lg font-bold text-gray-900">Assigned Teachers</h3>
-                <p className="mt-1 text-sm text-gray-500">Faculty linked through section-subject assignments appear here once mapped.</p>
-                <div className="mt-4 space-y-3">
-                  {sectionFacultyMembers.length ? sectionFacultyMembers.map((faculty) => (
-                    <div key={faculty._id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-gray-900">{faculty.name || 'Faculty'}</p>
-                          <p className="mt-1 text-sm text-gray-500">{faculty.systemId || faculty.email || 'No faculty ID'}</p>
-                        </div>
-                        {faculty.systemId ? (
-                          <button type="button" onClick={() => handleFacultyOpen(faculty)} className="btn-secondary text-xs">
-                            Open Profile
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                      No teachers are assigned to this section yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="card p-6">
                 <h3 className="font-display text-lg font-bold text-gray-900">Section Context</h3>
                 <div className="mt-4 space-y-3 text-sm text-gray-600">
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
                     <p className="font-semibold text-gray-900">Student Access</p>
-                    <p className="mt-1">Students attached to this section inherit their timetable, attendance scope, and subject list from these mappings.</p>
+                    <p className="mt-1">Approved students attached to this section inherit their timetable, attendance scope, and subject list from the course-linked subject catalog.</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
                     <p className="font-semibold text-gray-900">Faculty Scope</p>
-                    <p className="mt-1">Faculty linked here become the teaching owners for the section’s subject delivery and attendance workflows.</p>
+                    <p className="mt-1">Professor ownership is managed on the dedicated subject detail page, with optional section-level overrides when a section needs its own teaching context.</p>
                   </div>
                 </div>
               </div>
@@ -2466,31 +3361,80 @@ export default function AcademicStructurePage() {
             </div>
 
             <div className="p-6">
+              <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+                <div>
+                  <label className="label">Search Subjects or Faculty</label>
+                  <input
+                    className="input"
+                    placeholder="Search by subject, code, faculty, or ID"
+                    value={facultySubjectsQuery}
+                    onChange={(event) => setFacultySubjectsQuery(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label">Section Filter</label>
+                  <select className="input" value={facultySectionFilterId} onChange={(event) => setFacultySectionFilterId(event.target.value)}>
+                    <option value="">All Sections in Scope</option>
+                    {(options.sections || [])
+                      .filter((section) => {
+                        if (selectedDepartmentId && String(section.department?._id || section.department) !== String(selectedDepartmentId)) return false;
+                        if (selectedProgramId && String(section.program?._id || section.program) !== String(selectedProgramId)) return false;
+                        if (selectedCourseId && String(section.course?._id || section.course) !== String(selectedCourseId)) return false;
+                        return true;
+                      })
+                      .map((section) => (
+                        <option key={section._id} value={section._id}>{section.name} · {section.program?.name || 'Program'}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-5 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                  {filteredSubjects.length} subjects
+                </span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                  {facultyCards.length} faculty
+                </span>
+                {selectedDepartment?.name ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    {selectedDepartment.name}
+                  </span>
+                ) : null}
+                {selectedProgram?.name ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    {selectedProgram.name}
+                  </span>
+                ) : null}
+                {selectedCourse?.name ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    {selectedCourse.name}
+                  </span>
+                ) : null}
+              </div>
+
               {facultySubjectsTab === 'subjects' ? (
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <select className="input min-w-[220px] sm:max-w-xs" value={facultySectionFilterId} onChange={(event) => setFacultySectionFilterId(event.target.value)}>
-                      <option value="">All Sections in Scope</option>
-                      {(options.sections || [])
-                        .filter((section) => {
-                          if (selectedDepartmentId && String(section.department?._id || section.department) !== String(selectedDepartmentId)) return false;
-                          if (selectedProgramId && String(section.program?._id || section.program) !== String(selectedProgramId)) return false;
-                          if (selectedCourseId && String(section.course?._id || section.course) !== String(selectedCourseId)) return false;
-                          return true;
-                        })
-                        .map((section) => (
-                          <option key={section._id} value={section._id}>{section.name} · {section.program?.name || 'Program'}</option>
-                        ))}
-                    </select>
+                    <div className="text-sm text-slate-500">Open any subject to inspect linked teachers and section-level mappings.</div>
                     <button type="button" onClick={() => navigate('/academics/advanced')} className="btn-secondary text-xs">
                       Subject Operations
                     </button>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {filteredSubjects.length ? filteredSubjects.map((subject) => {
-                      const assignments = (options['section-subjects'] || []).filter(
-                        (entry) => String(entry.subject?._id || entry.subject) === String(subject._id)
-                      );
+                      const assignments = [
+                        ...(subject.sectionTeachers || []).map((entry) => ({
+                          _id: entry._id,
+                          faculty: entry.teacher,
+                          facultyMembers: entry.teacher ? [entry.teacher] : [],
+                        })),
+                        ...(subject.teachers || []).map((teacher) => ({
+                          _id: `${subject._id}-${teacher._id}`,
+                          faculty: teacher,
+                          facultyMembers: [teacher],
+                        })),
+                      ];
                       return (
                         <button
                           key={subject._id}
@@ -2569,73 +3513,9 @@ export default function AcademicStructurePage() {
 
         </div>
       ) : null}
+        </>
+      )}
 
-      {activeScreen === 'subjectDetail' && selectedSubject ? (
-        <div className="space-y-6">
-          <div className="card p-6">
-            <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-800">
-              <FiArrowLeft size={15} />
-              {previousScreen === 'sectionDetail' ? 'Back to section' : 'Back to faculty & subjects'}
-            </button>
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
-              <span>Academic Workspace</span>
-              <FiChevronRight size={12} />
-              <span>Subjects</span>
-              <FiChevronRight size={12} />
-              <span className="text-gray-900">{selectedSubject.code}</span>
-            </div>
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                <FiBookOpen size={20} />
-              </div>
-              <div>
-                <h2 className="font-display text-2xl font-bold text-gray-900">{selectedSubject.name}</h2>
-                <p className="mt-1 text-sm text-gray-500">{selectedSubject.code} · {selectedSubject.academicSession?.label || 'Academic Session'}</p>
-              </div>
-            </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-4">
-              <DetailPill label="Department" value={selectedSubject.department?.name} />
-              <DetailPill label="Program" value={selectedSubject.program?.name} />
-              <DetailPill label="Course" value={selectedSubject.course?.name} />
-              <DetailPill label="Credits" value={selectedSubject.credits ?? 0} />
-            </div>
-          </div>
-
-          <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900">Assigned Faculty & Sections</h3>
-            <p className="mt-1 text-sm text-gray-500">This shows where the subject is currently delivered and which faculty member is attached to each mapping.</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {selectedSubjectAssignments.length ? selectedSubjectAssignments.map((assignment) => (
-                <div key={assignment._id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Section {assignment.section?.name || '—'}</p>
-                  <p className="mt-1 text-xs text-gray-500">{assignment.section?.academicSession?.label || selectedSubject.academicSession?.label || 'Academic Session'} · {assignment.semester || 'Semester not set'}</p>
-                  <div className="mt-4">
-                    {getAssignedFacultyMembers(assignment).length ? (
-                      <div className="space-y-2">
-                        {getAssignedFacultyMembers(assignment).map((faculty) => (
-                          <button key={faculty._id} type="button" onClick={() => handleFacultyOpen(faculty)} className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 transition hover:border-blue-200 hover:bg-blue-50">
-                            <Avatar user={faculty} size="sm" />
-                            <div className="text-left">
-                              <p className="text-sm font-semibold text-gray-900">{faculty.name}</p>
-                              <p className="text-xs text-gray-500">Open faculty profile</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">No faculty assigned yet.</div>
-                    )}
-                  </div>
-                </div>
-              )) : (
-                <div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-400">
-                  This subject is not linked to any section mappings yet.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

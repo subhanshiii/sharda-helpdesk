@@ -7,6 +7,7 @@ import TicketCard from '../components/TicketCard';
 import { CATEGORIES, PRIORITIES, STATUSES } from '../utils/helpers';
 import { FiPlusCircle, FiSearch, FiFilter, FiX } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
+import { isAdminUser } from '../utils/access';
 import toast from 'react-hot-toast';
 
 /**
@@ -249,7 +250,7 @@ export default function TicketList() {
               <MemoTicketCard
                 key={ticket._id}
                 ticket={ticket}
-                canDelete={user?.role === 'admin' || ticket.user?._id === user?._id}
+                canDelete={isAdminUser(user) || ticket.user?._id === user?._id}
                 onDelete={handleDeleteTicket}
                 selected={selectedIds.includes(ticket._id)}
                 onSelect={handleSelectTicket}

@@ -1,17 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FiUpload, FiX } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, PageHeader } from '../components/ui';
 import VisibilitySection from '../components/content/VisibilitySection';
+import { useAuth } from '../context/AuthContext';
 
 export default function CreateAssignmentPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
     subject: '',
+    subjectId: '',
+    sectionId: '',
+    teachingAssignmentId: '',
     dueDate: '',
     maxScore: 100,
     audienceTiers: [],
@@ -25,13 +30,48 @@ export default function CreateAssignmentPage() {
     allowLateSubmissions: false,
   });
   const [files, setFiles] = useState([]);
+  const [teachingAssignments, setTeachingAssignments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const isFaculty = user?.role === 'faculty';
+
+  useEffect(() => {
+    const loadTeachingAssignments = async () => {
+      if (!isFaculty) return;
+      try {
+        const res = await API.get('/academics/teaching-assignments');
+        setTeachingAssignments(Array.isArray(res.data?.data) ? res.data.data : []);
+      } catch {
+        setTeachingAssignments([]);
+      }
+    };
+
+    loadTeachingAssignments();
+  }, [isFaculty]);
+
+  const availableSections = useMemo(() => Array.from(new Map(
+    teachingAssignments
+      .map((assignment) => assignment.section)
+      .filter(Boolean)
+      .map((section) => [String(section._id), section])
+  ).values()), [teachingAssignments]);
+
+  const availableSubjects = useMemo(() => Array.from(new Map(
+    teachingAssignments
+      .filter((assignment) => String(assignment.section?._id || assignment.section) === String(form.sectionId))
+      .map((assignment) => assignment.subject)
+      .filter(Boolean)
+      .map((subject) => [String(subject._id), subject])
+  ).values()), [form.sectionId, teachingAssignments]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!form.title.trim() || !form.description.trim() || !form.dueDate) {
       setError('Title, description, and due date are required');
+      return;
+    }
+    if (isFaculty && (!form.sectionId || !form.subjectId)) {
+      setError('Faculty assignments must be linked to a section and subject.');
       return;
     }
 
@@ -76,7 +116,32 @@ export default function CreateAssignmentPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="label">Subject</label>
-              <input className="input" value={form.subject} onChange={(event) => setForm((prev) => ({ ...prev, subject: event.target.value }))} placeholder="DBMS" />
+              {isFaculty ? (
+                <select
+                  className="input"
+                  value={form.subjectId}
+                  onChange={(event) => {
+                    const selectedSubject = availableSubjects.find((subject) => String(subject._id) === String(event.target.value));
+                    const matchedAssignment = teachingAssignments.find((assignment) => (
+                      String(assignment.section?._id || assignment.section) === String(form.sectionId)
+                      && String(assignment.subject?._id || assignment.subject) === String(event.target.value)
+                    ));
+                    setForm((prev) => ({
+                      ...prev,
+                      subjectId: event.target.value,
+                      subject: selectedSubject?.name || '',
+                      teachingAssignmentId: matchedAssignment?._id || '',
+                    }));
+                  }}
+                >
+                  <option value="">Select linked subject</option>
+                  {availableSubjects.map((subject) => (
+                    <option key={subject._id} value={subject._id}>{subject.name} ({subject.code || '—'})</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="input" value={form.subject} onChange={(event) => setForm((prev) => ({ ...prev, subject: event.target.value }))} placeholder="DBMS" />
+              )}
             </div>
             <div>
               <label className="label">Due Date</label>
@@ -88,7 +153,32 @@ export default function CreateAssignmentPage() {
             </div>
           </div>
 
-          <VisibilitySection form={form} onChange={(key, value) => setForm((prev) => ({ ...prev, [key]: value }))} />
+          {isFaculty ? (
+            <div>
+              <label className="label">Section</label>
+              <select
+                className="input"
+                value={form.sectionId}
+                onChange={(event) => setForm((prev) => ({
+                  ...prev,
+                  sectionId: event.target.value,
+                  subjectId: '',
+                  subject: '',
+                  teachingAssignmentId: '',
+                }))}
+              >
+                <option value="">Select linked section</option>
+                {availableSections.map((section) => (
+                  <option key={section._id} value={section._id}>
+                    {section.name} · {section.course?.name || 'Course'} · {section.academicSession?.label || 'Session'}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-gray-500">Faculty assignments are now scoped to your linked section-subject teaching assignments.</p>
+            </div>
+          ) : (
+            <VisibilitySection form={form} onChange={(key, value) => setForm((prev) => ({ ...prev, [key]: value }))} />
+          )}
 
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input type="checkbox" checked={form.allowLateSubmissions} onChange={(event) => setForm((prev) => ({ ...prev, allowLateSubmissions: event.target.checked }))} />

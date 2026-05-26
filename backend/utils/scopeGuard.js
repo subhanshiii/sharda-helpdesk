@@ -120,7 +120,7 @@ const getScopeFilter = async (user, resource = 'departments') => {
     return { program: { $in: toObjectIds(programIds) } };
   }
 
-  if (resource === 'section-subjects' || resource === 'enrollments') {
+  if (resource === 'enrollments') {
     const sectionIds = await getScopedSectionIds(scopes, effectiveTier);
     return { section: { $in: toObjectIds(sectionIds) } };
   }

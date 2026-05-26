@@ -1,10 +1,12 @@
 import { formatDistanceToNow, format } from 'date-fns';
 import { getAvatarUrl, getDefaultAvatarFilename } from '../constants/avatarOptions';
+import {
+  ADMIN_TIER_DEFINITIONS,
+  ROLE_LABELS,
+  normalizeUserRole,
+} from './access';
 
-export const normalizeUserRole = (role) => {
-  if (role === 'agent') return 'staff';
-  return role || 'student';
-};
+export { ADMIN_TIER_DEFINITIONS, normalizeUserRole } from './access';
 
 export const getAssetUrl = (assetPath) => {
   if (!assetPath) return '';
@@ -42,13 +44,7 @@ export const getAssetUrl = (assetPath) => {
 
 export const getRoleLabel = (role) => {
   const normalizedRole = normalizeUserRole(role);
-  const labels = {
-    admin: 'Admin',
-    staff: 'Staff',
-    faculty: 'Faculty',
-    student: 'Student',
-  };
-  return labels[normalizedRole] || normalizedRole;
+  return ROLE_LABELS[normalizedRole] || normalizedRole;
 };
 
 export const getAdminTierLabel = (tier) => {
@@ -62,57 +58,6 @@ export const getAdminTierLabel = (tier) => {
   };
   return labels[tier] || tier;
 };
-
-export const ADMIN_TIER_DEFINITIONS = [
-  {
-    key: 'section_moderator',
-    label: 'Section Moderator',
-    level: 1,
-    scopeLabel: 'Section scoped',
-    group: 'Scoped',
-    description: 'Owns section-level delivery workflows for assigned sections only.',
-  },
-  {
-    key: 'program_coordinator',
-    label: 'Program Coordinator',
-    level: 2,
-    scopeLabel: 'Program scoped',
-    group: 'Scoped',
-    description: 'Coordinates academic workflows across a specific program and its courses.',
-  },
-  {
-    key: 'department_admin',
-    label: 'Department Admin',
-    level: 3,
-    scopeLabel: 'Department scoped',
-    group: 'Scoped',
-    description: 'Governs academic delivery and support operations for a department.',
-  },
-  {
-    key: 'college_admin',
-    label: 'College Admin',
-    level: 4,
-    scopeLabel: 'College scoped',
-    group: 'Scoped',
-    description: 'Oversees academic and support operations within one college.',
-  },
-  {
-    key: 'admin',
-    label: 'Admin',
-    level: 5,
-    scopeLabel: 'System-wide',
-    group: 'System-level',
-    description: 'Runs institution-wide operations across users, academics, notices, and tickets.',
-  },
-  {
-    key: 'super_admin',
-    label: 'Super Admin',
-    level: 6,
-    scopeLabel: 'System-wide governance',
-    group: 'System-level',
-    description: 'Full governance authority with access to permission management and privileged admin controls.',
-  },
-];
 
 export const getAdminTierTone = (tier) => {
   const tones = {

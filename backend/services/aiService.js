@@ -11,7 +11,7 @@
  * so the app never breaks when AI is down.
  */
 
-const faqData = require('../data/faq.json');
+const { listFaqsSync } = require('./faqService');
 const motivationQuotes = require('../data/motivationQuotes');
 
 // ── OpenAI client (lazy init) ──────────────────────────
@@ -54,6 +54,7 @@ const getOpenAI = () => {
 
 // ── System prompt for FAQ chatbot ─────────────────────
 const buildSystemPrompt = () => {
+  const faqData = listFaqsSync();
   const faqContext = faqData
     .map((f, i) => `Q${i + 1}: ${f.question}\nA${i + 1}: ${f.answer}`)
     .join('\n\n');
@@ -247,6 +248,7 @@ const summarizeTicket = async (ticket) => {
 };
 
 const getRelevantFaqEntries = (title = '', description = '') => {
+  const faqData = listFaqsSync();
   const text = `${title} ${description}`.toLowerCase();
   const words = text.split(/\s+/).filter((word) => word.length > 3);
 
@@ -349,6 +351,7 @@ const keywordPriority = (title, description) => {
 
 // ── Keyword-based fallback chat ───────────────────────
 const fallbackChat = (message) => {
+  const faqData = listFaqsSync();
   const msg = message.toLowerCase();
   const SUGGESTIONS = [
     'How do I reset my password?',
@@ -400,6 +403,7 @@ const fallbackChat = (message) => {
 
 // ── Get related questions ──────────────────────────────
 const getRelatedQuestions = (message) => {
+  const faqData = listFaqsSync();
   const msg    = message.toLowerCase();
   const all    = faqData.map(f => f.question);
   const words  = msg.split(' ').filter(w => w.length > 3);

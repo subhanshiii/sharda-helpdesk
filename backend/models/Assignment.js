@@ -35,6 +35,18 @@ const assignmentSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    teachingAssignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeachingAssignment',
+      default: null,
+      index: true,
+    },
+    academicSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademicSession',
+      default: null,
+      index: true,
+    },
     dueDate: {
       type: Date,
       required: [true, 'Due date is required'],
@@ -114,6 +126,7 @@ assignmentSchema.index({ createdBy: 1, dueDate: -1 });
 assignmentSchema.index({ dueDate: 1, isPublished: 1 });
 assignmentSchema.index({ sectionId: 1, dueDate: 1 });
 assignmentSchema.index({ subjectId: 1, dueDate: 1 });
+assignmentSchema.index({ teachingAssignmentId: 1, dueDate: 1 });
 assignmentSchema.index({ createdAt: -1 });
 assignmentSchema.index({ 'targetAudience.collegeId': 1 });
 assignmentSchema.index({ 'targetAudience.departmentId': 1 });

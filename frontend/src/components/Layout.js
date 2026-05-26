@@ -6,40 +6,39 @@ import { usePermissions } from '../context/PermissionContext';
 import { getRoleLabel } from '../utils/helpers';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from './ui';
+import { hasRole, isAdminUser, isFacultyUser, isStaffUser } from '../utils/access';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiUsers,
   FiLogOut, FiMenu, FiX, FiChevronRight, FiArrowLeft,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers, FiUser,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers, FiUser, FiFolder,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
   <NavLink to={to} end={end} onClick={onClick}
     className={({ isActive }) =>
-      `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
-        isActive
-          ? 'bg-white/15 text-white shadow-lg backdrop-blur-sm border border-white/20'
-          : 'text-blue-100/70 hover:bg-white/10 hover:text-white'
+      `sidebar-nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative ${
+        isActive ? 'is-active shadow-lg backdrop-blur-sm' : ''
       }`
     }>
     {({ isActive }) => (
       <>
-        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-yellow-400 rounded-r-full" />}
-        <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-yellow-300' : ''}`} />
+        {isActive && <span className="sidebar-nav-accent absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full" />}
+        <Icon size={17} className={`flex-shrink-0 ${isActive ? 'sidebar-nav-icon-active' : ''}`} />
         <span className="flex-1">{label}</span>
-        {!isActive && <FiChevronRight size={13} className="opacity-0 group-hover:opacity-40 transition-opacity" />}
+        {!isActive && <FiChevronRight size={13} className="sidebar-nav-chevron opacity-0 transition-opacity group-hover:opacity-100" />}
       </>
     )}
   </NavLink>
 );
 
 const SectionLabel = ({ label }) => (
-  <p className="text-blue-300/50 text-xs font-semibold uppercase tracking-widest px-3 pt-3 pb-1">{label}</p>
+  <p className="sidebar-section-label px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-widest">{label}</p>
 );
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { hasPermission, isSuperAdmin } = usePermissions();
+  const { hasPermission, can, isSuperAdmin } = usePermissions();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -63,19 +62,17 @@ export default function Layout() {
     }
     navigate('/dashboard');
   };
-  const canAccessAssignments = ['student', 'faculty', 'admin'].includes(user?.role)
-    || hasPermission('canManageAssignments')
-    || hasPermission('canSubmitAssignments');
-  const canAccessTimetable = ['student', 'faculty', 'admin'].includes(user?.role) || hasPermission('canManageTimetable');
-  const canAccessAttendance = ['student', 'faculty', 'admin'].includes(user?.role) || hasPermission('canMarkAttendance');
+  const canAccessAssignments = can('view', 'assignments') || hasPermission('canSubmitAssignments');
+  const canAccessTimetable = can('view', 'timetable');
+  const canAccessAttendance = hasRole(user, ['student', 'faculty', 'admin']) || hasPermission('canMarkAttendance');
   const footerDisplayName = user?.name || 'Unknown user';
   const footerRoleTagStyle = user?.adminTier === 'super_admin'
     ? { backgroundColor: '#fef3c7', color: '#b45309' }
-    : user?.role === 'admin'
+    : isAdminUser(user)
       ? { backgroundColor: '#dbeafe', color: '#1d4ed8' }
-      : user?.role === 'faculty'
+      : isFacultyUser(user)
         ? { backgroundColor: '#ede9fe', color: '#6d28d9' }
-        : user?.role === 'staff'
+        : isStaffUser(user)
           ? { backgroundColor: '#dcfce7', color: '#15803d' }
           : { backgroundColor: '#f1f5f9', color: '#475569' };
 
@@ -89,8 +86,9 @@ export default function Layout() {
     '/attendance':    'Attendance',
     '/users':         'User Management',
     '/approvals':     'Identity Alerts',
-    '/academics':     'Academic Structure',
-    '/academics/advanced': 'Advanced Academic Operations',
+    '/academics':     'Academic Planning',
+    '/academics/subject-management': 'Subject Management',
+    '/academics/subject-teachers': 'Subject Management',
     '/users/new':     'Provision User',
     '/users/import':  'Import Users',
     '/profile':       'My Profile',
@@ -102,14 +100,17 @@ export default function Layout() {
     '/permissions':   'Permissions',
     '/events':        'Events & Calendar',
     '/opportunities': 'Opportunities',
+    '/resources':     'Shared Resources',
   };
   const pageTitle = (() => {
     if (location.pathname.startsWith('/tickets/')) return 'Ticket Details';
     if (location.pathname.startsWith('/assignments/')) return 'Assignment Details';
+    if (location.pathname.startsWith('/timetable/sections/')) return 'Section Timetable';
     if (location.pathname.startsWith('/timetable/') && location.pathname.endsWith('/edit')) return 'Edit Timetable Slot';
     if (location.pathname.startsWith('/admin/users/')) return 'User Details';
     if (location.pathname.startsWith('/users/') && !location.pathname.endsWith('/edit')) return 'User Details';
     if (location.pathname.startsWith('/users/') && location.pathname.endsWith('/edit')) return 'Edit User';
+    if (location.pathname.startsWith('/academics/sections/') && location.pathname.endsWith('/students')) return 'Enrolled Students';
     return pageTitles[location.pathname] || 'Sharda Platform';
   })();
 
@@ -127,10 +128,11 @@ export default function Layout() {
     {
       label: 'Academic Operations',
       items: [
-        { to: '/assignments', icon: FiBookOpen, label: hasPermission('canManageAssignments') || ['faculty', 'admin'].includes(user?.role) ? 'Assignments' : 'My Work', visible: canAccessAssignments },
+        { to: '/assignments', icon: FiBookOpen, label: can('create', 'assignments') || can('edit', 'assignments') ? 'Assignments' : 'My Work', visible: canAccessAssignments },
+        { to: '/resources', icon: FiFolder, label: 'Shared Resources', visible: can('view', 'resources') },
         { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: canAccessTimetable },
         { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: canAccessAttendance },
-        { to: '/academics', icon: FiLayers, label: 'Academic Structure', visible: hasPermission('canManageAcademics') },
+        { to: '/academics', icon: FiLayers, label: 'Academic Planning', visible: hasPermission('canManageAcademics') },
       ],
     },
     {
@@ -138,7 +140,7 @@ export default function Layout() {
       items: [
         { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Support Queue' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
         { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
-        { to: '/faq', icon: FiHelpCircle, label: 'FAQ' },
+        { to: '/faq', icon: FiHelpCircle, label: 'FAQ', visible: can('view', 'faq') },
       ],
     },
     {
@@ -207,12 +209,12 @@ export default function Layout() {
               onError={e => { e.target.style.display='none'; }} />
           </div>
           <div>
-            <p className="font-display font-bold text-white text-base leading-none">Sharda</p>
-            <p className="font-display font-bold text-white text-base leading-none">University</p>
-            <p className="text-blue-300/80 text-xs mt-0.5 font-medium tracking-wide">Student Platform</p>
+            <p className="sidebar-title font-display text-base font-bold leading-none">Sharda</p>
+            <p className="sidebar-title font-display text-base font-bold leading-none">University</p>
+            <p className="sidebar-subtitle mt-0.5 text-xs font-medium tracking-wide">Student Platform</p>
           </div>
           {sidebarOpen && (
-            <button onClick={closeSidebar} className="ml-auto text-white/50 hover:text-white p-1">
+            <button onClick={closeSidebar} className="sidebar-close ml-auto p-1">
               <FiX size={18} />
             </button>
           )}
@@ -235,14 +237,14 @@ export default function Layout() {
       <button
         type="button"
         onClick={() => { closeSidebar(); navigate('/profile'); }}
-        className="mx-3 mb-2 h-[76px] overflow-hidden rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-left backdrop-blur-sm transition hover:bg-white/15"
+        className="sidebar-user-card mx-3 mb-2 h-[76px] overflow-hidden rounded-2xl border px-3 py-3 text-left backdrop-blur-sm transition"
       >
         <div className="flex items-center gap-2.5">
           <Avatar user={user} size="md" className="shadow-lg flex-shrink-0" />
           <div className="min-w-0 flex-1 overflow-hidden">
             <p
               ref={footerNameRef}
-              className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
+              className="sidebar-user-name block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold"
               style={footerNameStyle}
               title={footerDisplayName}
             >
@@ -259,7 +261,7 @@ export default function Layout() {
           </div>
         </div>
       </button>
-      <p className="px-4 pb-4 text-[11px] leading-4 text-blue-200/55">
+      <p className="sidebar-footer-note px-4 pb-4 text-[11px] leading-4">
         Icons made by Freepik from www.flaticon.com
       </p>
     </div>

@@ -1,312 +1,567 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
-import { FiX, FiPlus, FiSearch, FiTrash2, FiUsers } from 'react-icons/fi';
+import {
+  FiArrowLeft,
+  FiArrowRight,
+  FiCheck,
+  FiFilter,
+  FiSearch,
+  FiUsers,
+  FiUserPlus,
+  FiX,
+} from 'react-icons/fi';
 import { getRoleLabel } from '../../utils/helpers';
 
-const DEPARTMENTS = ['CSE','ECE','EEE','MECH','CIVIL','MBA','MCA','BBA','BTECH','Other'];
-const YEARS       = ['1','2','3','4','5'];
-const SECTIONS    = ['A','B','C','D','E'];
-const ROLE_OPTIONS = [
-  { value: 'student', label: 'Student' },
-  { value: 'faculty', label: 'Faculty' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'admin', label: 'Group Admin' },
-];
+const initialFilters = {
+  role: '',
+  departmentId: '',
+  sectionId: '',
+  search: '',
+  selectAllFiltered: false,
+};
 
-const UserSearchResult = ({ user, onAdd }) => (
-  <button onClick={() => onAdd(user)}
-    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-50 transition-colors text-left">
-    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-      {user.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+const buildQueryString = (filters, page, excludeUserIds = []) => {
+  const params = new URLSearchParams();
+  if (filters.search.trim()) params.set('q', filters.search.trim());
+  if (filters.role) params.set('role', filters.role);
+  if (filters.departmentId) params.set('departmentId', filters.departmentId);
+  if (filters.sectionId) params.set('sectionId', filters.sectionId);
+  if (excludeUserIds.length) params.set('excludeUserIds', excludeUserIds.join(','));
+  params.set('page', String(page));
+  params.set('limit', '18');
+  return params.toString();
+};
+
+const Avatar = ({ name = 'User' }) => (
+  <div className="theme-surface flex h-10 w-10 items-center justify-center rounded-2xl text-xs font-bold shadow-sm">
+    {name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+  </div>
+);
+
+const SelectedUserRow = ({ user, onRemove }) => (
+  <div className="theme-surface-soft flex items-center gap-3 rounded-2xl px-3 py-3">
+    <Avatar name={user.name} />
+    <div className="min-w-0 flex-1">
+      <p className="truncate text-sm font-semibold text-[var(--theme-text)]">{user.name}</p>
+      <p className="truncate text-xs text-[var(--theme-text-muted)]">
+        {user.email} · {getRoleLabel(user.role)}
+      </p>
     </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-      <p className="text-xs text-gray-500 truncate">{user.email} · {getRoleLabel(user.role)}</p>
+    <button
+      type="button"
+      onClick={() => onRemove(user._id)}
+      className="theme-ghost-button inline-flex h-10 w-10 items-center justify-center rounded-2xl transition"
+      title="Remove"
+    >
+      <FiX size={16} />
+    </button>
+  </div>
+);
+
+const SearchResultRow = ({ user, selected, onToggle, disabled = false }) => (
+  <button
+    type="button"
+    onClick={() => onToggle(user)}
+    disabled={disabled}
+    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+      selected ? 'theme-surface-accent shadow-sm' : 'theme-surface theme-surface-interactive'
+    } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+  >
+    <Avatar name={user.name} />
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <p className="truncate text-sm font-semibold text-[var(--theme-text)]">{user.name}</p>
+        <span className="theme-chip rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]">
+          {getRoleLabel(user.role)}
+        </span>
+      </div>
+      <p className="truncate text-xs text-[var(--theme-text-muted)]">
+        {user.email}
+        {user.department ? ` · ${user.department}` : ''}
+        {user.section ? ` · ${user.section}` : ''}
+      </p>
     </div>
-    <FiPlus size={15} className="text-blue-500 flex-shrink-0" />
+    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${selected ? 'bg-[var(--theme-primary)] text-white' : 'theme-surface-soft text-[var(--theme-text-muted)]'}`}>
+      {selected ? <FiCheck size={15} /> : <FiUserPlus size={15} />}
+    </span>
   </button>
 );
 
 export default function CreateGroupModal({ onClose, onCreated }) {
-  const [step,         setStep]         = useState(1); // 1=details, 2=members
-  const [form,         setForm]         = useState({ name:'', department:'', year:'', section:'', description:'' });
-  const [nameTouched, setNameTouched] = useState(false);
-  const [searchQuery,  setSearchQuery]  = useState('');
-  const [searchResults,setSearchResults]= useState([]);
-  const [selectedUsers,setSelectedUsers]= useState([]);
-  const [userRoles,    setUserRoles]    = useState({}); // {userId: role}
-  const [searching,    setSearching]    = useState(false);
-  const [creating,     setCreating]     = useState(false);
-  const [error,        setError]        = useState('');
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ title: '', description: '' });
+  const [filters, setFilters] = useState(initialFilters);
+  const [manualSelectionEnabled, setManualSelectionEnabled] = useState(false);
+  const [options, setOptions] = useState({ roles: [], departments: [], sections: [] });
+  const [results, setResults] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, total: 0, hasMore: false });
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
 
-  // Auto-generate group name from department+year+section
-  const handleFormChange = useCallback((key, value) => {
-    setForm(prev => {
-      const updated = { ...prev, [key]: value };
-      if (!nameTouched && ['department','year','section'].includes(key)) {
-        const parts = [updated.department, updated.year && `Year ${updated.year}`, updated.section && `Sec ${updated.section}`].filter(Boolean);
-        updated.name = parts.join(' - ');
+  const selectedUserIds = useMemo(() => selectedUsers.map((user) => user._id), [selectedUsers]);
+
+  const filteredSections = useMemo(() => {
+    if (!filters.departmentId) return options.sections;
+    return options.sections.filter((section) => section.departmentId === filters.departmentId);
+  }, [filters.departmentId, options.sections]);
+
+  const activeFilterCount = useMemo(() => (
+    [filters.role, filters.departmentId, filters.sectionId].filter(Boolean).length + (filters.search.trim() ? 1 : 0)
+  ), [filters]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOptions = async () => {
+      setLoadingOptions(true);
+      try {
+        const res = await API.get('/chat-groups/users/options');
+        if (!cancelled) {
+          setOptions(res.data?.data || { roles: [], departments: [], sections: [] });
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error('Failed to load user filters');
+        }
+      } finally {
+        if (!cancelled) setLoadingOptions(false);
       }
-      return updated;
+    };
+
+    loadOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (step !== 2) return undefined;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      setLoadingUsers(true);
+      try {
+        const query = buildQueryString(filters, pagination.page, []);
+        const res = await API.get(`/chat-groups/users/search?${query}`, { signal: controller.signal });
+        setResults(res.data?.data || []);
+        setPagination((current) => ({
+          ...current,
+          total: res.data?.pagination?.total || 0,
+          hasMore: Boolean(res.data?.pagination?.hasMore),
+        }));
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+          toast.error('Failed to load users');
+        }
+      } finally {
+        setLoadingUsers(false);
+      }
+    }, 220);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [filters, pagination.page, step]);
+
+  const handleFilterChange = (key, value) => {
+    setPagination((current) => ({ ...current, page: 1 }));
+    setFilters((current) => {
+      if (key === 'role' && value !== 'student') {
+        return { ...current, role: value, sectionId: '', search: current.search };
+      }
+      if (key === 'departmentId' && current.sectionId) {
+        const nextSections = options.sections.filter((section) => !value || section.departmentId === value);
+        const stillValidSection = nextSections.some((section) => section._id === current.sectionId);
+        return { ...current, [key]: value, sectionId: stillValidSection ? current.sectionId : '' };
+      }
+      return { ...current, [key]: value };
     });
-  }, [nameTouched]);
+  };
 
-  // Search users to add
-  const handleSearch = useCallback(async (q) => {
-    setSearchQuery(q);
-    if (q.length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    try {
-      const res = await API.get(`/chat-groups/users/search?q=${encodeURIComponent(q)}`);
-      const filtered = res.data.data.filter(u => !selectedUsers.some(s => s._id === u._id));
-      setSearchResults(filtered);
-    } catch {}
-    finally { setSearching(false); }
-  }, [selectedUsers]);
+  const handleToggleUser = (user) => {
+    if (!manualSelectionEnabled) return;
+    setSelectedUsers((current) => (
+      current.some((entry) => entry._id === user._id)
+        ? current.filter((entry) => entry._id !== user._id)
+        : [...current, user]
+    ));
+  };
 
-  const addUser = useCallback((user) => {
-    setSelectedUsers(prev => [...prev, user]);
-    setUserRoles(prev => ({
-      ...prev,
-      [user._id]: user.role === 'admin'
-        ? 'admin'
-        : user.role === 'faculty'
-        ? 'faculty'
-        : user.role === 'staff' || user.role === 'agent'
-        ? 'staff'
-        : 'student',
-    }));
-    setSearchResults(prev => prev.filter(u => u._id !== user._id));
-    setSearchQuery('');
-  }, []);
+  const handleNext = () => {
+    if (!form.title.trim()) {
+      setError('Group title is required');
+      return;
+    }
+    setError('');
+    setStep(2);
+  };
 
-  const handleNameChange = useCallback((value) => {
-    setNameTouched(true);
-    setForm(prev => ({ ...prev, name: value }));
-  }, []);
+  const handleCreate = async () => {
+    if (!form.title.trim()) {
+      setStep(1);
+      setError('Group title is required');
+      return;
+    }
 
-  const removeUser = useCallback((userId) => {
-    setSelectedUsers(prev => prev.filter(u => u._id !== userId));
-    setUserRoles(prev => { const n = {...prev}; delete n[userId]; return n; });
-  }, []);
-
-  const handleCreate = useCallback(async () => {
-    if (!form.name.trim()) { setError('Group name is required'); return; }
     setCreating(true);
     setError('');
+
     try {
-      // Step 1: Create group
-      const res = await API.post('/chat-groups', {
-        name:        form.name.trim(),
-        department:  form.department,
-        year:        form.year,
-        section:     form.section,
-        description: form.description,
-      });
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        filters: {
+          roles: filters.role ? [filters.role] : [],
+          departmentId: filters.departmentId || '',
+          sectionId: filters.role === 'student' ? filters.sectionId || '' : '',
+          autoIncludeFiltered: filters.selectAllFiltered,
+        },
+        memberIds: selectedUserIds,
+        adminIds: [],
+      };
 
-      const groupId = res.data.data._id;
-
-      // Step 2: Add members if any selected
-      if (selectedUsers.length > 0) {
-        await API.post(`/chat-groups/${groupId}/members`, {
-          userIds: selectedUsers.map(u => u._id),
-          roles:   selectedUsers.map(u => userRoles[u._id] || 'student'),
-        });
-      }
-
-      // Fetch the full group
-      const fullGroup = await API.get(`/chat-groups/${groupId}`);
-      toast.success(`Group "${form.name}" created!`);
-      onCreated(fullGroup.data.data);
+      const res = await API.post('/chat-groups', payload);
+      toast.success(`Group "${form.title.trim()}" created`);
+      onCreated(res.data.data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create group');
-    } finally { setCreating(false); }
-  }, [form, selectedUsers, userRoles, onCreated, onClose]);
+      const message = err.response?.data?.message || '';
+      setError(message || 'Failed to create group');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const selectedDepartmentName = options.departments.find((entry) => entry._id === filters.departmentId)?.name || '';
+  const selectedSectionName = options.sections.find((entry) => entry._id === filters.sectionId)?.label || '';
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col animate-fade-in-up">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/5 p-4 backdrop-blur-md">
+      <div className="theme-surface flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px] shadow-2xl">
+        <div className="theme-surface-soft flex items-start justify-between border-b px-6 py-5">
           <div>
-            <h2 className="font-display font-bold text-gray-900">Create New Group</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Step {step} of 2 — {step === 1 ? 'Group Details' : 'Add Members'}</p>
+            <p className="theme-accent-badge inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em]">
+              Structured group creation
+            </p>
+            <h2 className="mt-3 text-2xl font-bold text-[var(--theme-text)]">Create chat group</h2>
+            <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
+              Build the audience by role, department, and section, then fine-tune membership before launch.
+            </p>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            className="theme-ghost-button inline-flex h-11 w-11 items-center justify-center rounded-2xl transition"
+          >
             <FiX size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          {error && (
-            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-              {error}
-            </div>
-          )}
+        {error ? (
+          <div className="mx-6 mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
 
-          {step === 1 && (
+        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[320px,minmax(0,1fr)]">
+          <aside className="theme-surface-soft border-r px-6 py-6">
             <div className="space-y-4">
-              {/* Department + Year + Section grid */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Department</label>
-                  <input
-                    list="department-options"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.department}
-                    onChange={e => handleFormChange('department', e.target.value)}
-                    placeholder="Select or type department"
-                  />
-                  <datalist id="department-options">
-                    {DEPARTMENTS.map(d => <option key={d} value={d} />)}
-                  </datalist>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Year</label>
-                  <input
-                    list="year-options"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.year}
-                    onChange={e => handleFormChange('year', e.target.value)}
-                    placeholder="Select or type year"
-                  />
-                  <datalist id="year-options">
-                    {YEARS.map(y => <option key={y} value={y} />)}
-                  </datalist>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Section</label>
-                  <input
-                    list="section-options"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={form.section}
-                    onChange={e => handleFormChange('section', e.target.value)}
-                    placeholder="Select or type section"
-                  />
-                  <datalist id="section-options">
-                    {SECTIONS.map(s => <option key={s} value={s} />)}
-                  </datalist>
-                </div>
+              <div className={`rounded-3xl border px-4 py-4 ${step === 1 ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-soft)]' : 'border-[var(--theme-border)]'}`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--theme-text-muted)]">Step 1</p>
+                <p className="mt-2 text-base font-semibold text-[var(--theme-text)]">Group details</p>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Title and purpose of the conversation.</p>
               </div>
-              <p className="text-xs text-gray-400">You can choose a suggested value or type a custom one in any field.</p>
-              {form.department && form.year && form.section && (
-                <div className="px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
-                  Approved users matching {form.department} · Year {form.year} · Section {form.section} will be added automatically. You can still add extra members manually in the next step.
-                </div>
-              )}
-
-              {/* Group name (auto-generated or manual) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Group Name *</label>
-                <input className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                  value={form.name}
-                  onChange={e => handleNameChange(e.target.value)}
-                  placeholder="e.g. CSE Year 2 - Sec A" />
-                <p className="text-xs text-gray-400 mt-1">Auto-filled from your group details until you type a custom name</p>
+              <div className={`rounded-3xl border px-4 py-4 ${step === 2 ? 'border-[var(--theme-primary)] bg-[var(--theme-primary-soft)]' : 'border-[var(--theme-border)]'}`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--theme-text-muted)]">Step 2</p>
+                <p className="mt-2 text-base font-semibold text-[var(--theme-text)]">Audience builder</p>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Filter, auto-select, and hand-pick members.</p>
               </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Description</label>
-                <textarea className="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
-                  rows={3} value={form.description}
-                  onChange={e => setForm(p => ({...p, description: e.target.value}))}
-                  placeholder="What is this group for? (optional)" />
+              <div className="theme-surface rounded-[28px] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--theme-text-muted)]">What happens</p>
+                <ul className="mt-3 space-y-2 text-sm text-[var(--theme-text-muted)]">
+                  <li>The creator becomes the first group admin.</li>
+                  <li>Only approved and active users appear in the member pool.</li>
+                  <li>Section filtering is available when you target students.</li>
+                </ul>
               </div>
             </div>
-          )}
+          </aside>
 
-          {step === 2 && (
-            <div className="space-y-4">
-              {/* Search users */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Search & Add Members</label>
-                <div className="relative">
-                  <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+          <div className="min-h-0 overflow-y-auto px-6 py-6">
+            {step === 1 ? (
+              <div className="mx-auto max-w-3xl space-y-6">
+                <div className="theme-surface rounded-[28px] p-5">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--theme-text-muted)]">
+                    Group title
+                  </label>
                   <input
-                    className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    value={searchQuery}
-                    onChange={e => handleSearch(e.target.value)}
-                    placeholder="Search by name, email, or enrollment ID..."
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    className="theme-input w-full rounded-2xl px-4 py-3 text-sm outline-none transition"
+                    placeholder="e.g. CSE Year 1 Mentorship Circle"
+                  />
+                </div>
+                <div className="theme-surface rounded-[28px] p-5">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--theme-text-muted)]">
+                    Description
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                    className="theme-input min-h-[160px] w-full rounded-2xl px-4 py-3 text-sm outline-none transition"
+                    placeholder="Add context for members. Mention what this group is for and who should use it."
                   />
                 </div>
               </div>
-
-              {/* Search results */}
-              {searchResults.length > 0 && (
-                <div className="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-50">
-                  {searchResults.slice(0, 6).map(u => <UserSearchResult key={u._id} user={u} onAdd={addUser} />)}
-                </div>
-              )}
-              {searching && <p className="text-xs text-gray-400 text-center py-2">Searching...</p>}
-
-              {/* Selected members list */}
-              {selectedUsers.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FiUsers size={14} className="text-gray-500" />
-                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                      Selected Members ({selectedUsers.length})
-                    </p>
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {selectedUsers.map(u => (
-                      <div key={u._id} className="flex items-center gap-3 px-3 py-2 bg-blue-50 rounded-xl">
-                        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {u.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{u.name}</p>
-                        </div>
-                        {/* Role selector */}
-                        <select
-                          value={userRoles[u._id] || 'student'}
-                          onChange={e => setUserRoles(prev => ({...prev, [u._id]: e.target.value}))}
-                          className="text-xs border border-blue-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400">
-                          {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                        <button onClick={() => removeUser(u._id)}
-                          className="p-1 text-gray-400 hover:text-red-500 rounded-lg transition-colors flex-shrink-0">
-                          <FiTrash2 size={13} />
-                        </button>
+            ) : (
+              <div className="grid min-h-0 gap-5 xl:grid-cols-[380px,minmax(0,1fr)]">
+                <section className="space-y-5">
+                  <div className="theme-surface rounded-[28px] p-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="theme-accent-badge inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
+                          Filters
+                        </p>
+                        <h3 className="mt-3 text-lg font-semibold text-[var(--theme-text)]">Audience rules</h3>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <span className="theme-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium">
+                        <FiFilter size={12} />
+                        {activeFilterCount} active
+                      </span>
+                    </div>
 
-              {selectedUsers.length === 0 && !searchQuery && (
-                <div className="text-center py-6">
-                  <FiUsers size={32} className="text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">Search and add members to the group</p>
-                  <p className="text-xs text-gray-400 mt-1">You can also add members after creating the group</p>
-                </div>
-              )}
-            </div>
-          )}
+                    <div className="mt-5 space-y-4">
+                      <div>
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-text-muted)]">
+                          Role
+                        </label>
+                        <select
+                          value={filters.role}
+                          onChange={(event) => handleFilterChange('role', event.target.value)}
+                          className="theme-input w-full rounded-2xl px-4 py-3 text-sm outline-none transition"
+                          disabled={loadingOptions}
+                        >
+                          <option value="">All roles</option>
+                          {options.roles.map((role) => (
+                            <option key={role.value} value={role.value}>{role.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-text-muted)]">
+                          Department
+                        </label>
+                        <select
+                          value={filters.departmentId}
+                          onChange={(event) => handleFilterChange('departmentId', event.target.value)}
+                          className="theme-input w-full rounded-2xl px-4 py-3 text-sm outline-none transition"
+                          disabled={loadingOptions}
+                        >
+                          <option value="">All departments</option>
+                          {options.departments.map((department) => (
+                            <option key={department._id} value={department._id}>{department.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {filters.role === 'student' ? (
+                        <div>
+                          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-text-muted)]">
+                            Section
+                          </label>
+                          <select
+                            value={filters.sectionId}
+                            onChange={(event) => handleFilterChange('sectionId', event.target.value)}
+                            className="theme-input w-full rounded-2xl px-4 py-3 text-sm outline-none transition"
+                            disabled={loadingOptions}
+                          >
+                            <option value="">All sections</option>
+                            {filteredSections.map((section) => (
+                              <option key={section._id} value={section._id}>{section.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null}
+
+                      <label className="theme-surface-soft flex items-start gap-3 rounded-2xl px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={filters.selectAllFiltered}
+                          onChange={(event) => handleFilterChange('selectAllFiltered', event.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary)] focus:ring-[var(--theme-primary)]"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-[var(--theme-text)]">Select all filtered users</span>
+                          <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
+                            Use the current filters to add the full audience automatically when the group is created.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="theme-surface rounded-[28px] p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-text-muted)]">Selected summary</p>
+                    <div className="mt-3 space-y-2 text-sm text-[var(--theme-text-muted)]">
+                      <p>Role: <span className="font-semibold text-[var(--theme-text)]">{filters.role ? getRoleLabel(filters.role) : 'All roles'}</span></p>
+                      <p>Department: <span className="font-semibold text-[var(--theme-text)]">{selectedDepartmentName || 'All departments'}</span></p>
+                      {filters.role === 'student' ? (
+                        <p>Section: <span className="font-semibold text-[var(--theme-text)]">{selectedSectionName || 'All sections'}</span></p>
+                      ) : null}
+                      <p>Manual picks: <span className="font-semibold text-[var(--theme-text)]">{manualSelectionEnabled ? selectedUsers.length : 0}</span></p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-5">
+                  <div className="theme-surface rounded-[28px] p-5 xl:flex xl:h-[calc(100vh-19rem)] xl:flex-col">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="theme-accent-badge inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]">
+                          Member pool
+                        </p>
+                        <h3 className="mt-3 text-lg font-semibold text-[var(--theme-text)]">Search and fine-tune</h3>
+                      </div>
+                      <div className="relative w-full max-w-md">
+                        <FiSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--theme-text-muted)]" size={15} />
+                        <input
+                          value={filters.search}
+                          onChange={(event) => handleFilterChange('search', event.target.value)}
+                          className="theme-input w-full rounded-2xl py-3 pl-11 pr-4 text-sm outline-none transition"
+                          placeholder="Search by name, email, or enrollment ID"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 space-y-4 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+                      <label className="theme-surface-soft flex items-start gap-3 rounded-2xl px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={manualSelectionEnabled}
+                          onChange={(event) => {
+                            const enabled = event.target.checked;
+                            setManualSelectionEnabled(enabled);
+                            if (!enabled) {
+                              setSelectedUsers([]);
+                            }
+                          }}
+                          className="mt-1 h-4 w-4 rounded border-[var(--theme-border)] text-[var(--theme-primary)] focus:ring-[var(--theme-primary)]"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-[var(--theme-text)]">Manually add specific members</span>
+                          <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">
+                            Turn this on only when you want exceptions beyond the selected filters.
+                          </span>
+                        </span>
+                      </label>
+
+                      <div className="space-y-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+                        <div className="flex items-center justify-between text-xs text-[var(--theme-text-muted)]">
+                          <span>{pagination.total} eligible users found</span>
+                          <span>{loadingUsers ? 'Updating list…' : 'Live results'}</span>
+                        </div>
+                        <div className="space-y-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
+                          {results.map((user) => (
+                            <SearchResultRow
+                              key={user._id}
+                              user={user}
+                              selected={manualSelectionEnabled && selectedUserIds.includes(user._id)}
+                              onToggle={handleToggleUser}
+                              disabled={!manualSelectionEnabled}
+                            />
+                          ))}
+                          {!loadingUsers && results.length === 0 ? (
+                            <div className="theme-surface-soft rounded-[28px] border border-dashed px-6 py-12 text-center">
+                              <FiUsers className="mx-auto text-[var(--theme-text-muted)]" size={28} />
+                              <p className="mt-3 text-sm font-semibold text-[var(--theme-text)]">No users match this audience</p>
+                              <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Try widening the role or department filters.</p>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center justify-between pt-2 xl:border-t xl:border-[var(--theme-border)] xl:pt-4">
+                          <button
+                            type="button"
+                            onClick={() => setPagination((current) => ({ ...current, page: Math.max(current.page - 1, 1) }))}
+                            disabled={pagination.page === 1 || loadingUsers}
+                            className="theme-ghost-button rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Previous
+                          </button>
+                          <span className="text-xs text-[var(--theme-text-muted)]">Page {pagination.page}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}
+                            disabled={!pagination.hasMore || loadingUsers}
+                            className="theme-ghost-button rounded-2xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+
+                      {manualSelectionEnabled ? (
+                        <div className="theme-surface-soft rounded-[28px] p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--theme-text-muted)]">Manual selection</p>
+                              <h4 className="mt-2 text-base font-semibold text-[var(--theme-text)]">{selectedUsers.length} queued</h4>
+                            </div>
+                            <span className="theme-chip rounded-full px-3 py-1 text-xs font-medium">
+                              <FiUsers size={12} className="inline" /> Members
+                            </span>
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            {selectedUsers.length ? selectedUsers.map((user) => (
+                              <SelectedUserRow key={user._id} user={user} onRemove={(userId) => {
+                                setSelectedUsers((current) => current.filter((entry) => entry._id !== userId));
+                              }} />
+                            )) : (
+                              <div className="rounded-2xl border border-dashed border-[var(--theme-border)] px-4 py-8 text-center text-sm text-[var(--theme-text-muted)]">
+                                Choose users from the list above to add one-off members.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Footer buttons */}
-        <div className="flex gap-3 p-5 border-t border-gray-100 flex-shrink-0">
-          {step === 1 ? (
-            <>
-              <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
-              <button onClick={() => {
-                if (!form.name.trim()) { setError('Group name is required'); return; }
-                setError(''); setStep(2);
-              }} className="btn-primary flex-1 justify-center">Next: Add Members →</button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => setStep(1)} className="btn-secondary flex-1 justify-center">← Back</button>
-              <button onClick={handleCreate} disabled={creating}
-                className="btn-primary flex-1 justify-center">
-                {creating ? 'Creating...' : `Create Group ${selectedUsers.length > 0 ? `(+${selectedUsers.length})` : ''}`}
+        <div className="theme-surface-soft flex items-center justify-between border-t px-6 py-5">
+          <div className="text-sm text-[var(--theme-text-muted)]">
+            {step === 2 ? `${manualSelectionEnabled ? selectedUsers.length : 0} manual member${manualSelectionEnabled && selectedUsers.length === 1 ? '' : 's'} selected` : 'Start with the basics, then build the audience.'}
+          </div>
+          <div className="flex gap-3">
+            {step === 2 ? (
+              <button type="button" onClick={() => setStep(1)} className="theme-ghost-button rounded-2xl px-5 py-3 text-sm font-semibold transition">
+                <FiArrowLeft className="inline" /> Back
               </button>
-            </>
-          )}
+            ) : (
+              <button type="button" onClick={onClose} className="theme-ghost-button rounded-2xl px-5 py-3 text-sm font-semibold transition">
+                Cancel
+              </button>
+            )}
+            {step === 1 ? (
+              <button type="button" onClick={handleNext} className="btn-primary rounded-2xl px-5 py-3 text-sm font-semibold">
+                Continue <FiArrowRight className="inline" />
+              </button>
+            ) : (
+              <button type="button" onClick={handleCreate} disabled={creating} className="btn-primary rounded-2xl px-5 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">
+                {creating ? 'Creating…' : 'Create group'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,16 +1,16 @@
 const Enrollment = require('../models/Enrollment');
 const Section = require('../models/Section');
-const SectionSubject = require('../models/SectionSubject');
+const TeachingAssignment = require('../models/TeachingAssignment');
 const Department = require('../models/Department');
 const { normalizeRole } = require('./roleHelpers');
 
 const getFacultyAssignedSectionIds = async (facultyId) => {
-  const assignments = await SectionSubject.find({
+  const sectionAssignments = await TeachingAssignment.find({
     isActive: true,
-    $or: [{ faculty: facultyId }, { facultyMembers: facultyId }],
+    teacher: facultyId,
   }).distinct('section');
 
-  return assignments.map((id) => String(id));
+  return [...new Set(sectionAssignments.map((id) => String(id)))];
 };
 
 const resolveScopedSectionIds = async ({

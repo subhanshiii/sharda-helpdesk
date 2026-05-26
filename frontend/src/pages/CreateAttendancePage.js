@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { FiCalendar, FiCheckCircle, FiUsers } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -8,22 +9,28 @@ import AcademicScopeFilters from '../components/academics/AcademicScopeFilters';
 import {
   buildDepartmentCollegeMap,
   emptyAcademicScopeFilters,
-  filterSectionsByScope,
+  filterSectionsByScope
 } from '../utils/academicScope';
 
-const STATUS_OPTIONS = ['present', 'absent', 'late', 'excused'];
+const STATUS_OPTIONS = ['present', 'absent'];
 
 export default function CreateAttendancePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const prefilledSectionId = searchParams.get('sectionId') || '';
+  const prefilledSubjectId = searchParams.get('subjectId') || '';
+  const prefilledTeachingAssignmentId = searchParams.get('teachingAssignmentId') || '';
+  const prefilledDate = searchParams.get('date') || new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState({
     title: '',
     subjectId: '',
     sectionId: '',
-    date: new Date().toISOString().slice(0, 10),
+    teachingAssignmentId: '',
+    date: prefilledDate,
     topic: '',
     records: [],
     // Fallback for backward compatibility
@@ -34,7 +41,8 @@ export default function CreateAttendancePage() {
   });
   
   const [sections, setSections] = useState([]);
-  const [subjects, setSubjects] = useState([]);
+  const [teachingAssignments, setTeachingAssignments] = useState([]);
+  const [activeSectionSubjects, setActiveSectionSubjects] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [programs, setPrograms] = useState([]);
@@ -50,53 +58,76 @@ export default function CreateAttendancePage() {
   useEffect(() => {
     const loadSections = async () => {
       try {
-        const [collegesRes, departmentsRes, programsRes, coursesRes, sectionsRes] = await Promise.all([
+        const [collegesRes, departmentsRes, programsRes, coursesRes, sectionsRes, teachingAssignmentsRes] = await Promise.all([
           API.get('/academics/colleges?paginate=false'),
           API.get('/academics/departments?paginate=false'),
           API.get('/academics/programs?paginate=false'),
           API.get('/academics/courses?paginate=false'),
           API.get('/academics/sections?paginate=false'),
+          API.get('/academics/teaching-assignments'),
         ]);
         setColleges(Array.isArray(collegesRes.data?.data) ? collegesRes.data.data : []);
         setDepartments(Array.isArray(departmentsRes.data?.data) ? departmentsRes.data.data : []);
         setPrograms(Array.isArray(programsRes.data?.data) ? programsRes.data.data : []);
         setCourses(Array.isArray(coursesRes.data?.data) ? coursesRes.data.data : []);
         setSections(Array.isArray(sectionsRes.data?.data) ? sectionsRes.data.data : []);
+        setTeachingAssignments(Array.isArray(teachingAssignmentsRes.data?.data) ? teachingAssignmentsRes.data.data : []);
       } catch (requestError) {
         setColleges([]);
         setDepartments([]);
         setPrograms([]);
         setCourses([]);
         setSections([]);
+        setTeachingAssignments([]);
       }
     };
     loadSections();
   }, []);
 
-  const departmentCollegeMap = buildDepartmentCollegeMap(departments);
-  const scopedSections = filterSectionsByScope(sections, filters, departmentCollegeMap);
-  const scopedSubjects = subjects.filter((subject) => {
-    if (filters.departmentId && String(subject.department?._id || subject.department) !== String(filters.departmentId)) return false;
-    if (filters.programId && String(subject.program?._id || subject.program) !== String(filters.programId)) return false;
-    if (filters.courseId && String(subject.course?._id || subject.course) !== String(filters.courseId)) return false;
-    if (filters.studyYear && String(subject.academicSession?.yearNumber || '') !== String(filters.studyYear)) return false;
-    return true;
-  });
+  const departmentCollegeMap = useMemo(() => buildDepartmentCollegeMap(departments), [departments]);
+  const scopedSections = useMemo(
+    () => filterSectionsByScope(sections, filters, departmentCollegeMap),
+    [sections, filters, departmentCollegeMap]
+  );
+  const scopedSubjects = useMemo(() => activeSectionSubjects
+    .map((entry) => entry?.subject)
+    .filter(Boolean), [activeSectionSubjects]);
 
-  // Load subjects on mount for the dropdown
+  const eligibleTeachingAssignments = useMemo(() => teachingAssignments.filter((assignment) => (
+    String(assignment.section?._id || assignment.section) === String(form.sectionId)
+    && String(assignment.subject?._id || assignment.subject) === String(form.subjectId)
+  )), [form.sectionId, form.subjectId, teachingAssignments]);
+
+  const teachingAssignmentOptions = useMemo(() => eligibleTeachingAssignments.map((assignment) => ({
+    _id: assignment._id,
+    label: `${assignment.subject?.name || 'Subject'} (${assignment.subject?.code || '—'}) · ${assignment.teacher?.name || 'Unassigned faculty'}`,
+    teacherId: assignment.teacher?._id || assignment.teacher || '',
+    subjectName: assignment.subject?.name || '',
+  })), [eligibleTeachingAssignments]);
+
   useEffect(() => {
-    const loadSubjects = async () => {
-      try {
-        const res = await API.get('/academics/subjects');
-        setSubjects(Array.isArray(res.data?.data) ? res.data.data : []);
-      } catch (requestError) {
-        setSubjects([]);
-      }
-    };
-    loadSubjects();
-  }, []);
+    if (!form.sectionId) {
+      setActiveSectionSubjects([]);
+      return;
+    }
 
-  const loadStudents = async (sectionId) => {
+    let active = true;
+    API.get(`/academics/sections/${form.sectionId}/active-subjects`)
+      .then((response) => {
+        if (!active) return;
+        setActiveSectionSubjects(Array.isArray(response.data?.data) ? response.data.data : []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setActiveSectionSubjects([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.sectionId]);
+
+  const loadStudents = useCallback(async (sectionId) => {
     if (!sectionId) {
       setStudents([]);
       setForm((current) => ({ ...current, records: [] }));
@@ -111,7 +142,10 @@ export default function CreateAttendancePage() {
       setStudents(roster);
       setForm((current) => ({
         ...current,
-        records: roster.map((student) => ({ student: student._id, status: 'present' })),
+        records: roster.map((student) => {
+          const existingRecord = current.records.find((record) => String(record.student) === String(student._id));
+          return existingRecord || { student: student._id, status: 'present' };
+        }),
       }));
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to load students.');
@@ -120,7 +154,7 @@ export default function CreateAttendancePage() {
     } finally {
       setLoadingSectionData(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -143,8 +177,9 @@ export default function CreateAttendancePage() {
           setForm((current) => ({
             ...current,
             title: item.title || '',
-            subjectId: item.subjectId || '',
-            sectionId: item.sectionId || '',
+            subjectId: item.subjectId?._id || item.subjectId || '',
+            sectionId: item.sectionId?._id || item.sectionId || '',
+            teachingAssignmentId: item.teachingAssignmentId?._id || item.teachingAssignmentId || '',
             subject: item.subject || '',
             department: item.department || user?.department || '',
             year: item.year || user?.year || '',
@@ -155,7 +190,7 @@ export default function CreateAttendancePage() {
           }));
           // If editing, load students for that section
           if (item.sectionId) {
-            await loadStudents(item.sectionId);
+            await loadStudents(item.sectionId?._id || item.sectionId);
           } else {
             // Fallback: try loading by section string if no sectionId
             const matchedSection = sections.find((s) => s.name === item.section);
@@ -179,7 +214,57 @@ export default function CreateAttendancePage() {
       active = false;
       controller.abort();
     };
-  }, [id, sections])
+  }, [id, isEdit, loadStudents, sections, user?.department, user?.section, user?.year]);
+
+  useEffect(() => {
+    if (isEdit || !sections.length) return;
+    if (!prefilledSectionId) return;
+
+    const selectedSection = sections.find((section) => String(section._id) === String(prefilledSectionId));
+    if (!selectedSection) return;
+
+    setFilters((current) => ({
+      ...current,
+      collegeId: departmentCollegeMap.get(String(selectedSection.department?._id || selectedSection.department || '')) || '',
+      departmentId: String(selectedSection.department?._id || selectedSection.department || ''),
+      programId: String(selectedSection.program?._id || selectedSection.program || ''),
+      courseId: String(selectedSection.course?._id || selectedSection.course || ''),
+      studyYear: String(selectedSection.studyYear || selectedSection.academicSession?.yearNumber || ''),
+      sectionId: String(selectedSection._id),
+    }));
+
+    setForm((current) => ({
+      ...current,
+      sectionId: String(selectedSection._id),
+      section: selectedSection.name || '',
+      department: selectedSection.department?.name || current.department,
+      year: String(selectedSection.studyYear || selectedSection.academicSession?.yearNumber || current.year || ''),
+      date: prefilledDate,
+    }));
+
+    loadStudents(String(selectedSection._id));
+  }, [departmentCollegeMap, isEdit, loadStudents, prefilledDate, prefilledSectionId, sections]);
+
+  useEffect(() => {
+    if (isEdit || !prefilledSubjectId || !form.sectionId) return;
+    if (!scopedSubjects.length) return;
+    const selectedSubject = scopedSubjects.find((subject) => String(subject._id) === String(prefilledSubjectId));
+    if (!selectedSubject) return;
+
+    const matchedAssignments = teachingAssignments.filter((assignment) => (
+      String(assignment.section?._id || assignment.section) === String(form.sectionId)
+      && String(assignment.subject?._id || assignment.subject) === String(prefilledSubjectId)
+    ));
+
+    setForm((current) => ({
+      ...current,
+      subjectId: String(selectedSubject._id),
+      subject: selectedSubject.name || '',
+      teachingAssignmentId: prefilledTeachingAssignmentId
+        || (matchedAssignments.length === 1 ? matchedAssignments[0]._id : current.teachingAssignmentId),
+      title: current.title || `${selectedSubject.name} Attendance`,
+    }));
+  }, [form.sectionId, isEdit, prefilledSubjectId, prefilledTeachingAssignmentId, scopedSubjects, teachingAssignments]);
 
   const handleSectionChange = (sectionId) => {
     const selectedSection = sections.find((s) => s._id === sectionId);
@@ -189,9 +274,22 @@ export default function CreateAttendancePage() {
       sectionId,
       section: selectedSection?.name || '',
       department: selectedSection?.department?.name || current.department,
+      subjectId: '',
+      subject: '',
+      teachingAssignmentId: '',
     }));
     setError('');
     loadStudents(sectionId);
+  };
+
+  const updateRecordStatus = (studentId, status) => {
+    setError('');
+    setForm((current) => ({
+      ...current,
+      records: current.records.map((entry) => (
+        String(entry.student) === String(studentId) ? { ...entry, status } : entry
+      )),
+    }));
   };
 
   const handleScopeChange = (key, value) => {
@@ -249,6 +347,7 @@ export default function CreateAttendancePage() {
       const payload = {
         title: form.title,
         subjectId: form.subjectId || null,
+        teachingAssignmentId: form.teachingAssignmentId || null,
         sectionId: form.sectionId,
         subject: form.subject,
         department: form.department,
@@ -278,22 +377,44 @@ export default function CreateAttendancePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <PageHeader
         title={isEdit ? 'Update Attendance' : 'Mark Attendance'}
-        subtitle="Capture section attendance from the academic structure, linked to real student enrollments."
+        subtitle="Review the selected section and subject, then mark each student from the vertical roster below."
       />
 
       <div className="card p-6">
         {error ? <div className="mb-4"><Alert type="error" message={error} /></div> : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <AcademicScopeFilters
-            filters={filters}
-            onChange={handleScopeChange}
-            options={{ colleges, departments, programs, courses, sections }}
-            departmentCollegeMap={departmentCollegeMap}
-          />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
+            <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
+              <AcademicScopeFilters
+                filters={filters}
+                onChange={handleScopeChange}
+                options={{ colleges, departments, programs, courses, sections }}
+                departmentCollegeMap={departmentCollegeMap}
+                singleLine
+              />
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-main)]">
+                  <FiUsers size={15} />
+                  Roster
+                </div>
+                <p className="mt-2 text-2xl font-black text-[var(--text-strong)]">{form.records.length}</p>
+                <p className="text-sm text-[var(--text-muted)]">Students loaded for this section.</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-main)]">
+                  <FiCheckCircle size={15} />
+                  Present by Default
+                </div>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Everyone starts as present. Switch only absences.</p>
+              </div>
+            </div>
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -322,10 +443,21 @@ export default function CreateAttendancePage() {
               <label htmlFor="subject" className="label">Subject (Optional)</label>
               <select id="subject" className="input" value={form.subjectId} onChange={(event) => {
                 const selectedSubject = scopedSubjects.find((s) => s._id === event.target.value);
+                const matchedTeachingAssignment = teachingAssignments.find((assignment) => (
+                  String(assignment.section?._id || assignment.section) === String(form.sectionId)
+                  && String(assignment.subject?._id || assignment.subject) === String(event.target.value)
+                ));
+                const matchedAssignments = teachingAssignments.filter((assignment) => (
+                  String(assignment.section?._id || assignment.section) === String(form.sectionId)
+                  && String(assignment.subject?._id || assignment.subject) === String(event.target.value)
+                ));
                 setForm((current) => ({
                   ...current,
                   subjectId: event.target.value,
                   subject: selectedSubject?.name || current.subject,
+                  teachingAssignmentId: matchedAssignments.length === 1
+                    ? matchedAssignments[0]._id
+                    : matchedTeachingAssignment?._id || '',
                 }));
                 setError('');
               }}>
@@ -338,6 +470,30 @@ export default function CreateAttendancePage() {
               </select>
             </div>
           </div>
+          {form.subjectId && teachingAssignmentOptions.length > 1 ? (
+            <div>
+              <label htmlFor="teachingAssignment" className="label">Assigned Faculty *</label>
+              <select
+                id="teachingAssignment"
+                className="input"
+                value={form.teachingAssignmentId}
+                onChange={(event) => {
+                  const selectedAssignment = eligibleTeachingAssignments.find((assignment) => String(assignment._id) === String(event.target.value));
+                  setForm((current) => ({
+                    ...current,
+                    teachingAssignmentId: event.target.value,
+                    subject: selectedAssignment?.subject?.name || current.subject,
+                  }));
+                  setError('');
+                }}
+              >
+                <option value="">Select linked faculty assignment</option>
+                {teachingAssignmentOptions.map((option) => (
+                  <option key={option._id} value={option._id}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
@@ -346,41 +502,44 @@ export default function CreateAttendancePage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100">
-            <div className="border-b border-gray-100 px-4 py-3">
-              <p className="font-semibold text-gray-900">Student Roster {loadingSectionData ? '(Loading...)' : `(${form.records.length} students)`}</p>
+          <div className="rounded-3xl border border-[var(--border-strong)]">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border-strong)] px-4 py-3">
+              <div>
+                <p className="font-semibold text-[var(--text-strong)]">Student Roster {loadingSectionData ? '(Loading...)' : `(${form.records.length} students)`}</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Each student is listed vertically with a simple present or absent toggle.</p>
+              </div>
+              <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-2 text-sm font-semibold text-[var(--text-main)]">
+                <FiCalendar className="mr-2 inline-flex" size={14} />
+                {form.date}
+              </div>
             </div>
-            <div className="max-h-[420px] divide-y divide-gray-100 overflow-y-auto">
+            <div className="max-h-[520px] divide-y divide-[var(--border-strong)] overflow-y-auto">
               {form.records.length === 0 ? (
-                <div className="p-5 text-center text-sm text-gray-400">
+                <div className="p-5 text-center text-sm text-[var(--text-muted)]">
                   {loadingSectionData ? 'Loading roster...' : 'Select a section to load the student roster.'}
                 </div>
               ) : form.records.map((record) => {
                 const student = students.find((entry) => entry._id === record.student);
-                const statusSelectId = `status-${record.student}`;
                 return (
-                  <div key={record.student} className="grid gap-3 px-4 py-3 md:grid-cols-[1fr_220px] md:items-center">
+                  <div key={record.student} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_200px] md:items-center">
                     <div>
-                      <p className="font-medium text-gray-900">{student?.name || 'Student'}</p>
-                      <p className="mt-1 text-xs text-gray-500">{student?.email || ''}</p>
+                      <p className="font-medium text-[var(--text-strong)]">{student?.name || 'Student'}</p>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">{student?.email || ''}</p>
                     </div>
-                    <select
-                      id={statusSelectId}
-                      className="input"
-                      value={record.status}
-                      aria-label={`Mark ${student?.name || 'Student'} as ${record.status}`}
-                      onChange={(event) => {
-                        setError('');
-                        setForm((current) => ({
-                          ...current,
-                          records: current.records.map((entry) => (
-                            entry.student === record.student ? { ...entry, status: event.target.value } : entry
-                          )),
-                        }));
-                      }}
-                    >
-                      {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="inline-flex rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-card)] p-1">
+                        {STATUS_OPTIONS.map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => updateRecordStatus(record.student, status)}
+                            className={`rounded-xl px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${record.status === status ? status === 'present' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white' : 'text-[var(--text-main)] hover:bg-[var(--surface-soft)]'}`}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 );
               })}

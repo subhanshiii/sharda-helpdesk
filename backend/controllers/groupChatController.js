@@ -29,8 +29,10 @@ const emitGroupEventToMembers = async (io, groupId, event, payload) => {
 };
 
 const getGroupSnapshot = async (groupId) => Group.findById(groupId)
-  .populate('createdBy', 'name email role')
-  .populate('members.user', 'name email role department enrollmentId')
+  .populate('createdBy', 'name email role adminTier')
+  .populate('selectionRules.departmentIds', 'name code')
+  .populate('selectionRules.sectionIds', 'name studyYear')
+  .populate('members.user', 'name email role department departmentId section sectionId enrollmentId')
   .populate('lastMessage');
 
 // ── GROUP ENDPOINTS ────────────────────────────────────
@@ -38,11 +40,11 @@ const getGroupSnapshot = async (groupId) => Group.findById(groupId)
 // POST /api/chat-groups
 exports.createGroup = async (req, res, next) => {
   try {
-    const { name, department, year, section, description } = req.body;
-    if (!name) return res.status(400).json({ success: false, message: 'Group name is required' });
+    const { title, name, description, filters, memberIds, adminIds } = req.body;
+    if (!(title || name)) return res.status(400).json({ success: false, message: 'Group title is required' });
 
     const group = await chatService.createGroup({
-      name, department, year, section, description,
+      title, name, description, filters, memberIds, adminIds,
       creatorId: req.user.id,
     });
 
@@ -50,6 +52,15 @@ exports.createGroup = async (req, res, next) => {
 
     res.status(201).json({ success: true, data: group });
   } catch (error) {
+    if (error?.code === 11000) {
+      const duplicateFields = Object.keys(error.keyPattern || {}).join(', ');
+      return res.status(400).json({
+        success: false,
+        message: duplicateFields
+          ? `Group creation was blocked by a duplicate database index on: ${duplicateFields}.`
+          : 'Group creation was blocked by a duplicate database index.',
+      });
+    }
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     next(error);
   }
@@ -63,11 +74,10 @@ exports.getMyGroups = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// GET /api/chat-groups — all groups (admin only)
+// GET /api/chat-groups — all groups with optional audience filters
 exports.getAllGroups = async (req, res, next) => {
   try {
-    const { department, year } = req.query;
-    const groups = await chatService.getAllGroups({ department, year });
+    const groups = await chatService.getAllGroups(req.query);
     res.status(200).json({ success: true, data: groups, count: groups.length });
   } catch (error) { next(error); }
 };
@@ -160,17 +170,26 @@ exports.deleteGroup = async (req, res, next) => {
 // PUT /api/chat-groups/:id — update group
 exports.updateGroup = async (req, res, next) => {
   try {
-    const { name, department, year, section, description } = req.body;
-    if (!name) return res.status(400).json({ success: false, message: 'Group name is required' });
+    const { title, name, description, filters } = req.body;
+    if (!(title || name)) return res.status(400).json({ success: false, message: 'Group title is required' });
 
     const group = await chatService.updateGroup(req.params.id, {
-      name, department, year, section, description,
+      title, name, description, filters,
     }, req.user.id);
 
     await emitGroupEventToMembers(req.io, group._id, 'group:updated', { group });
 
     res.status(200).json({ success: true, data: group });
   } catch (error) {
+    if (error?.code === 11000) {
+      const duplicateFields = Object.keys(error.keyPattern || {}).join(', ');
+      return res.status(400).json({
+        success: false,
+        message: duplicateFields
+          ? `Group update was blocked by a duplicate database index on: ${duplicateFields}.`
+          : 'Group update was blocked by a duplicate database index.',
+      });
+    }
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     next(error);
   }
@@ -249,28 +268,50 @@ exports.deleteMessage = async (req, res, next) => {
   }
 };
 
-// GET /api/chat-groups/users/search — search users to add to group
+// GET /api/chat-groups/users/options — filter metadata for group creation
+exports.getUserFilterOptions = async (req, res, next) => {
+  try {
+    const options = await chatService.getUserDirectoryOptions();
+    res.status(200).json({ success: true, data: options });
+  } catch (error) { next(error); }
+};
+
+// GET /api/chat-groups/users/search — search or filter users for membership selection
 exports.searchUsers = async (req, res, next) => {
   try {
-    const { q, role } = req.query;
-    if (!q || q.length < 2) return res.status(400).json({ success: false, message: 'Search query must be at least 2 characters' });
+    const {
+      q = '',
+      role,
+      roles,
+      departmentId,
+      departmentIds,
+      sectionId,
+      sectionIds,
+      page = 1,
+      limit = 24,
+      excludeUserIds,
+    } = req.query;
 
-    const query = {
-      $or: [
-        { name:         { $regex: q, $options: 'i' } },
-        { email:        { $regex: q, $options: 'i' } },
-        { enrollmentId: { $regex: q, $options: 'i' } },
-      ],
-      isActive: true,
-      status: 'approved',
-      emailVerified: true,
-    };
-    if (role) query.role = role;
+    const parsedRoles = roles ? String(roles).split(',') : role ? [role] : [];
+    const parsedDepartmentIds = departmentIds ? String(departmentIds).split(',') : departmentId ? [departmentId] : [];
+    const parsedSectionIds = sectionIds ? String(sectionIds).split(',') : sectionId ? [sectionId] : [];
+    const parsedExcludeIds = excludeUserIds ? String(excludeUserIds).split(',') : [];
 
-    const users = await User.find(query)
-      .select('name email role department enrollmentId')
-      .limit(20);
+    const result = await chatService.getFilteredUsers({
+      q,
+      roles: parsedRoles,
+      departmentIds: parsedDepartmentIds,
+      sectionIds: parsedSectionIds,
+      excludeUserIds: parsedExcludeIds,
+      page,
+      limit,
+    });
 
-    res.status(200).json({ success: true, data: users });
+    res.status(200).json({ success: true, data: result.users, pagination: {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      hasMore: result.hasMore,
+    } });
   } catch (error) { next(error); }
 };

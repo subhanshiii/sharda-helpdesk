@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiArrowLeft, FiCalendar, FiEdit2, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiEdit2, FiShield, FiTrash2, FiUser, FiBookOpen, FiClock, FiCheckCircle, FiImage, FiEye, FiEyeOff } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, Avatar, ConfirmDialog, EmptyState, FullPageSpinner, HelpTooltip, PageHeader } from '../components/ui';
 import { formatDate, formatRelative, getAdminTierDefinition, getAdminTierTone, getRoleColor, getRoleLabel } from '../utils/helpers';
 import { fetchAvatarOptions } from '../constants/avatarOptions';
 import AvatarPickerPopover from '../components/AvatarPickerPopover';
 import { usePermissions } from '../context/PermissionContext';
+import { isFacultyUser, normalizeUserRole } from '../utils/access';
 
 const MetaItem = ({ icon: Icon, label, value }) => (
   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 dark-surface-subtle">
@@ -32,13 +33,164 @@ const lifecycleTone = {
   expired: 'bg-red-100 text-red-700',
 };
 
+const lifecycleLabel = (overall) => {
+  const map = {
+    active: 'Access Allowed',
+    ready: 'Almost Ready',
+    pending_verification: 'Verify Email',
+    password_setup: 'Set Password',
+    assignment_pending: 'Add Academic Mapping',
+    pending_approval: 'Awaiting Approval',
+    rejected: 'Rejected',
+    suspended: 'Suspended',
+    inactive: 'Inactive',
+    expired: 'Expired',
+  };
+  return map[overall] || 'Pending';
+};
+
+const buildClientLifecycle = (user) => {
+  if (!user) {
+    return {
+      overall: 'pending',
+      stages: [],
+      requiresAssignment: false,
+      assignmentReady: false,
+      credentialReady: false,
+      verificationComplete: false,
+      operationallyActive: false,
+      isExpired: false,
+    };
+  }
+
+  const normalizedRole = normalizeUserRole(user.role);
+  const now = new Date();
+  const isExpired = Boolean(user.expiryDate && new Date(user.expiryDate) <= now);
+  const verificationComplete = Boolean(user.emailVerified);
+  const credentialReady = verificationComplete && !user.passwordNeedsSetup;
+  const accessApproved = verificationComplete && credentialReady && user.status === 'approved';
+  const requiresAssignment = ['student', 'faculty'].includes(normalizedRole);
+  const rawAssignmentReady = requiresAssignment
+    ? normalizedRole === 'student'
+      ? Boolean(user.enrollment?.id && user.enrollment?.status === 'active' && user.sectionContext?.id)
+      : (user.teachingAssignments || []).length > 0
+    : true;
+  const assignmentReady = accessApproved && rawAssignmentReady;
+  const hierarchyComplete = verificationComplete && credentialReady && accessApproved && assignmentReady;
+  const operationallyActive = hierarchyComplete && user.isActive !== false && !isExpired;
+
+  const stages = [
+    {
+      key: 'provisioned',
+      label: 'Account Created',
+      complete: true,
+      description: 'The user record exists in the system.',
+    },
+    {
+      key: 'verified',
+      label: 'Email Confirmed',
+      complete: verificationComplete,
+      description: verificationComplete ? 'Email verification is complete.' : 'Waiting for the user to verify their email.',
+    },
+    {
+      key: 'credentials',
+      label: 'Password Set',
+      complete: credentialReady,
+      description: credentialReady
+        ? 'User can authenticate with a managed password.'
+        : !verificationComplete
+          ? 'Complete email verification before the password step can be finished.'
+          : 'Password setup still needs to be completed.',
+    },
+    {
+      key: 'approval',
+      label: 'Admin Approved',
+      complete: accessApproved,
+      description: !verificationComplete
+        ? 'Complete email verification before admin approval can be treated as ready.'
+        : !credentialReady
+          ? 'Complete password setup before admin approval can be treated as ready.'
+          : accessApproved
+            ? 'The account has been approved for access.'
+            : `Account status is ${user.status || 'pending'}.`,
+    },
+    {
+      key: 'assignment',
+      label: requiresAssignment ? 'Academic Mapping Complete' : 'Academic Mapping Not Required',
+      complete: assignmentReady,
+      description: !verificationComplete
+        ? 'Complete email verification before academic mapping can be treated as ready.'
+        : !credentialReady
+          ? 'Complete password setup before academic mapping can be treated as ready.'
+          : !accessApproved
+            ? 'Complete admin approval before academic mapping can be treated as ready.'
+            : requiresAssignment
+              ? assignmentReady
+                ? 'Academic structure assignment is linked and ready.'
+                : `Waiting for ${normalizedRole === 'student' ? 'active section enrollment' : 'teaching assignment'}.`
+              : 'This role does not require academic assignment.',
+    },
+    {
+      key: 'active',
+      label: 'Account Access',
+      complete: operationallyActive,
+      description: operationallyActive
+        ? 'Account access is allowed.'
+        : isExpired
+          ? 'Account access has expired.'
+          : user.isActive === false
+            ? 'Account access is currently denied.'
+            : hierarchyComplete
+              ? 'Account access can be enabled by marking the account active.'
+              : `Account status is ${user.status || 'pending'}.`,
+    },
+  ];
+
+  const overall = operationallyActive
+    ? 'active'
+    : !verificationComplete
+      ? 'pending_verification'
+      : !credentialReady
+        ? 'password_setup'
+        : !accessApproved
+          ? 'pending_approval'
+          : !assignmentReady
+          ? 'assignment_pending'
+          : user.status === 'rejected'
+            ? 'rejected'
+            : user.status === 'suspended'
+              ? 'suspended'
+              : isExpired
+                ? 'expired'
+                : user.isActive === false
+                  ? 'inactive'
+                  : accessApproved
+                    ? 'ready'
+                    : 'pending_approval';
+
+  return {
+    overall,
+    stages,
+    requiresAssignment,
+    assignmentReady,
+    accessApproved,
+    hierarchyComplete,
+    credentialReady,
+    verificationComplete,
+    operationallyActive,
+    isExpired,
+  };
+};
+
 const getProfilePageCopy = (user) => {
   const roleLabel = getRoleLabel(user?.role || 'user');
+  const normalizedRole = normalizeUserRole(user?.role);
+  const systemIdLabel = user?.systemId || '—';
 
-  if (user?.role === 'faculty') {
+  if (normalizedRole === 'faculty') {
     return {
       title: 'Faculty Profile',
-      subtitle: `System ID ${user.systemId}`,
+      subtitle: `System ID ${systemIdLabel}`,
       academicTitle: 'Faculty Academic Scope',
       academicDescription: 'Teaching assignments, subject ownership, and section-linked academic scope for this faculty member.',
       subjectsTitle: 'Assigned Subjects',
@@ -46,10 +198,10 @@ const getProfilePageCopy = (user) => {
     };
   }
 
-  if (user?.role === 'student') {
+  if (normalizedRole === 'student') {
     return {
       title: 'Student Profile',
-      subtitle: `System ID ${user.systemId}`,
+      subtitle: `System ID ${systemIdLabel}`,
       academicTitle: 'Student Academic Mapping',
       academicDescription: 'Section, course, and subject context used to drive timetable, attendance, and assignments.',
       subjectsTitle: 'Enrolled Subjects',
@@ -57,10 +209,10 @@ const getProfilePageCopy = (user) => {
     };
   }
 
-  if (user?.role === 'staff') {
+  if (normalizedRole === 'staff') {
     return {
       title: 'Staff Profile',
-      subtitle: `System ID ${user.systemId}`,
+      subtitle: `System ID ${systemIdLabel}`,
       academicTitle: 'Operational Context',
       academicDescription: 'Operational context, academic visibility, and support access tied to this staff account.',
       subjectsTitle: 'Academic Visibility',
@@ -68,10 +220,10 @@ const getProfilePageCopy = (user) => {
     };
   }
 
-  if (user?.role === 'admin') {
+  if (normalizedRole === 'admin') {
     return {
-      title: user.adminTier === 'super_admin' ? 'Super Admin Profile' : 'Admin Profile',
-      subtitle: `System ID ${user.systemId}`,
+      title: user?.adminTier === 'super_admin' ? 'Super Admin Profile' : 'Admin Profile',
+      subtitle: `System ID ${systemIdLabel}`,
       academicTitle: 'Governance Context',
       academicDescription: 'Administrative access, academic visibility, and platform governance scope connected to this account.',
       subjectsTitle: 'Academic Visibility',
@@ -81,12 +233,58 @@ const getProfilePageCopy = (user) => {
 
   return {
     title: `${roleLabel} Profile`,
-    subtitle: `System ID ${user?.systemId || '—'}`,
+    subtitle: `System ID ${systemIdLabel}`,
     academicTitle: 'Academic Mapping',
     academicDescription: 'Academic context connected to this identity record.',
     subjectsTitle: 'Subjects',
     subjectsEmpty: 'No subjects mapped to this user yet.',
   };
+};
+
+const getAccessSummary = (user, lifecycle) => {
+  const roleLabel = getRoleLabel(user?.role || 'user');
+
+  if (!user) {
+    return 'Loading account readiness...';
+  }
+
+  if (lifecycle?.operationallyActive) {
+    return `${roleLabel} has account access and can use assigned modules.`;
+  }
+
+  if (!lifecycle?.verificationComplete) {
+    return 'This user cannot sign in yet because email verification is still pending.';
+  }
+
+  if (!lifecycle?.credentialReady) {
+    return 'This user cannot sign in yet because password setup is still incomplete.';
+  }
+
+  if (user.status !== 'approved') {
+    if (user.status === 'pending') {
+      return 'This user cannot sign in yet because the account is still waiting for admin approval.';
+    }
+    if (user.status === 'rejected') {
+      return 'This user cannot sign in because the account has been rejected.';
+    }
+    if (user.status === 'suspended') {
+      return 'This user cannot sign in because the account is suspended.';
+    }
+  }
+
+  if (user.isActive === false) {
+    return 'This user cannot access the app because account access is currently denied.';
+  }
+
+  if (lifecycle?.isExpired) {
+    return 'This user cannot sign in because the account access has expired.';
+  }
+
+  if (lifecycle?.requiresAssignment && !lifecycle?.assignmentReady) {
+    return `This ${roleLabel.toLowerCase()} cannot fully use academic modules yet because the required academic assignment is still missing.`;
+  }
+
+  return 'This user still has account readiness checks pending.';
 };
 
 export default function UserDetailPage() {
@@ -98,10 +296,12 @@ export default function UserDetailPage() {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarOptions, setAvatarOptions] = useState([]);
   const [deleteState, setDeleteState] = useState({ open: false, loading: false });
+  const [mappingState, setMappingState] = useState({ open: false, loading: false });
   const [error, setError] = useState('');
   const [accountControl, setAccountControl] = useState({ status: 'pending', emailVerified: false, isActive: true, expiryDate: '' });
   const [savingAccess, setSavingAccess] = useState(false);
   const [passwordControl, setPasswordControl] = useState({ password: '', confirmPassword: '' });
+  const [showPasswordOverride, setShowPasswordOverride] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const { isSuperAdmin } = usePermissions();
 
@@ -188,9 +388,11 @@ export default function UserDetailPage() {
   }, [user]);
 
   const pageCopy = useMemo(() => getProfilePageCopy(user), [user]);
+  const effectiveLifecycle = useMemo(() => buildClientLifecycle(user), [user]);
+  const accessSummary = useMemo(() => getAccessSummary(user, effectiveLifecycle), [user, effectiveLifecycle]);
   const adminTierDefinition = useMemo(() => getAdminTierDefinition(user?.adminTier), [user?.adminTier]);
   const facultySubjectSummary = useMemo(() => {
-    if (user?.role !== 'faculty') return [];
+    if (!isFacultyUser(user)) return [];
     return (user.teachingAssignments || []).map((assignment) => ({
       id: assignment.id,
       name: assignment.subject?.name || 'Subject',
@@ -244,6 +446,19 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleRemoveAcademicMapping = async () => {
+    setMappingState({ open: true, loading: true });
+    try {
+      await API.put(`/users/${systemId}`, { sectionId: '' });
+      toast.success('Academic mapping removed');
+      await loadUser();
+      setMappingState({ open: false, loading: false });
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Failed to remove academic mapping');
+      setMappingState({ open: true, loading: false });
+    }
+  };
+
   const handleAccessUpdate = async () => {
     setSavingAccess(true);
     try {
@@ -274,11 +489,11 @@ export default function UserDetailPage() {
 
     setSavingPassword(true);
     try {
-      await API.post(`/users/${systemId}/password`, {
+      const response = await API.post(`/users/${systemId}/password`, {
         password: passwordControl.password,
       });
       setPasswordControl({ password: '', confirmPassword: '' });
-      toast.success('Password updated');
+      toast.success(response.data?.message || 'Password updated');
       await loadUser();
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Failed to update password');
@@ -315,6 +530,16 @@ export default function UserDetailPage() {
         loading={deleteState.loading}
         onConfirm={handleDelete}
         onClose={() => setDeleteState({ open: false, loading: false })}
+      />
+
+      <ConfirmDialog
+        open={mappingState.open}
+        title="Remove academic mapping"
+        description={`Remove ${user.name}'s current section mapping? This will also remove the active section enrollment for this student.`}
+        confirmLabel="Remove Mapping"
+        loading={mappingState.loading}
+        onConfirm={handleRemoveAcademicMapping}
+        onClose={() => setMappingState({ open: false, loading: false })}
       />
 
       <PageHeader
@@ -361,11 +586,8 @@ export default function UserDetailPage() {
                     <span className={`badge ${user.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : user.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
                       {user.status}
                     </span>
-                    <span className={`badge ${lifecycleTone[user.lifecycle?.overall] || 'bg-slate-100 text-slate-700'}`}>
-                      {String(user.lifecycle?.overall || 'pending').replace(/_/g, ' ')}
-                    </span>
-                    <span className={`badge ${user.isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
-                      {user.isActive ? 'Account active' : 'Account inactive'}
+                    <span className={`badge ${lifecycleTone[effectiveLifecycle.overall] || 'bg-slate-100 text-slate-700'}`}>
+                      {lifecycleLabel(effectiveLifecycle.overall)}
                     </span>
                   </div>
                 </div>
@@ -376,6 +598,9 @@ export default function UserDetailPage() {
                 <MetaItem icon={FiCalendar} label="Last login" value={user.lastLogin ? formatDate(user.lastLogin) : 'No successful login yet'} />
                 <MetaItem icon={FiClock} label="Created" value={formatDate(user.createdAt)} />
               </div>
+            </div>
+            <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+              {accessSummary}
             </div>
           </div>
 
@@ -397,7 +622,7 @@ export default function UserDetailPage() {
                 ) : null}
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {(user.lifecycle?.stages || []).map((stage) => (
+                {effectiveLifecycle.stages.map((stage) => (
                   <div key={stage.key} className={`rounded-2xl border px-4 py-4 ${stage.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-gray-900">{stage.label}</p>
@@ -434,8 +659,21 @@ export default function UserDetailPage() {
           </div>
 
           <div className="card p-6">
-            <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">{pageCopy.academicTitle}</h3>
-            <p className="mt-1 text-sm text-gray-500 dark-text-muted">{pageCopy.academicDescription}</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">{pageCopy.academicTitle}</h3>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">{pageCopy.academicDescription}</p>
+              </div>
+              {normalizeUserRole(user?.role) === 'student' && effectiveLifecycle.accessApproved && (user.sectionContext?.id || user.sectionId || user.section) ? (
+                <button
+                  type="button"
+                  onClick={() => setMappingState({ open: true, loading: false })}
+                  className="btn-secondary text-red-600 hover:text-red-700"
+                >
+                  Remove Mapping
+                </button>
+              ) : null}
+            </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetaItem icon={FiBookOpen} label="Program" value={user.sectionContext?.program?.name || user.department || '—'} />
@@ -464,7 +702,7 @@ export default function UserDetailPage() {
               </div>
             </div>
 
-            {user.role === 'faculty' ? (
+            {isFacultyUser(user) ? (
               <div className="mt-6">
                 <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Teaching Summary</h4>
                 <p className="mt-1 text-sm text-gray-500 dark-text-muted">Live teaching scope derived from section-subject assignments.</p>
@@ -526,7 +764,7 @@ export default function UserDetailPage() {
             <div className="mt-4 flex flex-wrap gap-3">
               <Link to="/users" className="btn-secondary">All Users</Link>
               <Link to="/approvals" className="btn-secondary">Approvals</Link>
-              <Link to="/academics" className="btn-secondary">Academic Structure</Link>
+              <Link to="/academics" className="btn-secondary">Academic Planning</Link>
               <Link to="/tickets" className="btn-secondary">Tickets</Link>
             </div>
           </div>
@@ -563,14 +801,14 @@ export default function UserDetailPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="label">Access</label>
+                      <label className="label">Account Access</label>
                       <select
                         className="input"
                         value={String(accountControl.isActive)}
                         onChange={(event) => setAccountControl((current) => ({ ...current, isActive: event.target.value === 'true' }))}
                       >
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
+                        <option value="true">Allowed</option>
+                        <option value="false">Denied</option>
                       </select>
                     </div>
                   </div>
@@ -591,27 +829,47 @@ export default function UserDetailPage() {
 
               <div className="card p-6">
                 <h3 className="font-display text-lg font-bold text-gray-900 dark-text-primary">Manual Password Assignment</h3>
-                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Super-admin-only override for testing and controlled support access.</p>
+                <p className="mt-1 text-sm text-gray-500 dark-text-muted">Super-admin-only override for testing and controlled support access. This also completes email verification; the account still needs Approved status and active access to sign in.</p>
                 <div className="mt-5 space-y-4">
                   <div>
                     <label className="label">New Password</label>
-                    <input
-                      type="password"
-                      className="input"
-                      value={passwordControl.password}
-                      onChange={(event) => setPasswordControl((current) => ({ ...current, password: event.target.value }))}
-                      placeholder="Minimum 6 characters"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPasswordOverride ? 'text' : 'password'}
+                        className="input pr-11"
+                        value={passwordControl.password}
+                        onChange={(event) => setPasswordControl((current) => ({ ...current, password: event.target.value }))}
+                        placeholder="Minimum 6 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordOverride((current) => !current)}
+                        className="absolute inset-y-0 right-3 inline-flex items-center text-gray-400 transition hover:text-gray-600"
+                        aria-label={showPasswordOverride ? 'Hide password' : 'Show password'}
+                      >
+                        {showPasswordOverride ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="label">Confirm Password</label>
-                    <input
-                      type="password"
-                      className="input"
-                      value={passwordControl.confirmPassword}
-                      onChange={(event) => setPasswordControl((current) => ({ ...current, confirmPassword: event.target.value }))}
-                      placeholder="Re-enter the password"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPasswordOverride ? 'text' : 'password'}
+                        className="input pr-11"
+                        value={passwordControl.confirmPassword}
+                        onChange={(event) => setPasswordControl((current) => ({ ...current, confirmPassword: event.target.value }))}
+                        placeholder="Re-enter the password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordOverride((current) => !current)}
+                        className="absolute inset-y-0 right-3 inline-flex items-center text-gray-400 transition hover:text-gray-600"
+                        aria-label={showPasswordOverride ? 'Hide password' : 'Show password'}
+                      >
+                        {showPasswordOverride ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <button type="button" onClick={handlePasswordOverride} disabled={savingPassword} className="btn-secondary w-full justify-center">
                     {savingPassword ? 'Updating Password…' : 'Set Password Manually'}

@@ -171,7 +171,7 @@ function CompactNotice({ notice, canDelete, onDelete }) {
 export default function AnnouncementsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { can } = usePermissions();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -179,7 +179,7 @@ export default function AnnouncementsPage() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
 
-  const canManage = hasPermission('canPostNotice');
+  const canManage = can('create', 'notices') || can('edit', 'notices') || can('delete', 'notices');
 
   const categoryOptions = useMemo(() => {
     const categories = [...new Set(items.map((item) => String(item.category || '').trim()).filter(Boolean))];
@@ -275,7 +275,11 @@ export default function AnnouncementsPage() {
             <button type="button" onClick={() => navigate('/notice-board/new')} className="btn-primary">
               <FiPlus size={15} /> Publish Notice
             </button>
-          ) : null}
+          ) : (
+            <button type="button" className="btn-secondary cursor-not-allowed opacity-70" disabled title="Only staff and admins can publish notices.">
+              <FiPlus size={15} /> Publish Notice
+            </button>
+          )}
         />
 
         <div className="grid grid-cols-3 gap-3">

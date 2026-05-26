@@ -42,4 +42,4 @@ npm start
 
 - Backend runs on Express with MongoDB
 - Frontend runs as a separate React app
-- For a deeper system overview, see [PROJECT_SYSTEM_OVERVIEW.md](/Users/work/IdeaProjects/sharda-helpdesk/PROJECT_SYSTEM_OVERVIEW.md)
+- For a deeper system overview, see [PROJECT_SYSTEM_OVERVIEW.md](PROJECT_SYSTEM_OVERVIEW.md)

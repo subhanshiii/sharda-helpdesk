@@ -6,6 +6,7 @@ import { Avatar, ConfirmDialog, EmptyState, FullPageSpinner } from '../component
 import { formatDate, formatRelative, getAssetUrl, getRoleLabel } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
+import { hasRole, isStudentUser } from '../utils/access';
 import { FiArrowLeft, FiCheck, FiDownload, FiTrash2, FiUpload, FiX } from 'react-icons/fi';
 
 const SubmissionState = ({ status }) => {
@@ -32,8 +33,8 @@ export default function AssignmentDetail() {
   const [gradeDrafts, setGradeDrafts] = useState({});
   const [deleteState, setDeleteState] = useState({ open: false, loading: false });
 
-  const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
-  const canSubmitAssignments = user?.role === 'student' || hasPermission('canSubmitAssignments');
+  const canManageAssignments = hasRole(user, ['faculty', 'admin']) || hasPermission('canManageAssignments');
+  const canSubmitAssignments = isStudentUser(user) || hasPermission('canSubmitAssignments');
 
   useEffect(() => {
     const loadAssignment = async () => {

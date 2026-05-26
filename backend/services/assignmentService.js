@@ -4,6 +4,7 @@ const Enrollment = require('../models/Enrollment');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
 const Department = require('../models/Department');
+const TeachingAssignment = require('../models/TeachingAssignment');
 const mongoose = require('mongoose');
 const { isAdminRole, normalizeRole } = require('../utils/roleHelpers');
 const { buildAudienceVisibilityQuery, buildTargetAudiencePayload, buildVisibilityFilterQuery } = require('../utils/visibility');
@@ -27,6 +28,68 @@ const parseAssignedStudents = (value) => {
     : String(value).split(',').map((item) => item.trim()).filter(Boolean);
 
   return values.filter((item) => mongoose.Types.ObjectId.isValid(item));
+};
+
+const resolveTeachingAssignmentContext = async (body, user) => {
+  const role = normalizeRole(user?.role);
+  const sectionId = mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null;
+  const subjectId = mongoose.Types.ObjectId.isValid(body.subjectId) ? body.subjectId : null;
+  const teachingAssignmentId = mongoose.Types.ObjectId.isValid(body.teachingAssignmentId) ? body.teachingAssignmentId : null;
+
+  if (!sectionId || !subjectId) {
+    return {
+      sectionId,
+      subjectId,
+      teachingAssignment: null,
+      academicSessionId: null,
+      subjectName: body.subject || '',
+    };
+  }
+
+  const query = {
+    isActive: true,
+    section: sectionId,
+    subject: subjectId,
+  };
+
+  if (role === 'faculty') {
+    query.teacher = user.id || user._id;
+  } else if (mongoose.Types.ObjectId.isValid(body.teacherId)) {
+    query.teacher = body.teacherId;
+  }
+
+  const teachingAssignments = await TeachingAssignment.find(query)
+    .populate('section', 'name studyYear course program department academicSession')
+    .populate('subject', 'name code')
+    .populate('teacher', 'name email systemId role')
+    .lean();
+
+  if (!teachingAssignments.length && role === 'faculty') {
+    const error = new Error('Faculty can only create assignments for sections and subjects linked to them');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  let teachingAssignment = null;
+  if (teachingAssignmentId) {
+    teachingAssignment = teachingAssignments.find((entry) => String(entry._id) === String(teachingAssignmentId)) || null;
+  } else if (teachingAssignments.length === 1) {
+    [teachingAssignment] = teachingAssignments;
+  }
+
+  if (!teachingAssignment && role === 'faculty' && teachingAssignments.length > 1) {
+    const error = new Error('Multiple teaching assignments match this section and subject. Choose the specific linked teacher context.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    sectionId,
+    subjectId,
+    teachingAssignment,
+    academicSessionId: teachingAssignment?.academicSession || teachingAssignment?.section?.academicSession || null,
+    subjectName: teachingAssignment?.subject?.name || body.subject || '',
+  };
 };
 
 const getActiveEnrollment = async (userId) => Enrollment.findOne({ student: userId, status: 'active' }).lean();
@@ -93,7 +156,9 @@ const getAssignmentAccess = async (assignmentId, user) => {
     .populate('createdBy', 'name email role department')
     .populate('assignedStudents', 'name email department year section')
     .populate('sectionId', 'name')
-    .populate('subjectId', 'name code');
+    .populate('subjectId', 'name code')
+    .populate('teachingAssignmentId')
+    .populate('academicSessionId', 'label yearNumber');
 
   if (!assignment) {
     const error = new Error('Assignment not found');
@@ -218,6 +283,7 @@ const listAssignments = async (user, filters = {}) => {
     .populate('createdBy', 'name email role department')
     .populate('sectionId', 'name')
     .populate('subjectId', 'name code')
+    .populate('teachingAssignmentId')
     .sort({ dueDate: 1, createdAt: -1 });
 
   if (limit) cursor = cursor.limit(parseInt(limit, 10));
@@ -294,6 +360,11 @@ const createAssignment = async (body, user, files) => {
     throw error;
   }
   const audience = buildTargetAudiencePayload(body);
+  const teachingContext = await resolveTeachingAssignmentContext(body, user);
+
+  if (teachingContext.sectionId) {
+    audience.sectionId = teachingContext.sectionId;
+  }
 
   if (audience.sectionId) {
     const section = await Section.findById(audience.sectionId).populate('department', 'name college');
@@ -319,14 +390,16 @@ const createAssignment = async (body, user, files) => {
   const assignment = await Assignment.create({
     title: body.title,
     description: body.description,
-    subject: body.subject || '',
-    subjectId: mongoose.Types.ObjectId.isValid(body.subjectId) ? body.subjectId : null,
+    subject: teachingContext.subjectName,
+    subjectId: teachingContext.subjectId,
+    teachingAssignmentId: teachingContext.teachingAssignment?._id || null,
+    academicSessionId: teachingContext.academicSessionId || null,
     dueDate: body.dueDate,
     maxScore: body.maxScore ? Number(body.maxScore) : 100,
     allowLateSubmissions: body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true,
     isPublished: body.isPublished !== 'false' && body.isPublished !== false,
     targetAudience: audience,
-    sectionId: mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null,
+    sectionId: teachingContext.sectionId,
     assignedStudents: parseAssignedStudents(body.assignedStudentIds),
     attachments: serializeFiles(files),
     createdBy: user.id || user._id,
@@ -361,7 +434,10 @@ const createAssignment = async (body, user, files) => {
     .populate('createdBy', 'name email role department')
     .populate('assignedStudents', 'name email department year section')
     .populate('sectionId', 'name')
-    .populate('subjectId', 'name code');
+    .populate('subjectId', 'name code')
+    .populate('teachingAssignmentId')
+    .populate('academicSessionId', 'label yearNumber');
+
 };
 
 const updateAssignment = async (assignmentId, body, user, files) => {
@@ -375,14 +451,20 @@ const updateAssignment = async (assignmentId, body, user, files) => {
 
   if (body.title !== undefined) assignment.title = body.title;
   if (body.description !== undefined) assignment.description = body.description;
-  if (body.subject !== undefined) assignment.subject = body.subject;
-  if (body.subjectId !== undefined) assignment.subjectId = mongoose.Types.ObjectId.isValid(body.subjectId) ? body.subjectId : null;
   if (body.dueDate !== undefined) assignment.dueDate = body.dueDate;
   if (body.maxScore !== undefined) assignment.maxScore = Number(body.maxScore);
   if (body.allowLateSubmissions !== undefined) assignment.allowLateSubmissions = body.allowLateSubmissions === 'true' || body.allowLateSubmissions === true;
   if (body.isPublished !== undefined) assignment.isPublished = body.isPublished === 'true' || body.isPublished === true;
   assignment.targetAudience = buildTargetAudiencePayload(body);
-  if (body.sectionId !== undefined) assignment.sectionId = mongoose.Types.ObjectId.isValid(body.sectionId) ? body.sectionId : null;
+  const teachingContext = await resolveTeachingAssignmentContext({
+    ...assignment.toObject(),
+    ...body,
+  }, user);
+  assignment.subject = teachingContext.subjectName;
+  assignment.subjectId = teachingContext.subjectId;
+  assignment.sectionId = teachingContext.sectionId;
+  assignment.teachingAssignmentId = teachingContext.teachingAssignment?._id || null;
+  assignment.academicSessionId = teachingContext.academicSessionId || null;
   assignment.assignedStudents = parseAssignedStudents(body.assignedStudentIds);
   if (files?.length) assignment.attachments = serializeFiles(files);
 
@@ -422,7 +504,9 @@ const updateAssignment = async (assignmentId, body, user, files) => {
     .populate('createdBy', 'name email role department')
     .populate('assignedStudents', 'name email department year section')
     .populate('sectionId', 'name')
-    .populate('subjectId', 'name code');
+    .populate('subjectId', 'name code')
+    .populate('teachingAssignmentId')
+    .populate('academicSessionId', 'label yearNumber');
 };
 
 const deleteAssignment = async (assignmentId, user) => {

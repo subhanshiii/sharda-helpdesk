@@ -6,6 +6,7 @@ import { EmptyState, FullPageSpinner, PageHeader, Alert } from '../components/ui
 import { formatDate, formatRelative } from '../utils/helpers';
 import { usePermissions } from '../context/PermissionContext';
 import { useAuth } from '../context/AuthContext';
+import { isStudentUser } from '../utils/access';
 import { FiBookOpen, FiClock, FiPlus } from 'react-icons/fi';
 import AcademicScopeFilters from '../components/academics/AcademicScopeFilters';
 import useAcademicOptions from '../hooks/useAcademicOptions';
@@ -23,7 +24,7 @@ const SubmissionBadge = ({ submission }) => {
 export default function AssignmentsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { can, hasPermission } = usePermissions();
   const { options, departmentCollegeMap } = useAcademicOptions();
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,8 +40,8 @@ export default function AssignmentsPage() {
     sectionId: '',
   });
 
-  const canManageAssignments = ['faculty', 'admin'].includes(user?.role) || hasPermission('canManageAssignments');
-  const canSubmitAssignments = user?.role === 'student' || hasPermission('canSubmitAssignments');
+  const canManageAssignments = can('create', 'assignments') || can('edit', 'assignments') || can('delete', 'assignments');
+  const canSubmitAssignments = isStudentUser(user) || hasPermission('canSubmitAssignments');
 
   useEffect(() => {
     const loadAssignments = async () => {
@@ -87,7 +88,11 @@ export default function AssignmentsPage() {
           <button onClick={() => navigate('/assignments/new')} className="btn-primary">
             <FiPlus size={15} /> Create Assignment
           </button>
-        ) : null}
+        ) : (
+          <button className="btn-secondary cursor-not-allowed opacity-70" disabled title="Only faculty and admins can create assignments.">
+            <FiPlus size={15} /> Create Assignment
+          </button>
+        )}
       />
 
       <div className="grid gap-4 md:grid-cols-3">

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import API from '../utils/api';
 import toast from 'react-hot-toast';
 import { PageHeader, Alert, Avatar } from '../components/ui';
-import { getRoleColor, formatDate } from '../utils/helpers';
+import { getRoleColor, formatDate, getRoleLabel } from '../utils/helpers';
 import { FiUser, FiMail, FiLayers, FiLock, FiCheck, FiImage } from 'react-icons/fi';
 import { fetchAvatarOptions } from '../constants/avatarOptions';
 import AvatarPickerPopover from '../components/AvatarPickerPopover';
@@ -153,7 +153,7 @@ export default function ProfilePage() {
             <h2 className="text-lg font-bold text-gray-900">{user?.name}</h2>
             <p className="text-sm text-gray-500">{user?.email}</p>
             <div className="mt-1 flex items-center gap-2">
-              <span className={`badge ${getRoleColor(user?.role)}`}>{user?.role}</span>
+              <span className={`badge ${getRoleColor(user?.role)}`}>{getRoleLabel(user?.role)}</span>
               {user?.section ? <span className="badge bg-gray-100 text-gray-600">{user.section}</span> : null}
             </div>
           </div>

@@ -2,12 +2,13 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { buildScopeOptions } from '../../utils/academicScope';
 import { ADMIN_TIER_DEFINITIONS, getAdminTierLabel, getRoleLabel } from '../../utils/helpers';
+import { normalizeUserRole, resolveEffectiveAdminTier } from '../../utils/access';
 
 const getFilterAccessProfile = (user) => {
-  const role = user?.role || '';
-  const tier = user?.adminTier || '';
+  const role = normalizeUserRole(user?.role);
+  const tier = resolveEffectiveAdminTier(user?.role, user?.adminTier);
 
-  if (tier === 'super_admin' || tier === 'admin' || role === 'admin') {
+  if (tier === 'super_admin' || tier === 'admin') {
     return {
       showVisibilityFilters: true,
       showCollege: true,
@@ -117,12 +118,12 @@ export default function AcademicScopeFilters({
   const { user } = useAuth();
   const scopedOptions = buildScopeOptions(options, filters, departmentCollegeMap);
   const accessProfile = getFilterAccessProfile(user);
-  const labelClassName = `label ${singleLine ? 'mb-1 whitespace-nowrap text-[11px]' : ''}`;
-  const fieldClassName = singleLine ? 'w-[168px] flex-shrink-0' : '';
+  const labelClassName = `label ${singleLine ? 'mb-1 whitespace-nowrap text-[10px]' : ''}`;
+  const fieldClassName = singleLine ? 'min-w-[126px] flex-1 md:w-[142px] md:flex-none' : '';
 
   return (
-    <div className={`${singleLine ? 'overflow-x-auto pb-1' : ''} ${className}`}>
-      <div className={`${singleLine ? 'flex min-w-max items-end gap-3' : 'grid gap-3 md:grid-cols-2 xl:grid-cols-3'}`}>
+    <div className={className}>
+      <div className={`${singleLine ? 'flex flex-wrap items-end gap-2' : 'grid gap-3 md:grid-cols-2 xl:grid-cols-3'}`}>
       {showTierFilter && accessProfile.showVisibilityFilters ? (
         <div className={fieldClassName}>
           <label className={labelClassName}>Tier</label>
@@ -190,7 +191,7 @@ export default function AcademicScopeFilters({
       </div>
       ) : null}
       {showLevel && accessProfile.showLevel ? (
-        <div className={singleLine ? 'w-[132px] flex-shrink-0' : ''}>
+        <div className={singleLine ? 'min-w-[112px] flex-1 md:w-[120px] md:flex-none' : ''}>
           <label className={labelClassName}>Level / Year</label>
           <select className="input" value={filters.studyYear} onChange={(event) => onChange('studyYear', event.target.value)}>
             <option value="">All Levels</option>

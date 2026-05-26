@@ -2,12 +2,14 @@ const express = require('express');
 const router = express.Router();
 
 const academicController = require('../controllers/academicController');
+const academicPlanningController = require('../controllers/academicPlanningController');
 const {
   getTimetable,
   getTimetableEntry,
   createTimetableEntry,
   updateTimetableEntry,
   deleteTimetableEntry,
+  getTeachingAssignments,
   getAttendanceOptions,
   getAttendanceSessions,
   createAttendanceSession,
@@ -18,7 +20,7 @@ const { verifyAuth, permissionMiddleware, anyPermissionMiddleware, checkPermissi
 
 const academicReadAccess = (req, res, next) => {
   const resource = req.params.resource;
-  if (['subjects', 'section-subjects', 'enrollments'].includes(resource)) {
+  if (['subjects', 'enrollments'].includes(resource)) {
     return anyPermissionMiddleware('canManageAcademics', 'canManageUsers')(req, res, next);
   }
 
@@ -37,19 +39,41 @@ router.get('/reports/enrollments', permissionMiddleware('canManageAcademics'), a
 router.get('/workspace-summary', permissionMiddleware('canManageAcademics'), academicController.getWorkspaceSummary);
 router.get('/workspace-data', permissionMiddleware('canManageAcademics'), academicController.getWorkspaceData);
 router.get('/workspace-options', anyPermissionMiddleware('canManageAcademics', 'canManageUsers', 'canManageTimetable', 'canMarkAttendance', 'canPostNotice'), academicController.getWorkspaceOptions);
+router.get('/org-units', anyPermissionMiddleware('canManageAcademics', 'canManageUsers'), academicController.getOrganizationWorkspace);
+router.post('/org-units', permissionMiddleware('canManageAcademics'), academicController.createOrgUnit);
+router.put('/org-units/:id', permissionMiddleware('canManageAcademics'), academicController.updateOrgUnit);
+router.delete('/org-units/:id', permissionMiddleware('canManageAcademics'), academicController.deleteOrgUnit);
+router.get('/subject-management', permissionMiddleware('canManageAcademics'), academicController.getSubjectManagementWorkspace);
+router.get('/subjects/:id/detail', permissionMiddleware('canManageAcademics'), academicController.getSubjectRecord);
+router.post('/subjects/:id/courses', permissionMiddleware('canManageAcademics'), academicController.linkCourseToSubject);
+router.delete('/subjects/:id/courses/:courseId', permissionMiddleware('canManageAcademics'), academicController.unlinkCourseFromSubject);
+router.put('/subjects/:id/teachers', permissionMiddleware('canManageAcademics'), academicController.updateSubjectTeachers);
+router.put('/subjects/:id/sections/:sectionId/teachers', permissionMiddleware('canManageAcademics'), academicController.updateSubjectSectionTeachers);
 router.get('/reports/students/:studentId', permissionMiddleware('canManageAcademics'), academicController.getStudentAcademicOverview);
 router.get('/me/overview', academicController.getStudentAcademicOverview);
 router.get('/structure-tree', permissionMiddleware('canManageAcademics'), academicController.getStructureTree);
 router.post('/setup', permissionMiddleware('canManageAcademics'), academicController.quickSetup);
-router.patch('/section-subjects/:id', permissionMiddleware('canManageAcademics'), academicController.updateSectionSubjectFaculty);
 
-router.get('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)', academicReadAccess, academicController.list);
-router.post('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)', permissionMiddleware('canManageAcademics'), academicController.create);
-router.put('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
-router.patch('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
-router.delete('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|section-subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.remove);
+// Course-centric academic planning reads (additive, course -> subjects, section -> active subjects)
+router.get(
+  '/courses/:id/subjects',
+  anyPermissionMiddleware('canManageAcademics', 'canManageTimetable', 'canMarkAttendance'),
+  academicPlanningController.getSubjectsForCourse
+);
+router.get(
+  '/sections/:id/active-subjects',
+  anyPermissionMiddleware('canManageAcademics', 'canManageTimetable', 'canMarkAttendance'),
+  academicPlanningController.getActiveSubjectsForSection
+);
+
+router.get('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|enrollments)', academicReadAccess, academicController.list);
+router.post('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|enrollments)', permissionMiddleware('canManageAcademics'), academicController.create);
+router.put('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
+router.patch('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.update);
+router.delete('/:resource(colleges|departments|programs|courses|years|academic-sessions|sections|subjects|enrollments)/:id', permissionMiddleware('canManageAcademics'), academicController.remove);
 
 router.get('/timetable', getTimetable);
+router.get('/teaching-assignments', getTeachingAssignments);
 router.get('/timetable/:id', getTimetableEntry);
 router.post('/timetable', checkPermission('create', 'timetable'), createTimetableEntry);
 router.put('/timetable/:id', checkPermission('edit', 'timetable'), updateTimetableEntry);

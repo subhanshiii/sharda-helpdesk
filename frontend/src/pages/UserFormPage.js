@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FiArrowLeft, FiCheck, FiUpload } from 'react-icons/fi';
@@ -9,28 +9,9 @@ import { ADMIN_TIER_DEFINITIONS, getAdminTierDefinition, getAdminTierTone } from
 
 const ROLES = ['student', 'faculty', 'staff', 'admin'];
 const ADMIN_TIER_GROUPS = [
-  {
-    label: 'No Tier',
-    options: [
-      { value: '', label: 'No Tier' },
-    ],
-  },
-  {
-    label: 'System-level',
-    options: [
-      { value: 'super_admin', label: 'Super Admin' },
-      { value: 'admin', label: 'Admin' },
-    ],
-  },
-  {
-    label: 'Scoped',
-    options: [
-      { value: 'college_admin', label: 'College Admin' },
-      { value: 'department_admin', label: 'Department Admin' },
-      { value: 'program_coordinator', label: 'Program Coordinator' },
-      { value: 'section_moderator', label: 'Section Moderator' },
-    ],
-  },
+  { label: 'No Tier', options: [{ value: '', label: 'No Tier' }] },
+  { label: 'System-level', options: [{ value: 'super_admin', label: 'Super Admin' }, { value: 'admin', label: 'Admin' }] },
+  { label: 'Scoped', options: [{ value: 'college_admin', label: 'College Admin' }, { value: 'department_admin', label: 'Department Admin' }, { value: 'program_coordinator', label: 'Program Coordinator' }, { value: 'section_moderator', label: 'Section Moderator' }] },
 ];
 
 const initialForm = {
@@ -40,18 +21,106 @@ const initialForm = {
   password: '',
   role: 'student',
   adminTier: '',
-  collegeId: '',
-  department: '',
-  departmentId: '',
-  programId: '',
-  year: '',
-  section: '',
+  academicProgramId: '',
+  orgUnitId: '',
   status: 'pending',
   expiryDate: '',
   isActive: true,
   emailVerified: false,
+  passwordNeedsSetup: false,
   sectionId: '',
+  scopeCollegeId: '',
+  scopeDepartmentId: '',
+  scopeProgramId: '',
   adminScopeIds: [],
+};
+
+const buildLifecyclePreview = (form) => {
+  const verificationComplete = Boolean(form.emailVerified);
+  const passwordPending = Boolean(form.passwordNeedsSetup) || (!form.password && !form.systemId);
+  const credentialReady = verificationComplete && !passwordPending;
+  const accessApproved = verificationComplete && credentialReady && form.status === 'approved';
+  const requiresAcademicMapping = ['student', 'faculty', 'staff', 'admin'].includes(form.role);
+  const rawAssignmentReady = requiresAcademicMapping
+    ? form.role === 'student'
+      ? Boolean(form.sectionId)
+      : Boolean(form.orgUnitId)
+    : true;
+  const assignmentReady = accessApproved && rawAssignmentReady;
+  const isExpired = Boolean(form.expiryDate && new Date(form.expiryDate) <= new Date());
+  const hierarchyComplete = verificationComplete && credentialReady && accessApproved && assignmentReady;
+  const canSignIn = hierarchyComplete && form.isActive !== false && !isExpired;
+
+  return [
+    { label: 'Account Created', complete: true, description: 'The user record exists in the system.' },
+    { label: 'Email Confirmed', complete: verificationComplete, description: verificationComplete ? 'Email verification is complete.' : 'Waiting for email verification.' },
+    { label: 'Password Set', complete: credentialReady, description: credentialReady ? 'A usable password is available.' : !verificationComplete ? 'Email verification must be completed first.' : 'Password setup is still pending.' },
+    { label: 'Admin Approved', complete: accessApproved, description: accessApproved ? 'The account is approved for access.' : !credentialReady ? 'Password readiness must be completed first.' : `Current status is ${form.status || 'pending'}.` },
+    {
+      label: requiresAcademicMapping ? 'Academic Mapping Complete' : 'Academic Mapping Not Required',
+      complete: assignmentReady,
+      description: !requiresAcademicMapping
+        ? 'This role does not require academic mapping.'
+        : assignmentReady
+          ? 'Academic mapping is in place.'
+          : !accessApproved
+            ? 'Admin approval must be completed first.'
+            : form.role === 'student'
+              ? 'Assign a section to complete academic mapping.'
+              : 'Assign a home department unit to complete non-student placement.',
+    },
+    { label: 'Account Access', complete: canSignIn, description: canSignIn ? 'Account access is allowed.' : isExpired ? 'Account access has expired.' : form.isActive === false ? 'Account access is currently denied.' : hierarchyComplete ? 'Account access can be enabled by marking the account active.' : 'One or more earlier steps are still incomplete.' },
+  ];
+};
+
+const buildDerivedAcademic = ({ role, section, program, orgUnit, departments, colleges }) => {
+  if (role === 'student' && section) {
+    return {
+      school: section.department?.college?.name || '—',
+      department: section.department?.name || '—',
+      program: section.program?.name || '—',
+      course: section.course?.name || '—',
+      year: section.studyYear ? String(section.studyYear) : '—',
+      section: section.name || '—',
+    };
+  }
+
+  if (orgUnit) {
+    const linkedDepartment = departments.find((entry) => String(entry._id) === String(orgUnit.linkedDepartmentId?._id || orgUnit.linkedDepartmentId || '')) || orgUnit.linkedDepartmentId || null;
+    const linkedCollege = colleges.find((entry) => String(entry._id) === String(linkedDepartment?.college?._id || linkedDepartment?.college || orgUnit.collegeId?._id || orgUnit.collegeId || '')) || orgUnit.collegeId || null;
+
+    return {
+      school: linkedCollege?.name || '—',
+      department: orgUnit.name || linkedDepartment?.name || '—',
+      program: role === 'faculty' && program ? (program.name || '—') : (orgUnit.type === 'academic' ? 'Academic home unit' : 'Operational home unit'),
+      course: '—',
+      year: '—',
+      section: '—',
+    };
+  }
+
+  if ((role === 'faculty' || role === 'staff') && program) {
+    const department = departments.find((entry) => String(entry._id) === String(program.department?._id || program.department)) || program.department || null;
+    const college = colleges.find((entry) => String(entry._id) === String(department?.college?._id || department?.college)) || null;
+
+    return {
+      school: college?.name || '—',
+      department: department?.name || '—',
+      program: program.name || '—',
+      course: '—',
+      year: '—',
+      section: '—',
+    };
+  }
+
+  return {
+    school: '—',
+    department: '—',
+    program: '—',
+    course: '—',
+    year: '—',
+    section: '—',
+  };
 };
 
 export default function UserFormPage() {
@@ -67,12 +136,39 @@ export default function UserFormPage() {
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [programOptions, setProgramOptions] = useState([]);
   const [sectionOptions, setSectionOptions] = useState([]);
+  const [orgUnitOptions, setOrgUnitOptions] = useState([]);
   const isStudent = form.role === 'student';
+  const usesProgramReference = form.role === 'faculty';
+  const needsOrgUnit = !isStudent;
   const { isSuperAdmin } = usePermissions();
   const selectedTierDefinition = getAdminTierDefinition(form.adminTier);
+  const lifecyclePreview = buildLifecyclePreview(form);
+  const selectedSection = useMemo(
+    () => sectionOptions.find((entry) => String(entry._id) === String(form.sectionId)) || null,
+    [form.sectionId, sectionOptions]
+  );
+  const selectedProgram = useMemo(
+    () => programOptions.find((entry) => String(entry._id) === String(form.academicProgramId)) || null,
+    [form.academicProgramId, programOptions]
+  );
+  const selectedOrgUnit = useMemo(
+    () => orgUnitOptions.find((entry) => String(entry._id) === String(form.orgUnitId)) || null,
+    [form.orgUnitId, orgUnitOptions]
+  );
+  const derivedAcademic = useMemo(
+    () => buildDerivedAcademic({
+      role: form.role,
+      section: selectedSection,
+      program: selectedProgram,
+      orgUnit: selectedOrgUnit,
+      departments: departmentOptions,
+      colleges: collegeOptions,
+    }),
+    [collegeOptions, departmentOptions, form.role, selectedOrgUnit, selectedProgram, selectedSection]
+  );
 
   useEffect(() => {
-    if (!isEdit) return;
+    if (!isEdit) return undefined;
 
     let mounted = true;
     const loadUser = async () => {
@@ -81,6 +177,8 @@ export default function UserFormPage() {
         const res = await API.get(`/users/${systemId}`);
         const user = res.data?.data;
         if (!mounted || !user) return;
+
+        const firstScopeId = String(user.adminScopes?.[0]?.scopeId || '');
         setForm({
           systemId: user.systemId || '',
           name: user.name || '',
@@ -88,18 +186,20 @@ export default function UserFormPage() {
           password: '',
           role: user.role || 'student',
           adminTier: user.adminTier || '',
-          collegeId: user.collegeId?._id || user.collegeId || '',
-          department: user.department || '',
-          departmentId: user.departmentId?._id || user.departmentId || '',
-          programId: user.programId?._id || user.programId || '',
-          year: user.year || '',
-          section: user.section || '',
+          academicProgramId: user.role === 'student' ? '' : String(user.programId?._id || user.programId || ''),
+          orgUnitId: String(user.orgUnitId?._id || user.orgUnitId || ''),
           status: user.status || 'pending',
           expiryDate: user.expiryDate ? new Date(user.expiryDate).toISOString().slice(0, 10) : '',
           isActive: user.isActive !== false,
           emailVerified: Boolean(user.emailVerified),
-          sectionId: user.sectionId?._id || user.sectionId || '',
-          adminScopeIds: Array.isArray(user.adminScopes) ? user.adminScopes.map((scope) => String(scope.scopeId)) : [],
+          passwordNeedsSetup: Boolean(user.passwordNeedsSetup),
+          sectionId: String(user.sectionId?._id || user.sectionId || ''),
+          scopeCollegeId: user.adminTier === 'college_admin' ? firstScopeId : '',
+          scopeDepartmentId: user.adminTier === 'department_admin' ? firstScopeId : '',
+          scopeProgramId: user.adminTier === 'program_coordinator' ? firstScopeId : '',
+          adminScopeIds: user.adminTier === 'section_moderator' && Array.isArray(user.adminScopes)
+            ? user.adminScopes.map((scope) => String(scope.scopeId))
+            : [],
         });
       } catch (requestError) {
         setError(requestError.response?.data?.message || 'Failed to load user');
@@ -119,21 +219,22 @@ export default function UserFormPage() {
       API.get('/academics/departments'),
       API.get('/academics/programs'),
       API.get('/academics/sections'),
-    ])
-      .then(([collegesRes, departmentsRes, programsRes, sectionsRes]) => {
-        if (!mounted) return;
-        setCollegeOptions(collegesRes.data?.data || []);
-        setDepartmentOptions(departmentsRes.data?.data || []);
-        setProgramOptions(programsRes.data?.data || []);
-        setSectionOptions(sectionsRes.data?.data || []);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setCollegeOptions([]);
-        setDepartmentOptions([]);
-        setProgramOptions([]);
-        setSectionOptions([]);
-      });
+      API.get('/academics/org-units'),
+    ]).then(([collegesRes, departmentsRes, programsRes, sectionsRes, orgUnitsRes]) => {
+      if (!mounted) return;
+      setCollegeOptions(collegesRes.data?.data || []);
+      setDepartmentOptions(departmentsRes.data?.data || []);
+      setProgramOptions(programsRes.data?.data || []);
+      setSectionOptions(sectionsRes.data?.data || []);
+      setOrgUnitOptions(orgUnitsRes.data?.data?.units || []);
+    }).catch(() => {
+      if (!mounted) return;
+      setCollegeOptions([]);
+      setDepartmentOptions([]);
+      setProgramOptions([]);
+      setSectionOptions([]);
+      setOrgUnitOptions([]);
+    });
 
     return () => {
       mounted = false;
@@ -141,46 +242,37 @@ export default function UserFormPage() {
   }, []);
 
   const handleChange = (event) => {
-    const { name, value, type, checked } = event.target;
+    const { name, value } = event.target;
     setForm((current) => {
-      const normalizedValue = type === 'checkbox'
-        ? checked
-        : (name === 'emailVerified' || name === 'isActive')
-          ? value === 'true'
-          : value;
+      const normalizedValue = (name === 'emailVerified' || name === 'isActive') ? value === 'true' : value;
       const next = { ...current, [name]: normalizedValue };
-      if (name === 'role' && value !== 'student') {
-        next.year = '';
-        next.section = '';
-        next.sectionId = '';
+
+      if (name === 'role') {
+        if (value !== 'student') next.sectionId = '';
+        if (value !== 'faculty') next.academicProgramId = '';
+        if (value === 'student') next.orgUnitId = '';
       }
+
       if (name === 'adminTier') {
-        next.adminScopeIds = [];
-        if (!value || value === 'super_admin' || value === 'admin') {
-          next.collegeId = '';
-          next.departmentId = '';
-          next.programId = '';
-        }
-      }
-      if (name === 'collegeId' && ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(current.adminTier)) {
-        next.departmentId = '';
-        next.programId = '';
-      }
-      if (name === 'departmentId' && ['department_admin', 'program_coordinator', 'section_moderator'].includes(current.adminTier)) {
-        next.programId = '';
-      }
-      if (name === 'programId' && ['program_coordinator', 'section_moderator'].includes(current.adminTier)) {
+        next.scopeCollegeId = '';
+        next.scopeDepartmentId = '';
+        next.scopeProgramId = '';
         next.adminScopeIds = [];
       }
-      if (name === 'sectionId') {
-        const selectedSection = sectionOptions.find((entry) => String(entry._id) === String(value));
-        next.section = selectedSection?.name || '';
-        next.department = selectedSection?.department?.name || current.department || '';
-        next.departmentId = selectedSection?.department?._id || current.departmentId || '';
-        next.collegeId = selectedSection?.department?.college?._id || current.collegeId || '';
-        next.programId = selectedSection?.program?._id || current.programId || '';
-        next.year = selectedSection?.studyYear ? String(selectedSection.studyYear) : current.year;
+
+      if (name === 'scopeCollegeId') {
+        next.scopeDepartmentId = '';
+        next.scopeProgramId = '';
       }
+
+      if (name === 'scopeDepartmentId') {
+        next.scopeProgramId = '';
+      }
+
+      if (name === 'scopeProgramId') {
+        next.adminScopeIds = [];
+      }
+
       return next;
     });
     setError('');
@@ -195,17 +287,19 @@ export default function UserFormPage() {
     if (form.adminTier) {
       const needsScope = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'].includes(form.adminTier);
       const hasScope = form.adminTier === 'college_admin'
-        ? Boolean(form.collegeId)
+        ? Boolean(form.scopeCollegeId)
         : form.adminTier === 'department_admin'
-          ? Boolean(form.departmentId)
+          ? Boolean(form.scopeDepartmentId)
           : form.adminTier === 'program_coordinator'
-            ? Boolean(form.programId)
+            ? Boolean(form.scopeProgramId)
             : form.adminScopeIds.length > 0;
+
       if (needsScope && !hasScope) {
         setError('Please select the required scope for this access tier');
         setSaving(false);
         return;
       }
+
       if (!isSuperAdmin) {
         setError('Only the super admin can assign or modify access tiers');
         setSaving(false);
@@ -215,11 +309,21 @@ export default function UserFormPage() {
 
     try {
       const payload = {
-        ...form,
         systemId: form.systemId || undefined,
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        adminTier: form.adminTier,
+        orgUnitId: needsOrgUnit ? (form.orgUnitId || null) : null,
+        programId: usesProgramReference ? (form.academicProgramId || null) : null,
+        sectionId: isStudent ? (form.sectionId || null) : null,
+        status: form.status,
         expiryDate: form.expiryDate || null,
+        isActive: form.isActive,
+        emailVerified: form.emailVerified,
       };
-      delete payload.adminScopeIds;
+
       const res = isEdit
         ? await API.put(`/users/${systemId}`, payload)
         : await API.post('/users', payload);
@@ -232,11 +336,11 @@ export default function UserFormPage() {
         section_moderator: 'section',
       }[form.adminTier];
       const scopeIds = form.adminTier === 'college_admin'
-        ? (form.collegeId ? [form.collegeId] : [])
+        ? (form.scopeCollegeId ? [form.scopeCollegeId] : [])
         : form.adminTier === 'department_admin'
-          ? (form.departmentId ? [form.departmentId] : [])
+          ? (form.scopeDepartmentId ? [form.scopeDepartmentId] : [])
           : form.adminTier === 'program_coordinator'
-            ? (form.programId ? [form.programId] : [])
+            ? (form.scopeProgramId ? [form.scopeProgramId] : [])
             : form.adminScopeIds;
 
       if (isSuperAdmin && savedUser?._id) {
@@ -348,7 +452,7 @@ export default function UserFormPage() {
                 {form.adminTier === 'college_admin' ? (
                   <div>
                     <label className="label">College Scope</label>
-                    <select name="collegeId" value={form.collegeId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
+                    <select name="scopeCollegeId" value={form.scopeCollegeId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select College</option>
                       {collegeOptions.map((college) => <option key={college._id} value={college._id}>{college.name}</option>)}
                     </select>
@@ -358,10 +462,10 @@ export default function UserFormPage() {
                 {form.adminTier === 'department_admin' ? (
                   <div>
                     <label className="label">Department Scope</label>
-                    <select name="departmentId" value={form.departmentId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
+                    <select name="scopeDepartmentId" value={form.scopeDepartmentId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select Department</option>
                       {departmentOptions
-                        .filter((department) => !form.collegeId || String(department.college?._id || department.college) === String(form.collegeId))
+                        .filter((department) => !form.scopeCollegeId || String(department.college?._id || department.college) === String(form.scopeCollegeId))
                         .map((department) => <option key={department._id} value={department._id}>{department.name}</option>)}
                     </select>
                   </div>
@@ -370,10 +474,10 @@ export default function UserFormPage() {
                 {form.adminTier === 'program_coordinator' ? (
                   <div>
                     <label className="label">Program Scope</label>
-                    <select name="programId" value={form.programId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
+                    <select name="scopeProgramId" value={form.scopeProgramId} onChange={handleChange} className="input" required disabled={!isSuperAdmin}>
                       <option value="">Select Program</option>
                       {programOptions
-                        .filter((program) => !form.departmentId || String(program.department?._id || program.department) === String(form.departmentId))
+                        .filter((program) => !form.scopeDepartmentId || String(program.department?._id || program.department) === String(form.scopeDepartmentId))
                         .map((program) => <option key={program._id} value={program._id}>{program.name}</option>)}
                     </select>
                   </div>
@@ -399,47 +503,95 @@ export default function UserFormPage() {
               </div>
             ) : null}
 
-            <div className={`grid gap-5 ${isStudent ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+            <div className="space-y-4 rounded-3xl border border-gray-100 bg-gray-50 p-5">
               <div>
-                <label className="label">Department</label>
-                <input
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder={isStudent ? 'Student department' : 'Owning department'}
-                  disabled={isStudent && Boolean(form.sectionId)}
-                />
+                <h3 className="text-sm font-semibold text-gray-900">Placement reference</h3>
+                <p className="mt-1 text-sm text-gray-500">Students still derive their hierarchy from sections. Faculty, staff, and admins use a separate home department unit. Academic departments drive curriculum and teaching scope; department units drive people placement and ownership.</p>
               </div>
+
               {isStudent ? (
-                <>
-                  <div>
-                    <label className="label">Section Assignment</label>
-                    <select name="sectionId" value={form.sectionId} onChange={handleChange} className="input">
-                      <option value="">Select a section</option>
-                      {sectionOptions.map((sectionOption) => (
-                        <option key={sectionOption._id} value={sectionOption._id}>
-                          {[
-                            sectionOption.program?.name,
-                            sectionOption.course?.name,
-                            sectionOption.academicSession?.label,
-                            sectionOption.name ? `Section ${sectionOption.name}` : null,
-                          ].filter(Boolean).join(' · ')}
+                <div>
+                  <label className="label">Section Assignment</label>
+                  <select name="sectionId" value={form.sectionId} onChange={handleChange} className="input">
+                    <option value="">Select a section</option>
+                    {sectionOptions.map((sectionOption) => (
+                      <option key={sectionOption._id} value={sectionOption._id}>
+                        {[sectionOption.program?.name, sectionOption.course?.name, sectionOption.academicSession?.label, sectionOption.name ? `Section ${sectionOption.name}` : null].filter(Boolean).join(' · ')}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">This section becomes the single source of truth for the student’s academic hierarchy.</p>
+                </div>
+              ) : null}
+
+              {needsOrgUnit ? (
+                <div>
+                  <label className="label">Home Department Unit</label>
+                  <select name="orgUnitId" value={form.orgUnitId} onChange={handleChange} className="input">
+                    <option value="">Select Department Unit</option>
+                    {orgUnitOptions
+                      .filter((unit) => form.role !== 'faculty' || unit.type === 'academic')
+                      .map((unit) => (
+                        <option key={unit._id} value={unit._id}>
+                          {[unit.name, unit.type === 'academic' ? 'Academic' : 'Operational', unit.linkedDepartmentId?.name || unit.collegeId?.name || null].filter(Boolean).join(' · ')}
                         </option>
                       ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">Assigning a section keeps student academics aligned with timetable, attendance, and subjects.</p>
-                  </div>
-                  <div>
-                    <label className="label">Year Snapshot</label>
-                    <input name="year" value={form.year} onChange={handleChange} className="input" placeholder="e.g. 2" disabled={Boolean(form.sectionId)} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="label">Section Snapshot</label>
-                    <input name="section" value={form.section} onChange={handleChange} className="input" placeholder="e.g. A" disabled={Boolean(form.sectionId)} />
-                  </div>
-                </>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {form.role === 'faculty'
+                      ? 'Faculty use an academic home unit here, such as a unit linked to CSE. Teaching visibility still comes from subject and section assignments, not from the home unit alone.'
+                      : 'This unit becomes the non-student ownership anchor for placement, scope, and grouping.'}
+                  </p>
+                </div>
               ) : null}
+
+              {usesProgramReference ? (
+                <div>
+                  <label className="label">Program Affiliation</label>
+                  <select name="academicProgramId" value={form.academicProgramId} onChange={handleChange} className="input">
+                    <option value="">Select Program</option>
+                    {programOptions.map((program) => <option key={program._id} value={program._id}>{program.name}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Optional for faculty when you want a visible academic affiliation in addition to the home unit. This does not replace subject-section teaching assignments.</p>
+                </div>
+              ) : null}
+
+              {!isStudent && !needsOrgUnit ? (
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                  This role does not require a direct academic mapping in the user form.
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">School</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.school}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Department</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.department}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Program</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.program}</p>
+                </div>
+                {isStudent ? (
+                  <>
+                    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Course</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.course}</p>
+                    </div>
+                    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Study Year</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.year}</p>
+                    </div>
+                    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Section</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">{derivedAcademic.section}</p>
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             {form.adminTier === 'section_moderator' ? (
@@ -498,16 +650,36 @@ export default function UserFormPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Access</label>
+                  <label className="label">Account Access</label>
                   <select name="isActive" value={String(form.isActive)} onChange={handleChange} className="input">
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
+                    <option value="true">Allowed</option>
+                    <option value="false">Denied</option>
                   </select>
                 </div>
                 <div>
                   <label className="label">Expiry Date</label>
                   <input name="expiryDate" type="date" value={form.expiryDate} onChange={handleChange} className="input" />
                   <p className="mt-1 text-xs text-gray-500">{isStudent ? 'Recommended for student lifecycle control.' : 'Optional for non-student operational accounts.'}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-gray-200 pt-5">
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-900 dark-text-primary">Derived Readiness Preview</h4>
+                  <p className="mt-1 text-sm text-gray-500 dark-text-muted">These tags update from the current form values before you save.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {lifecyclePreview.map((item) => (
+                    <div key={item.label} className={`rounded-2xl border px-4 py-4 ${item.complete ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-gray-900">{item.label}</p>
+                        <span className={`badge ${item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {item.complete ? 'True' : 'False'}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs leading-5 text-gray-500">{item.description}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

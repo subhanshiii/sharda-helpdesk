@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import API from '../../utils/api';
 import { Alert } from '../ui';
@@ -7,7 +7,9 @@ import {
   buildDepartmentCollegeMap,
   emptyAcademicScopeFilters,
   filterSectionsByScope,
+  subjectMatchesCourse,
 } from '../../utils/academicScope';
+import { isAdminUser, resolveEffectiveAdminTier } from '../../utils/access';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -22,6 +24,7 @@ const defaultForm = {
   notes: '',
   isActive: true,
   faculty: '',
+  teachingAssignmentId: '',
   subject: '',
   subjectCode: '',
   department: '',
@@ -32,8 +35,11 @@ const defaultForm = {
 export default function TimetableEntryForm({
   item,
   user,
+  prefilledSectionId = '',
+  prefilledSubjectId = '',
   sections,
   subjects,
+  teachingAssignments = [],
   colleges,
   departments,
   programs,
@@ -50,20 +56,45 @@ export default function TimetableEntryForm({
     sectionId: item?.sectionId?._id || item?.sectionId || item?.sectionId || '',
     subjectId: item?.subjectId?._id || item?.subjectId || '',
     faculty: item?.faculty?._id || item?.faculty || '',
+    teachingAssignmentId: item?.teachingAssignmentId?._id || item?.teachingAssignmentId || '',
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [facultyOptions, setFacultyOptions] = useState([]);
   const [filters, setFilters] = useState(emptyAcademicScopeFilters);
   const departmentCollegeMap = useMemo(() => buildDepartmentCollegeMap(departments), [departments]);
   const scopedSections = useMemo(() => filterSectionsByScope(sections, filters, departmentCollegeMap), [departmentCollegeMap, filters, sections]);
-  const scopedSubjects = useMemo(() => subjects.filter((subject) => {
-    if (filters.departmentId && String(subject.department?._id || subject.department) !== String(filters.departmentId)) return false;
-    if (filters.programId && String(subject.program?._id || subject.program) !== String(filters.programId)) return false;
-    if (filters.courseId && String(subject.course?._id || subject.course) !== String(filters.courseId)) return false;
-    if (filters.studyYear && String(subject.academicSession?.yearNumber || '') !== String(filters.studyYear)) return false;
-    return true;
-  }), [filters, subjects]);
+  const canSelectFaculty = useMemo(
+    () => Boolean(isAdminUser(user) || resolveEffectiveAdminTier(user?.role, user?.adminTier)),
+    [user]
+  );
+  const scopedSubjects = useMemo(() => {
+    const subjectsForSection = form.sectionId
+      ? teachingAssignments
+        .filter((assignment) => String(assignment.section?._id || assignment.section) === String(form.sectionId))
+        .map((assignment) => assignment.subject)
+        .filter(Boolean)
+      : subjects;
+
+    const uniqueSubjects = Array.from(new Map(subjectsForSection.map((subject) => [String(subject._id), subject])).values());
+    return uniqueSubjects.filter((subject) => {
+      if (filters.departmentId && String(subject.department?._id || subject.department) !== String(filters.departmentId)) return false;
+      if (filters.programId && String(subject.program?._id || subject.program) !== String(filters.programId)) return false;
+      if (filters.courseId && !subjectMatchesCourse(subject, filters.courseId)) return false;
+      return true;
+    });
+  }, [filters, form.sectionId, subjects, teachingAssignments]);
+
+  const eligibleTeachingAssignments = useMemo(() => teachingAssignments.filter((assignment) => (
+    String(assignment.section?._id || assignment.section) === String(form.sectionId)
+    && String(assignment.subject?._id || assignment.subject) === String(form.subjectId)
+  )), [form.sectionId, form.subjectId, teachingAssignments]);
+
+  const facultyOptions = useMemo(() => Array.from(new Map(
+    eligibleTeachingAssignments
+      .map((assignment) => assignment.teacher)
+      .filter(Boolean)
+      .map((teacher) => [String(teacher._id), teacher])
+  ).values()), [eligibleTeachingAssignments]);
 
   useEffect(() => {
     if (!form.sectionId) return;
@@ -82,21 +113,58 @@ export default function TimetableEntryForm({
   }, [departmentCollegeMap, form.sectionId, sections]);
 
   useEffect(() => {
-    const loadFacultyOptions = async () => {
-      try {
-        const res = await API.get('/users?role=faculty&limit=100');
-        setFacultyOptions(Array.isArray(res.data?.data) ? res.data.data : []);
-      } catch {
-        setFacultyOptions([]);
-      }
-    };
-
-    if (user?.role === 'admin' || user?.adminTier) {
-      loadFacultyOptions();
+    if (!eligibleTeachingAssignments.length) {
+      setForm((current) => ({ ...current, faculty: '', teachingAssignmentId: '' }));
+      return;
     }
-  }, [user?.adminTier, user?.role]);
 
-  const handleSectionChange = (sectionId) => {
+    if (eligibleTeachingAssignments.length === 1) {
+      const [assignment] = eligibleTeachingAssignments;
+      setForm((current) => ({
+        ...current,
+        faculty: assignment.teacher?._id || assignment.teacher || '',
+        teachingAssignmentId: assignment._id || '',
+      }));
+      return;
+    }
+
+    const currentFacultyStillValid = facultyOptions.some((teacher) => String(teacher._id) === String(form.faculty));
+    const facultyScopedAssignments = eligibleTeachingAssignments.filter(
+      (assignment) => String(assignment.teacher?._id || assignment.teacher) === String(user?.id || user?._id)
+    );
+
+    if (!canSelectFaculty && facultyScopedAssignments.length === 1) {
+      const [assignment] = facultyScopedAssignments;
+      setForm((current) => {
+        const nextFaculty = assignment.teacher?._id || assignment.teacher || '';
+        const nextAssignmentId = assignment._id || '';
+        if (String(current.faculty) === String(nextFaculty)
+          && String(current.teachingAssignmentId) === String(nextAssignmentId)) {
+          return current;
+        }
+        return {
+          ...current,
+          faculty: nextFaculty,
+          teachingAssignmentId: nextAssignmentId,
+        };
+      });
+      return;
+    }
+
+    setForm((current) => {
+      const nextFaculty = currentFacultyStillValid ? current.faculty : '';
+      if (!current.teachingAssignmentId && String(nextFaculty) === String(current.faculty)) {
+        return current;
+      }
+      return {
+        ...current,
+        teachingAssignmentId: '',
+        faculty: nextFaculty,
+      };
+    });
+  }, [canSelectFaculty, eligibleTeachingAssignments, facultyOptions, form.faculty, user?.id, user?._id]);
+
+  const handleSectionChange = useCallback((sectionId) => {
     const selectedSection = sections.find((section) => String(section._id) === String(sectionId));
     setFilters((current) => ({ ...current, sectionId }));
     setForm((current) => ({
@@ -105,18 +173,39 @@ export default function TimetableEntryForm({
       section: selectedSection?.name || '',
       department: selectedSection?.department?.name || current.department,
       year: String(selectedSection?.studyYear || selectedSection?.academicSession?.yearNumber || current.year || ''),
+      subjectId: '',
+      subject: '',
+      subjectCode: '',
+      faculty: '',
+      teachingAssignmentId: '',
     }));
-  };
+  }, [sections]);
 
-  const handleSubjectChange = (subjectId) => {
+  const handleSubjectChange = useCallback((subjectId) => {
     const selectedSubject = subjects.find((subject) => String(subject._id) === String(subjectId));
     setForm((current) => ({
       ...current,
       subjectId,
       subject: selectedSubject?.name || '',
       subjectCode: selectedSubject?.code || '',
+      faculty: '',
+      teachingAssignmentId: '',
     }));
-  };
+  }, [subjects]);
+
+  useEffect(() => {
+    if (item?._id || !prefilledSectionId || form.sectionId || !sections.length) return;
+    const selectedSection = sections.find((section) => String(section._id) === String(prefilledSectionId));
+    if (!selectedSection) return;
+    handleSectionChange(String(selectedSection._id));
+  }, [form.sectionId, handleSectionChange, item?._id, prefilledSectionId, sections]);
+
+  useEffect(() => {
+    if (item?._id || !prefilledSubjectId || !form.sectionId || form.subjectId) return;
+    const selectedSubject = subjects.find((subject) => String(subject._id) === String(prefilledSubjectId));
+    if (!selectedSubject) return;
+    handleSubjectChange(String(selectedSubject._id));
+  }, [form.sectionId, form.subjectId, handleSubjectChange, item?._id, prefilledSubjectId, subjects]);
 
   const handleScopeChange = (key, value) => {
     setFilters((current) => {
@@ -169,6 +258,7 @@ export default function TimetableEntryForm({
         notes: form.notes,
         isActive: form.isActive,
         faculty: form.faculty || null,
+        teachingAssignmentId: form.teachingAssignmentId || null,
       };
 
       if (item?._id) {
@@ -270,17 +360,31 @@ export default function TimetableEntryForm({
           <input className="input" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Lab assignments, laptops required, etc." />
         </div>
 
-        {user?.role === 'admin' || user?.adminTier ? (
+        {(canSelectFaculty || eligibleTeachingAssignments.length > 1) ? (
           <div className="mt-4">
             <label className="label">Assigned Faculty</label>
-            <select className="input" value={form.faculty || ''} onChange={(event) => setForm((current) => ({ ...current, faculty: event.target.value }))}>
-              <option value="">Not assigned</option>
+            <select
+              className="input"
+              value={form.faculty || ''}
+              onChange={(event) => {
+                const nextFacultyId = event.target.value;
+                const matchedAssignment = eligibleTeachingAssignments.find((assignment) => String(assignment.teacher?._id || assignment.teacher) === String(nextFacultyId));
+                setForm((current) => ({
+                  ...current,
+                  faculty: nextFacultyId,
+                  teachingAssignmentId: matchedAssignment?._id || '',
+                }));
+              }}
+              disabled={Boolean(form.subjectId) && !facultyOptions.length}
+            >
+              <option value="">{form.subjectId ? 'Select linked teacher' : 'Select subject first'}</option>
               {facultyOptions.map((faculty) => (
                 <option key={faculty._id} value={faculty._id}>
                   {faculty.name} {faculty.department ? `· ${faculty.department}` : ''}
                 </option>
               ))}
             </select>
+            {form.subjectId ? <p className="mt-2 text-xs text-slate-500">Only teachers linked to this section and subject are available.</p> : null}
           </div>
         ) : null}
 

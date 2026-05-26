@@ -4,9 +4,12 @@
  * Controllers are thin — all logic lives here.
  */
 
+const mongoose = require('mongoose');
 const Group   = require('../models/Group');
 const Message = require('../models/Message');
 const User    = require('../models/User');
+const Department = require('../models/Department');
+const Section = require('../models/Section');
 const Permission = require('../models/Permission');
 const logger  = require('../utils/logger');
 const {
@@ -15,9 +18,13 @@ const {
   resolveEffectiveTier,
   isPlatformAdmin,
 } = require('../utils/permissionDefaults');
-const { normalizeRole } = require('../utils/roleHelpers');
+const { normalizeRole, getStoredRolesForRoles } = require('../utils/roleHelpers');
 
-const GROUP_MEMBER_ROLES = ['student', 'faculty', 'staff', 'agent', 'admin'];
+const GROUP_MEMBER_ROLES = ['member', 'admin', 'student', 'faculty', 'staff', 'agent'];
+const FILTERABLE_ROLES = ['student', 'faculty', 'staff', 'admin'];
+const GROUP_ADMIN_ROLE = 'admin';
+const GROUP_DEFAULT_ROLE = 'member';
+const USER_SELECT_FIELDS = 'name email role department departmentId programId section sectionId enrollmentId status isActive emailVerified adminTier';
 
 const normalizeGroupValue = (value) => {
   if (value === undefined || value === null) return undefined;
@@ -25,9 +32,219 @@ const normalizeGroupValue = (value) => {
   return trimmed || '';
 };
 
+const toObjectId = (value) => {
+  if (!value || !mongoose.Types.ObjectId.isValid(value)) return null;
+  return new mongoose.Types.ObjectId(value);
+};
+
+const normalizeIdList = (values = []) => [...new Set(
+  (Array.isArray(values) ? values : [values])
+    .map((value) => (mongoose.Types.ObjectId.isValid(value) ? String(value) : null))
+    .filter(Boolean)
+)];
+
+const normalizeRoleList = (values = []) => [...new Set(
+  (Array.isArray(values) ? values : [values])
+    .map((value) => normalizeRole(value))
+    .filter((value) => FILTERABLE_ROLES.includes(value))
+)];
+
+const isStudentRole = (roles = []) => roles.includes('student');
+
+const describeSelectionRules = ({ roles = [], departmentNames = [], sectionNames = [] }) => {
+  const parts = [];
+  if (roles.length) parts.push(`roles: ${roles.join(', ')}`);
+  if (departmentNames.length) parts.push(`departments: ${departmentNames.join(', ')}`);
+  if (sectionNames.length) parts.push(`sections: ${sectionNames.join(', ')}`);
+  return parts.join(' · ');
+};
+
 const isGroupManager = (group, userId) => group.members.some(
-  (member) => member.user.toString() === userId.toString() && member.role === 'admin'
+  (member) => member.user.toString() === userId.toString() && member.role === GROUP_ADMIN_ROLE
 );
+
+const buildUserFilterQuery = ({ q, roles = [], departmentIds = [], sectionIds = [], excludeUserIds = [] } = {}) => {
+  const query = {
+    isActive: true,
+    status: 'approved',
+    emailVerified: true,
+  };
+
+  const storedRoles = getStoredRolesForRoles(roles);
+  if (storedRoles.length === 1) {
+    query.role = storedRoles[0];
+  } else if (storedRoles.length > 1) {
+    query.role = { $in: storedRoles };
+  }
+
+  if (departmentIds.length) {
+    query.departmentId = { $in: departmentIds.map((id) => toObjectId(id)).filter(Boolean) };
+  }
+
+  if (sectionIds.length) {
+    query.sectionId = { $in: sectionIds.map((id) => toObjectId(id)).filter(Boolean) };
+  }
+
+  if (excludeUserIds.length) {
+    query._id = { $nin: excludeUserIds.map((id) => toObjectId(id)).filter(Boolean) };
+  }
+
+  const searchValue = normalizeGroupValue(q);
+  if (searchValue) {
+    query.$or = [
+      { name: { $regex: searchValue, $options: 'i' } },
+      { email: { $regex: searchValue, $options: 'i' } },
+      { enrollmentId: { $regex: searchValue, $options: 'i' } },
+    ];
+  }
+
+  return query;
+};
+
+const getFilteredUsers = async ({
+  q = '',
+  roles = [],
+  departmentIds = [],
+  sectionIds = [],
+  excludeUserIds = [],
+  page = 1,
+  limit = 24,
+} = {}) => {
+  const normalizedRoles = normalizeRoleList(roles);
+  const normalizedDepartmentIds = normalizeIdList(departmentIds);
+  const normalizedSectionIds = normalizeIdList(sectionIds);
+  const safePage = Math.max(parseInt(page, 10) || 1, 1);
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 24, 1), 100);
+  const query = buildUserFilterQuery({
+    q,
+    roles: normalizedRoles,
+    departmentIds: normalizedDepartmentIds,
+    sectionIds: normalizedSectionIds,
+    excludeUserIds,
+  });
+
+  const [users, total] = await Promise.all([
+    User.find(query)
+      .select(USER_SELECT_FIELDS)
+      .populate('departmentId', 'name code')
+      .populate('sectionId', 'name studyYear')
+      .sort({ name: 1 })
+      .skip((safePage - 1) * safeLimit)
+      .limit(safeLimit),
+    User.countDocuments(query),
+  ]);
+
+  return {
+    users,
+    total,
+    page: safePage,
+    limit: safeLimit,
+    hasMore: safePage * safeLimit < total,
+  };
+};
+
+const buildGroupMembers = async ({ creatorId, memberIds = [], adminIds = [] }) => {
+  const uniqueMemberIds = [...new Set([String(creatorId), ...memberIds.map(String)])];
+  const adminSet = new Set([String(creatorId), ...adminIds.map(String)]);
+  const users = await User.find({
+    _id: { $in: uniqueMemberIds.map((id) => toObjectId(id)).filter(Boolean) },
+    isActive: true,
+    status: 'approved',
+    emailVerified: true,
+  }).select('_id');
+
+  const allowedIds = new Set(users.map((user) => String(user._id)));
+
+  return uniqueMemberIds
+    .filter((id) => allowedIds.has(String(id)))
+    .map((id) => ({
+      user: id,
+      role: adminSet.has(String(id)) ? GROUP_ADMIN_ROLE : GROUP_DEFAULT_ROLE,
+    }));
+};
+
+const populateGroup = (groupId) => Group.findById(groupId)
+  .populate('createdBy', 'name email role adminTier')
+  .populate('selectionRules.departmentIds', 'name code')
+  .populate('selectionRules.sectionIds', 'name studyYear')
+  .populate('members.user', USER_SELECT_FIELDS)
+  .populate('lastMessage');
+
+const normalizeSelectionRules = (filters = {}) => {
+  const roles = normalizeRoleList(filters.roles || filters.role || []);
+  const departmentIds = normalizeIdList(filters.departmentIds || filters.departmentId || []);
+  const sectionIds = normalizeIdList(filters.sectionIds || filters.sectionId || []);
+  const autoIncludeFiltered = Boolean(filters.autoIncludeFiltered || filters.selectAllFiltered);
+
+  return {
+    roles,
+    departmentIds,
+    sectionIds: isStudentRole(roles) ? sectionIds : [],
+    autoIncludeFiltered,
+  };
+};
+
+const buildAudienceSignature = (rules = {}) => {
+  const roleSignature = [...(rules.roles || [])].sort().join('|') || 'all-roles';
+  const departmentSignature = [...(rules.departmentIds || [])].map(String).sort().join('|') || 'all-departments';
+  const sectionSignature = [...(rules.sectionIds || [])].map(String).sort().join('|') || 'all-sections';
+  return `${roleSignature}::${departmentSignature}::${sectionSignature}`;
+};
+
+const hasStructuredAudienceFilters = (rules = {}) => (
+  Boolean(rules.roles?.length || rules.departmentIds?.length || rules.sectionIds?.length)
+);
+
+const buildSelectionContext = async (rules) => {
+  const [departments, sections] = await Promise.all([
+    rules.departmentIds.length
+      ? Department.find({ _id: { $in: rules.departmentIds.map((id) => toObjectId(id)).filter(Boolean) } }).select('name code')
+      : [],
+    rules.sectionIds.length
+      ? Section.find({ _id: { $in: rules.sectionIds.map((id) => toObjectId(id)).filter(Boolean) } }).select('name studyYear')
+      : [],
+  ]);
+
+  return {
+    departmentNames: departments.map((entry) => entry.name).filter(Boolean),
+    sectionNames: sections.map((entry) => entry.name).filter(Boolean),
+  };
+};
+
+const getUserDirectoryOptions = async () => {
+  const [departments, sections] = await Promise.all([
+    Department.find({ isActive: true }).sort({ name: 1 }).select('name code'),
+    Section.find({ isActive: true }).sort({ name: 1 }).select('name studyYear program department academicSession')
+      .populate('program', 'name code')
+      .populate('department', 'name code')
+      .populate('academicSession', 'label yearNumber'),
+  ]);
+
+  return {
+    roles: FILTERABLE_ROLES.map((role) => ({
+      value: role,
+      label: role.charAt(0).toUpperCase() + role.slice(1),
+    })),
+    departments,
+    sections: sections.map((section) => ({
+      _id: section._id,
+      name: section.name,
+      studyYear: section.studyYear,
+      departmentId: section.department?._id || null,
+      departmentName: section.department?.name || '',
+      programId: section.program?._id || null,
+      programName: section.program?.name || '',
+      academicSessionId: section.academicSession?._id || null,
+      academicSessionLabel: section.academicSession?.label || '',
+      label: [
+        section.program?.name,
+        section.academicSession?.label,
+        section.studyYear ? `Year ${section.studyYear}` : '',
+        section.name,
+      ].filter(Boolean).join(' · '),
+    })),
+  };
+};
 
 const canManageGroup = async (groupId, userId) => {
   const requester = await User.findById(userId).select('role adminTier');
@@ -107,94 +324,120 @@ const canAccessGroup = async (groupId, userId) => {
   return { group, user, isMember };
 };
 
-const getAutoMembersForGroup = async ({ department, year, section, creatorId }) => {
-  if (!department || !year || !section) return [];
-
-  const users = await User.find({
-    department,
-    year,
-    section,
-    isActive: true,
-    status: 'approved',
-    emailVerified: true,
-  }).select('_id role');
-
-  return users
-    .filter((user) => user._id.toString() !== creatorId.toString())
-    .map((user) => ({
-      user: user._id,
-      role: GROUP_MEMBER_ROLES.includes(user.role) ? user.role : 'student',
-    }));
-};
-
-// ── GROUP OPERATIONS ───────────────────────────────────
-
-/**
- * Create a new group
- * Only admins can create groups
- */
-const createGroup = async ({ name, department, year, section, description, creatorId }) => {
+const createGroup = async ({ title, name, description, filters = {}, memberIds = [], adminIds = [], creatorId }) => {
   await canCreateGroup(creatorId);
 
-  const normalizedName = normalizeGroupValue(name);
-  const normalizedDepartment = normalizeGroupValue(department);
-  const normalizedYear = normalizeGroupValue(year);
-  const normalizedSection = normalizeGroupValue(section);
+  const normalizedName = normalizeGroupValue(title || name);
   const normalizedDescription = normalizeGroupValue(description);
+  const selectionRules = normalizeSelectionRules(filters);
+  const audienceSignature = buildAudienceSignature(selectionRules);
 
-  // Check duplicate group name
-  const existing = await Group.findOne({ name: normalizedName, createdBy: creatorId, isActive: true });
-  if (existing) {
-    const err = new Error(`A group named "${name}" already exists`);
+  if (!normalizedName) {
+    const err = new Error('Group title is required');
     err.statusCode = 400;
     throw err;
   }
 
-  const group = await Group.create({
+  const existing = await Group.findOne({
     name: normalizedName,
-    department: normalizedDepartment,
-    year: normalizedYear,
-    section: normalizedSection,
-    description: normalizedDescription,
     createdBy: creatorId,
-    // Creator is automatically added as admin member
-    members: [{ user: creatorId, role: 'admin' }],
+    audienceSignature,
+    isActive: true,
   });
+  if (existing) {
+    const creatorMembership = existing.members.find(
+      (member) => member.user.toString() === creatorId.toString()
+    );
 
-  const autoMembers = await getAutoMembersForGroup({
-    department: normalizedDepartment,
-    year: normalizedYear,
-    section: normalizedSection,
-    creatorId,
-  });
+    if (!creatorMembership) {
+      existing.members.push({
+        user: creatorId,
+        role: GROUP_ADMIN_ROLE,
+      });
 
-  if (autoMembers.length) {
-    group.members.push(...autoMembers);
-    await group.save();
+      if (normalizedDescription && !existing.description) {
+        existing.description = normalizedDescription;
+      }
+
+      await existing.save();
+      await Message.create({
+        group: existing._id,
+        sender: creatorId,
+        type: 'system',
+        systemMessage: `${normalizedName} was restored and the creator rejoined as group admin`,
+      });
+
+      logger.info('Existing hidden group restored to creator', {
+        groupId: existing._id,
+        name: normalizedName,
+        creatorId,
+      });
+
+      return populateGroup(existing._id);
+    }
+
+    const err = new Error(`A group named "${normalizedName}" already exists for the same audience`);
+    err.statusCode = 400;
+    throw err;
   }
 
-  // Send system message: "Group was created"
-  await Message.create({
-    group:         group._id,
-    sender:        creatorId,
-    type:          'system',
-    systemMessage: `Group "${name}" was created`,
+  const filteredUsers = selectionRules.autoIncludeFiltered && hasStructuredAudienceFilters(selectionRules)
+    ? await getFilteredUsers({
+      roles: selectionRules.roles,
+      departmentIds: selectionRules.departmentIds,
+      sectionIds: selectionRules.sectionIds,
+      excludeUserIds: [creatorId],
+      page: 1,
+      limit: 1000,
+    })
+    : { users: [] };
+
+  const mergedMemberIds = [
+    ...memberIds.map(String),
+    ...filteredUsers.users.map((user) => String(user._id)),
+  ];
+  const members = await buildGroupMembers({
+    creatorId,
+    memberIds: mergedMemberIds,
+    adminIds,
   });
 
-  if (autoMembers.length) {
+  const group = await Group.create({
+    name: normalizedName,
+    description: normalizedDescription,
+    createdBy: creatorId,
+    selectionRules,
+    audienceSignature,
+    department: '',
+    year: '',
+    section: '',
+    members,
+  });
+
+  await Message.create({
+    group: group._id,
+    sender: creatorId,
+    type: 'system',
+    systemMessage: `Group "${normalizedName}" was created`,
+  });
+
+  if (selectionRules.autoIncludeFiltered && filteredUsers.users.length) {
+    const context = await buildSelectionContext(selectionRules);
     await Message.create({
       group: group._id,
       sender: creatorId,
       type: 'system',
-      systemMessage: `${autoMembers.length} matching users were automatically added from ${normalizedDepartment} Year ${normalizedYear} Section ${normalizedSection}`,
+      systemMessage: `${filteredUsers.users.length} users were added from ${describeSelectionRules({
+        roles: selectionRules.roles,
+        departmentNames: context.departmentNames,
+        sectionNames: context.sectionNames,
+      }) || 'the selected audience'}`,
     });
   }
 
-  const populated = await Group.findById(group._id)
-    .populate('createdBy', 'name email role')
-    .populate('members.user', 'name email role department');
+  const populated = await populateGroup(group._id);
 
-  logger.info('Group created', { groupId: group._id, name, creatorId, autoAddedMembers: autoMembers.length });
+  logger.info('Group created', { groupId: group._id, name: normalizedName, creatorId, memberCount: members.length });
   return populated;
 };
 
@@ -208,23 +451,18 @@ const getUserGroups = async (userId) => {
     isActive: true,
   })
     .populate('lastMessage')
-    .populate('members.user', 'name email role')
-    .sort({ updatedAt: -1 }); // Most recently active first
+    .populate('members.user', 'name email role department departmentId section sectionId')
+    .sort({ updatedAt: -1 });
 
-  // For each group, get unread count for this user
   const groupsWithUnread = await Promise.all(
     groups.map(async (group) => {
       const groupObj = group.toObject();
-
-      // Count messages not read by this user
       const unreadCount = await Message.countDocuments({
-        group:          group._id,
-        sender:         { $ne: userId }, // Not sent by this user
-        'readBy.user':  { $ne: userId }, // Not read by this user
-        isDeleted:      false,
+        group: group._id,
+        sender: { $ne: userId },
+        'readBy.user': { $ne: userId },
+        isDeleted: false,
       });
-
-      // Find this user's role in the group
       const memberInfo = group.members.find(
         (m) => m.user._id.toString() === userId.toString()
       );
@@ -232,7 +470,7 @@ const getUserGroups = async (userId) => {
       return {
         ...groupObj,
         unreadCount,
-        myRole: memberInfo?.role || 'student',
+        myRole: memberInfo?.role || GROUP_DEFAULT_ROLE,
       };
     })
   );
@@ -244,10 +482,7 @@ const getUserGroups = async (userId) => {
  * Get a single group (with authorization check)
  */
 const getGroup = async (groupId, userId) => {
-  const group = await Group.findById(groupId)
-    .populate('createdBy',     'name email role')
-    .populate('members.user',  'name email role department enrollmentId')
-    .populate('lastMessage');
+  const group = await populateGroup(groupId);
 
   if (!group) {
     const err = new Error('Group not found');
@@ -272,15 +507,19 @@ const getGroup = async (groupId, userId) => {
  */
 const addMembers = async (groupId, userIds, roles, adminId) => {
   const { group } = await canManageGroup(groupId, adminId);
+  const normalizedUserIds = normalizeIdList(userIds);
+  const roleMap = Array.isArray(roles)
+    ? roles.reduce((acc, role, index) => {
+      acc[normalizedUserIds[index]] = role;
+      return acc;
+    }, {})
+    : {};
 
   const addedUsers = [];
   const skippedUsers = [];
 
-  for (let i = 0; i < userIds.length; i++) {
-    const userId = userIds[i];
-    const role = GROUP_MEMBER_ROLES.includes(roles?.[i]) ? roles[i] : 'student';
-
-    // Check if already a member
+  for (const userId of normalizedUserIds) {
+    const role = GROUP_MEMBER_ROLES.includes(roleMap[userId]) ? roleMap[userId] : GROUP_DEFAULT_ROLE;
     const alreadyMember = group.members.some(
       (m) => m.user.toString() === userId.toString()
     );
@@ -290,8 +529,12 @@ const addMembers = async (groupId, userIds, roles, adminId) => {
       continue;
     }
 
-    // Verify user exists
-    const user = await User.findById(userId);
+    const user = await User.findOne({
+      _id: userId,
+      isActive: true,
+      status: 'approved',
+      emailVerified: true,
+    }).select('name');
     if (!user) continue;
 
     group.members.push({ user: userId, role });
@@ -300,12 +543,11 @@ const addMembers = async (groupId, userIds, roles, adminId) => {
 
   await group.save();
 
-  // Send system messages for each added user
   for (const added of addedUsers) {
     await Message.create({
-      group:         groupId,
-      sender:        adminId,
-      type:          'system',
+      group: groupId,
+      sender: adminId,
+      type: 'system',
       systemMessage: `${added.name} was added to the group`,
     });
   }
@@ -352,7 +594,7 @@ const updateMemberRole = async (groupId, userId, role, requesterId) => {
     group: groupId,
     sender: requesterId,
     type: 'system',
-    systemMessage: `${updatedMember?.name || 'A member'} is now ${role === 'admin' ? 'a group admin' : `a ${role}`}`,
+    systemMessage: `${updatedMember?.name || 'A member'} is now ${role === GROUP_ADMIN_ROLE ? 'a group admin' : 'a member'}`,
   });
 
   logger.info('Group member role updated', { groupId, userId, role, requesterId, requesterRole: requester.role });
@@ -419,12 +661,21 @@ const removeMember = async (groupId, userId, requesterId) => {
  */
 const getAllGroups = async (filters = {}) => {
   const query = { isActive: true };
-  if (filters.department) query.department = filters.department;
-  if (filters.year)       query.year       = filters.year;
+  const normalizedDepartmentIds = normalizeIdList(filters.departmentIds || filters.departmentId || []);
+  const normalizedSectionIds = normalizeIdList(filters.sectionIds || filters.sectionId || []);
+  const normalizedRoles = normalizeRoleList(filters.roles || filters.role || []);
+  const searchValue = normalizeGroupValue(filters.q);
+
+  if (normalizedDepartmentIds.length) query['selectionRules.departmentIds'] = { $in: normalizedDepartmentIds };
+  if (normalizedSectionIds.length) query['selectionRules.sectionIds'] = { $in: normalizedSectionIds };
+  if (normalizedRoles.length) query['selectionRules.roles'] = { $in: normalizedRoles };
+  if (searchValue) query.name = { $regex: searchValue, $options: 'i' };
 
   const groups = await Group.find(query)
-    .populate('createdBy',    'name email')
-    .populate('members.user', 'name email role')
+    .populate('createdBy', 'name email role')
+    .populate('selectionRules.departmentIds', 'name code')
+    .populate('selectionRules.sectionIds', 'name studyYear')
+    .populate('members.user', 'name email role department departmentId section sectionId')
     .sort({ createdAt: -1 });
 
   return groups;
@@ -434,14 +685,8 @@ const getAllGroups = async (filters = {}) => {
  * Delete a group (admin only)
  */
 const deleteGroup = async (groupId, adminId) => {
-  const group = await Group.findById(groupId);
-  if (!group) {
-    const err = new Error('Group not found');
-    err.statusCode = 404;
-    throw err;
-  }
+  const { group } = await canManageGroup(groupId, adminId);
 
-  // Soft delete the group, but remove related chat history.
   group.isActive = false;
   group.lastMessage = null;
   await group.save();
@@ -456,14 +701,13 @@ const deleteGroup = async (groupId, adminId) => {
 const updateGroup = async (groupId, updates, adminId) => {
   const { group } = await canManageGroup(groupId, adminId);
 
-  const nextName = normalizeGroupValue(updates.name);
-  const nextDepartment = normalizeGroupValue(updates.department);
-  const nextYear = normalizeGroupValue(updates.year);
-  const nextSection = normalizeGroupValue(updates.section);
+  const nextName = normalizeGroupValue(updates.title || updates.name);
   const nextDescription = normalizeGroupValue(updates.description);
+  const nextSelectionRules = updates.filters ? normalizeSelectionRules(updates.filters) : null;
+  const nextAudienceSignature = buildAudienceSignature(nextSelectionRules || group.selectionRules || {});
 
   if (!nextName) {
-    const err = new Error('Group name is required');
+    const err = new Error('Group title is required');
     err.statusCode = 400;
     throw err;
   }
@@ -471,6 +715,7 @@ const updateGroup = async (groupId, updates, adminId) => {
   const duplicate = await Group.findOne({
     _id: { $ne: groupId },
     name: nextName,
+    audienceSignature: nextAudienceSignature,
     isActive: true,
   });
 
@@ -480,18 +725,16 @@ const updateGroup = async (groupId, updates, adminId) => {
     throw err;
   }
 
-  // Update allowed fields
   group.name = nextName;
-  if (updates.department !== undefined) group.department = nextDepartment;
-  if (updates.year !== undefined) group.year = nextYear;
-  if (updates.section !== undefined) group.section = nextSection;
   if (updates.description !== undefined) group.description = nextDescription;
+  if (nextSelectionRules) {
+    group.selectionRules = nextSelectionRules;
+  }
+  group.audienceSignature = nextAudienceSignature;
 
   await group.save();
 
-  const populated = await Group.findById(group._id)
-    .populate('createdBy', 'name email role')
-    .populate('members.user', 'name email role department');
+  const populated = await populateGroup(group._id);
 
   logger.info('Group updated', { groupId, updates, adminId });
   return populated;
@@ -610,5 +853,6 @@ module.exports = {
   createGroup, getUserGroups, getGroup, getAllGroups, deleteGroup,
   addMembers, updateMemberRole, removeMember,
   updateGroup, getMessages, saveMessage, deleteMessage,
-  canAccessGroup,
+  canAccessGroup, getFilteredUsers, getUserDirectoryOptions,
+  buildAudienceSignature,
 };

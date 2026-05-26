@@ -96,7 +96,7 @@ function AddModal({ onClose, onSaved }) {
 }
 
 export default function AcademicCalendarPage() {
-  const { hasPermission } = usePermissions();
+  const { can } = usePermissions();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -104,7 +104,7 @@ export default function AcademicCalendarPage() {
   const [error, setError] = useState('');
   const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
 
-  const canManage = hasPermission('canPostNotice');
+  const canManage = can('create', 'events') || can('edit', 'events') || can('delete', 'events');
 
   const fetchEvents = async () => {
     setLoading(true);

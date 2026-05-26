@@ -37,12 +37,12 @@ const lifecycleTone = (overall) => {
 
 const lifecycleLabel = (overall) => {
   const map = {
-    active: 'Active',
-    ready: 'Ready',
+    active: 'Access Allowed',
+    ready: 'Almost Ready',
     pending_verification: 'Verify Email',
     password_setup: 'Set Password',
-    assignment_pending: 'Assign Context',
-    pending_approval: 'Pending',
+    assignment_pending: 'Add Academic Mapping',
+    pending_approval: 'Awaiting Approval',
     rejected: 'Rejected',
     suspended: 'Suspended',
     inactive: 'Inactive',
@@ -280,7 +280,6 @@ export default function UsersPage() {
                         ].filter(Boolean).join(' · ') || 'No academic mapping'}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`badge ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
                         <span className={`badge ${u.emailVerified ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{u.emailVerified ? 'Verified' : 'Unverified'}</span>
                         <span className={`badge ${u.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : u.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{u.status}</span>
                         <span className={`badge ${lifecycleTone(u.lifecycle?.overall)}`}>{lifecycleLabel(u.lifecycle?.overall)}</span>

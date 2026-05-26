@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const AdminScope = require('../models/AdminScope');
 const Enrollment = require('../models/Enrollment');
-const SectionSubject = require('../models/SectionSubject');
+const SubjectTeacher = require('../models/SubjectTeacher');
+const SubjectSectionTeacher = require('../models/SubjectSectionTeacher');
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
 const Section = require('../models/Section');
@@ -22,7 +23,10 @@ const {
   deriveAcademicFields,
   populateUserAcademicContext,
   buildDerivedAcademicDisplay,
+  isStudentApprovedForAcademicMapping,
+  clearStudentAcademicMapping,
 } = require('../utils/userAcademicContext');
+const { buildSubjectCatalog, getSubjectIdsForSection } = require('../utils/subjectManagement');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MANAGED_ROLES = ROLE_ORDER;
@@ -51,7 +55,8 @@ const normalizeUserPayload = (body = {}) => {
     collegeId: null,
     department: '',
     departmentId: null,
-    programId: ['faculty', 'staff'].includes(normalizedRole) ? (body.programId || null) : null,
+    orgUnitId: normalizedRole !== 'student' ? (body.orgUnitId || null) : null,
+    programId: normalizedRole === 'faculty' ? (body.programId || null) : null,
     year: '',
     section: '',
     sectionId: normalizedRole === 'student' ? (body.sectionId || null) : null,
@@ -78,14 +83,20 @@ const normalizeUserPayload = (body = {}) => {
 };
 
 const applyDerivedAcademicContext = async (payload) => {
+  const nextPayload = { ...payload };
+  if (normalizeRole(nextPayload.role) === 'student' && !isStudentApprovedForAcademicMapping(nextPayload)) {
+    nextPayload.sectionId = null;
+  }
+
   const nextFields = await deriveAcademicFields({
-    role: payload.role,
-    sectionId: payload.sectionId || null,
-    programId: payload.programId || null,
+    role: nextPayload.role,
+    sectionId: nextPayload.sectionId || null,
+    programId: nextPayload.programId || null,
+    orgUnitId: nextPayload.orgUnitId || null,
   });
 
   return {
-    ...payload,
+    ...nextPayload,
     ...nextFields,
   };
 };
@@ -171,6 +182,14 @@ const buildUserDetail = async (user) => {
       select: 'name code department',
       populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
     })
+    .populate({
+      path: 'orgUnitId',
+      select: 'name code type collegeId linkedDepartmentId description',
+      populate: [
+        { path: 'collegeId', select: 'name code' },
+        { path: 'linkedDepartmentId', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+      ],
+    })
     .populate('collegeId', 'name code')
     .populate('departmentId', 'name code college')
     .lean();
@@ -199,16 +218,41 @@ const buildUserDetail = async (user) => {
   });
   const [subjectAssignments, teachingAssignments, recentTickets, recentNotifications] = await Promise.all([
     sectionContext?._id
-      ? SectionSubject.find({ section: sectionContext._id, isActive: true })
-        .populate('subject', 'name code credits')
-        .populate('faculty', 'name email systemId')
-        .lean()
+      ? (async () => {
+        const subjectIds = await getSubjectIdsForSection(sectionContext._id);
+        return buildSubjectCatalog({
+          subjectQuery: { _id: { $in: subjectIds } },
+          scopedSectionIds: [sectionContext._id],
+        });
+      })()
       : [],
     populatedUser?.role === 'faculty'
-      ? SectionSubject.find({ faculty: populatedUser._id, isActive: true })
-        .populate('section', 'name')
-        .populate('subject', 'name code')
-        .lean()
+      ? (async () => {
+        const [generalAssignments, sectionAssignments] = await Promise.all([
+          SubjectTeacher.find({ teacher: populatedUser._id, isActive: true })
+            .populate('subject', 'name code')
+            .lean(),
+          SubjectSectionTeacher.find({ teacher: populatedUser._id, isActive: true })
+            .populate('subject', 'name code')
+            .populate('section', 'name')
+            .lean(),
+        ]);
+
+        return [
+          ...generalAssignments.map((entry) => ({
+            id: entry._id,
+            semester: '',
+            section: null,
+            subject: entry.subject ? { id: entry.subject._id, code: entry.subject.code, name: entry.subject.name } : null,
+          })),
+          ...sectionAssignments.map((entry) => ({
+            id: entry._id,
+            semester: '',
+            section: entry.section ? { id: entry.section._id, name: entry.section.name } : null,
+            subject: entry.subject ? { id: entry.subject._id, code: entry.subject.code, name: entry.subject.name } : null,
+          })),
+        ];
+      })()
       : [],
     Ticket.find({
       $or: [{ user: populatedUser._id }, { assignedTo: populatedUser._id }],
@@ -237,9 +281,7 @@ const buildUserDetail = async (user) => {
       expiryDate: populatedUser.expiryDate,
       isAssigned: normalizeRole(populatedUser.role) === 'student'
         ? Boolean(enrollment?._id && enrollment?.status === 'active' && enrollment?.section?._id)
-        : normalizeRole(populatedUser.role) === 'faculty'
-          ? teachingAssignments.length > 0
-          : true,
+        : Boolean(populatedUser.orgUnitId || populatedUser.department || populatedUser.departmentId),
     }),
     sectionContext: sectionContext
       ? {
@@ -259,27 +301,30 @@ const buildUserDetail = async (user) => {
           academicSessionId: enrollment.academicSession || null,
         }
       : null,
-    subjects: subjectAssignments.map((entry) => ({
-      id: entry.subject?._id,
-      code: entry.subject?.code,
-      name: entry.subject?.name,
-      credits: entry.subject?.credits,
-      semester: entry.semester,
-      faculty: entry.faculty
-        ? {
-            id: entry.faculty._id,
-            systemId: entry.faculty.systemId,
-            name: entry.faculty.name,
-            email: entry.faculty.email,
-          }
-        : null,
-    })),
-    teachingAssignments: teachingAssignments.map((entry) => ({
-      id: entry._id,
-      semester: entry.semester,
-      section: entry.section ? { id: entry.section._id, name: entry.section.name } : null,
-      subject: entry.subject ? { id: entry.subject._id, code: entry.subject.code, name: entry.subject.name } : null,
-    })),
+    subjects: subjectAssignments.map((entry) => {
+      const sectionTeachers = (entry.sectionTeachers || [])
+        .filter((mapping) => String(mapping.section?._id || mapping.section) === String(sectionContext?._id || ''))
+        .map((mapping) => mapping.teacher)
+        .filter(Boolean);
+      const assignedTeachers = sectionTeachers.length ? sectionTeachers : (entry.teachers || []);
+
+      return {
+        id: entry._id,
+        code: entry.code,
+        name: entry.name,
+        credits: entry.credits,
+        semester: enrollment?.semester || '',
+        faculty: assignedTeachers[0]
+          ? {
+              id: assignedTeachers[0]._id,
+              systemId: assignedTeachers[0].systemId,
+              name: assignedTeachers[0].name,
+              email: assignedTeachers[0].email,
+            }
+          : null,
+      };
+    }),
+    teachingAssignments,
     recentTickets,
     recentNotifications,
   };
@@ -409,6 +454,14 @@ exports.getUsers = async (req, res, next) => {
           path: 'programId',
           select: 'name code department',
           populate: { path: 'department', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+        })
+        .populate({
+          path: 'orgUnitId',
+          select: 'name code type collegeId linkedDepartmentId description',
+          populate: [
+            { path: 'collegeId', select: 'name code' },
+            { path: 'linkedDepartmentId', select: 'name code college', populate: { path: 'college', select: 'name code' } },
+          ],
         })
         .sort({ createdAt: -1 })
         .skip((numericPage - 1) * numericLimit)
@@ -602,6 +655,7 @@ exports.updateUser = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Only the super admin can modify privileged access accounts' });
     }
 
+    const previousRole = normalizeRole(user.role);
     const previousSectionId = user.sectionId ? String(user.sectionId) : '';
     const normalized = await applyDerivedAcademicContext(
       normalizeUserPayload({ ...user.toObject(), ...req.body, password: undefined, systemId: user.systemId })
@@ -610,7 +664,7 @@ exports.updateUser = async (req, res, next) => {
       normalized.section = '';
       normalized.year = '';
     }
-    const allowedFields = ['name', 'email', 'role', 'adminTier', 'collegeId', 'department', 'departmentId', 'programId', 'year', 'section', 'sectionId', 'isActive', 'status', 'expiryDate', 'avatarChoice', 'emailVerified'];
+    const allowedFields = ['name', 'email', 'role', 'adminTier', 'collegeId', 'department', 'departmentId', 'orgUnitId', 'programId', 'year', 'section', 'sectionId', 'isActive', 'status', 'expiryDate', 'avatarChoice', 'emailVerified'];
     allowedFields.forEach((field) => {
       if (normalized[field] !== undefined) {
         user[field] = normalized[field];
@@ -622,7 +676,13 @@ exports.updateUser = async (req, res, next) => {
 
     await user.save();
     if (normalizeRole(user.role) === 'student') {
-      await syncStudentEnrollment(user._id, previousSectionId, user.sectionId ? String(user.sectionId) : '');
+      if (!isStudentApprovedForAcademicMapping(user)) {
+        await clearStudentAcademicMapping(user._id);
+      } else {
+        await syncStudentEnrollment(user._id, previousSectionId, user.sectionId ? String(user.sectionId) : '');
+      }
+    } else if (previousRole === 'student' && normalizeRole(user.role) !== 'student') {
+      await clearStudentAcademicMapping(user._id);
     }
     await invalidateUserCaches(String(user._id));
 
@@ -700,9 +760,10 @@ exports.deleteUser = async (req, res, next) => {
       }
     }
 
-    const [activeEnrollment, teachingAssignment, assignedTicket] = await Promise.all([
+    const [activeEnrollment, teachingAssignment, sectionTeachingAssignment, assignedTicket] = await Promise.all([
       Enrollment.findOne({ student: user._id, status: 'active' }).lean(),
-      SectionSubject.findOne({ faculty: user._id, isActive: true }).lean(),
+      SubjectTeacher.findOne({ teacher: user._id, isActive: true }).lean(),
+      SubjectSectionTeacher.findOne({ teacher: user._id, isActive: true }).lean(),
       Ticket.findOne({ assignedTo: user._id, status: { $in: ['Open', 'In Progress'] } }).lean(),
     ]);
 
@@ -713,7 +774,7 @@ exports.deleteUser = async (req, res, next) => {
       });
     }
 
-    if (teachingAssignment) {
+    if (teachingAssignment || sectionTeachingAssignment) {
       return res.status(409).json({
         success: false,
         message: 'Cannot delete a faculty user with active subject assignments. Remove teaching assignments first.',

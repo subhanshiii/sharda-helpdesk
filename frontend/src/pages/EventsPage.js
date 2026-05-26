@@ -143,7 +143,7 @@ const EventCard = ({ event, onInterest, canDelete, onDelete }) => {
 // ── Main Page ─────────────────────────────────────────
 export default function EventsPage() {
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { can } = usePermissions();
   const [events,     setEvents]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
@@ -153,7 +153,7 @@ export default function EventsPage() {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, currentPage: 1 });
   const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
 
-  const canPost = hasPermission('canPostNotice');
+  const canPost = can('create', 'events');
 
   const fetchEvents = useCallback(async (page = 1) => {
     setLoading(true);
@@ -220,8 +220,12 @@ export default function EventsPage() {
         title="Events"
         subtitle="Browse the complete event directory. Notice Board only highlights selected updates and does not replace this full event workspace."
         action={
-          canPost && (
+          canPost ? (
             <button onClick={() => navigate('/events/new')} className="btn-primary">
+              <FiPlus size={15} /> Create Event
+            </button>
+          ) : (
+            <button className="btn-secondary cursor-not-allowed opacity-70" disabled title="Only staff and admins can create events.">
               <FiPlus size={15} /> Create Event
             </button>
           )

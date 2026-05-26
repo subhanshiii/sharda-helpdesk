@@ -19,6 +19,18 @@ const timetableEntrySchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    teachingAssignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeachingAssignment',
+      default: null,
+      index: true,
+    },
+    academicSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademicSession',
+      default: null,
+      index: true,
+    },
     subjectCode: {
       type: String,
       trim: true,
@@ -107,5 +119,6 @@ timetableEntrySchema.index({ department: 1, year: 1, section: 1, dayOfWeek: 1, s
 timetableEntrySchema.index({ sectionId: 1, dayOfWeek: 1, startTime: 1 });
 timetableEntrySchema.index({ faculty: 1, dayOfWeek: 1, startTime: 1 });
 timetableEntrySchema.index({ subjectCode: 1, sectionId: 1 }); // FIXED: speed up subject-code propagation lookups across sections.
+timetableEntrySchema.index({ teachingAssignmentId: 1, dayOfWeek: 1, startTime: 1 });
 
 module.exports = mongoose.model('TimetableEntry', timetableEntrySchema);

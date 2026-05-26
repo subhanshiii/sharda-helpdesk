@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import API from '../utils/api';
 import { usePermissions } from '../context/PermissionContext';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { PageHeader, EmptyState, Alert, ConfirmDialog } from '../components/ui';
 import { OpportunitiesSkeleton } from '../components/skeletons/SkeletonComponents';
 import { useOptimisticUpdate } from '../hooks/useOptimisticUpdate';
 import { formatDate } from '../utils/helpers';
-import VisibilitySection from '../components/content/VisibilitySection';
 import {
   FiPlus, FiSearch, FiBookmark, FiExternalLink, FiX,
-  FiCalendar, FiMapPin, FiDollarSign, FiTag, FiBriefcase,
+  FiCalendar, FiMapPin, FiDollarSign, FiBriefcase,
   FiAward, FiCode, FiBook, FiStar, FiUsers,
 } from 'react-icons/fi';
 
@@ -98,84 +98,10 @@ const OpportunityCard = memo(({ opp, onBookmark, canDelete, onDelete }) => {
   );
 });
 
-const OpportunityModal = memo(({ onClose, onSaved }) => {
-  const [form, setForm] = useState({
-    title:'', description:'', type:'Internship', company:'', location:'Remote',
-    externalLink:'', deadline:'', stipend:'', eligibility:'', tags:'',
-    audienceTiers:[], audienceRoles:[],
-    audienceCollegeId:'', audienceDepartmentId:'', audienceProgramId:'', audienceCourseId:'', audienceStudyYear:'', audienceSectionId:'',
-    audienceDepartments:[], audienceYears:[], audienceSections:[],
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.title || !form.description || !form.type) { setError('Title, description and type are required'); return; }
-    setLoading(true);
-    try {
-      await API.post('/opportunities', form);
-      toast.success('Opportunity posted!');
-      onSaved(); onClose();
-    } catch (err) { setError(err.response?.data?.message || 'Failed to save'); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in-up">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-display font-bold text-gray-900">Post New Opportunity</h2>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"><FiX size={18}/></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && <Alert type="error" message={error} />}
-          <div>
-            <label className="label">Type</label>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {TYPES.map(type => {
-                const cfg = TYPE_CONFIG[type]; const Icon = cfg.icon;
-                return (
-                  <button key={type} type="button" onClick={() => setForm(f => ({...f, type}))}
-                    className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-xs font-semibold ${
-                      form.type === type ? `border-transparent bg-gradient-to-br ${cfg.color} text-white shadow-md` : 'border-gray-200 text-gray-500'
-                    }`}>
-                    <Icon size={16}/>{type}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="label">Title *</label>
-              <input className="input" value={form.title} onChange={e => setForm(f => ({...f,title:e.target.value}))} placeholder="e.g. Software Engineer Intern at Google"/>
-            </div>
-            <div><label className="label">Company</label><input className="input" value={form.company} onChange={e => setForm(f => ({...f,company:e.target.value}))} placeholder="e.g. Google"/></div>
-            <div><label className="label">Location</label><input className="input" value={form.location} onChange={e => setForm(f => ({...f,location:e.target.value}))} placeholder="Remote / Delhi"/></div>
-          </div>
-          <div><label className="label">Description *</label><textarea className="input resize-none" rows={3} value={form.description} onChange={e => setForm(f => ({...f,description:e.target.value}))} placeholder="Describe the opportunity..."/></div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div><label className="label">Deadline</label><input type="date" className="input" value={form.deadline} onChange={e => setForm(f => ({...f,deadline:e.target.value}))}/></div>
-            <div><label className="label">Stipend</label><input className="input" value={form.stipend} onChange={e => setForm(f => ({...f,stipend:e.target.value}))} placeholder="₹15,000/month or Unpaid"/></div>
-          </div>
-          <div><label className="label">Apply Link</label><div className="relative"><FiExternalLink className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/><input className="input pl-9" value={form.externalLink} onChange={e => setForm(f => ({...f,externalLink:e.target.value}))} placeholder="https://apply.example.com"/></div></div>
-          <div><label className="label">Tags</label><div className="relative"><FiTag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/><input className="input pl-9" value={form.tags} onChange={e => setForm(f => ({...f,tags:e.target.value}))} placeholder="React, Python, ML (comma-separated)"/></div></div>
-          <VisibilitySection form={form} compact onChange={(key, value) => setForm(f => ({ ...f, [key]: value }))} />
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">{loading ? 'Saving...' : 'Post Opportunity'}</button>
-            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-});
-
 export default function OpportunitiesPage() {
-  const { hasPermission } = usePermissions();
+  const navigate = useNavigate();
+  const { can } = usePermissions();
   const [loading, setLoading]   = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [showBookmarked, setShowBookmarked] = useState(false);
   const [activeType, setActiveType] = useState('');
   const [search, setSearch]       = useState('');
@@ -187,7 +113,7 @@ export default function OpportunitiesPage() {
   // useOptimisticUpdate: bookmarks update instantly without waiting for server
   const { data: opportunities, setData: setOpportunities, optimisticUpdate } = useOptimisticUpdate([]);
 
-  const canPost = hasPermission('canPostNotice');
+  const canPost = can('create', 'opportunities');
 
   // Load total saved count
   useEffect(() => {
@@ -276,12 +202,13 @@ export default function OpportunitiesPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteState({ open: false, id: '', loading: false })}
       />
-      {showModal && <OpportunityModal onClose={() => setShowModal(false)} onSaved={() => fetchOpps(1)} />}
 
       <PageHeader
         title="Opportunities"
         subtitle={`${pagination.total} opportunities available`}
-        action={canPost && <button onClick={() => setShowModal(true)} className="btn-primary"><FiPlus size={15}/> Post Opportunity</button>}
+        action={canPost
+          ? <button onClick={() => navigate('/opportunities/new')} className="btn-primary"><FiPlus size={15}/> Post Opportunity</button>
+          : <button className="btn-secondary cursor-not-allowed opacity-70" disabled title="Only admins can post opportunities."><FiPlus size={15}/> Post Opportunity</button>}
       />
 
       {error ? <Alert type="error" message={error} /> : null}
@@ -326,7 +253,7 @@ export default function OpportunitiesPage() {
           icon={showBookmarked ? '🔖' : '💼'}
           title={showBookmarked ? 'No saved opportunities' : 'No opportunities found'}
           description={showBookmarked ? 'Bookmark opportunities to find them here' : 'Check back later for new opportunities'}
-          action={canPost && !showBookmarked ? <button onClick={() => setShowModal(true)} className="btn-primary"><FiPlus size={15}/> Post First Opportunity</button> : null}
+          action={canPost && !showBookmarked ? <button onClick={() => navigate('/opportunities/new')} className="btn-primary"><FiPlus size={15}/> Post First Opportunity</button> : null}
         />
       ) : (
         <>

@@ -18,7 +18,6 @@ export default function AdvancedAcademicOperationsPage() {
     subjects: [],
     faculty: [],
     students: [],
-    'section-subjects': [],
     enrollments: [],
   });
   const [loading, setLoading] = useState(true);
@@ -50,7 +49,6 @@ export default function AdvancedAcademicOperationsPage() {
         subjects: workspace.subjects || [],
         faculty: facultyRes.data?.data || [],
         students: studentsRes.data?.data || [],
-        'section-subjects': workspace['section-subjects'] || [],
         enrollments: workspace.enrollments || [],
       });
     } catch (requestError) {
@@ -102,7 +100,7 @@ export default function AdvancedAcademicOperationsPage() {
       <PageHeader
         title="Advanced Academic Operations"
         description="Manage the deeper academic relationships that sit underneath the structure workspace."
-        meta={['Subjects', 'Teaching assignments', 'Enrollments']}
+        meta={['Subjects', 'Course links', 'Enrollments']}
         action={(
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={() => navigate('/academics')} className="btn-secondary">

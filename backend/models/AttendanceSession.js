@@ -39,6 +39,18 @@ const attendanceSessionSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    teachingAssignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeachingAssignment',
+      default: null,
+      index: true,
+    },
+    academicSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AcademicSession',
+      default: null,
+      index: true,
+    },
     department: {
       type: String,
       trim: true,
@@ -101,5 +113,6 @@ const attendanceSessionSchema = new mongoose.Schema(
 attendanceSessionSchema.index({ department: 1, year: 1, section: 1, date: -1 });
 attendanceSessionSchema.index({ sectionId: 1, subjectId: 1, date: -1 }, { unique: false });
 attendanceSessionSchema.index({ faculty: 1, date: -1 });
+attendanceSessionSchema.index({ teachingAssignmentId: 1, date: -1 });
 
 module.exports = mongoose.model('AttendanceSession', attendanceSessionSchema);

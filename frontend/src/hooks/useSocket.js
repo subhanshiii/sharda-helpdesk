@@ -67,6 +67,12 @@ export const useSocket = () => {
 // ── Hook for ticket-specific real-time events ──────────
 export const useTicketSocket = (ticketId, callbacks) => {
   const socket = useSocket();
+  const {
+    onNewReply,
+    onTicketUpdated,
+    onTyping,
+    onStopTyping,
+  } = callbacks || {};
 
   useEffect(() => {
     if (!socket || !ticketId) return;
@@ -82,36 +88,40 @@ export const useTicketSocket = (ticketId, callbacks) => {
     socket.emit('join_ticket', ticketId);
 
     // Listen for new replies
-    if (callbacks.onNewReply) {
-      socket.on('ticket:new_reply', (data) => {
-        if (data.ticketId === ticketId) callbacks.onNewReply(data);
-      });
+    const handleNewReply = (data) => {
+      if (data.ticketId === ticketId) onNewReply?.(data);
+    };
+    if (onNewReply) {
+      socket.on('ticket:new_reply', handleNewReply);
     }
 
     // Listen for ticket updates (status, priority changes)
-    if (callbacks.onTicketUpdated) {
-      socket.on('ticket:updated', (data) => {
-        if (data.ticket._id === ticketId) callbacks.onTicketUpdated(data);
-      });
+    const handleTicketUpdated = (data) => {
+      if (data.ticket._id === ticketId) onTicketUpdated?.(data);
+    };
+    if (onTicketUpdated) {
+      socket.on('ticket:updated', handleTicketUpdated);
     }
 
     // Listen for typing indicators
-    if (callbacks.onTyping) {
-      socket.on('user_typing',         callbacks.onTyping);
-      socket.on('user_stopped_typing', callbacks.onStopTyping || (() => {}));
+    const handleTyping = (data) => onTyping?.(data);
+    const handleStopTyping = (data) => onStopTyping?.(data);
+    if (onTyping) {
+      socket.on('user_typing', handleTyping);
+      socket.on('user_stopped_typing', handleStopTyping);
     }
 
     // Cleanup: leave room when component unmounts
     return () => {
       socket.emit('leave_ticket', ticketId);
       socket.off('ticket:error', onTicketError);
-      socket.off('ticket:new_reply');
-      socket.off('ticket:updated');
-      socket.off('user_typing');
-      socket.off('user_stopped_typing');
+      socket.off('ticket:new_reply', handleNewReply);
+      socket.off('ticket:updated', handleTicketUpdated);
+      socket.off('user_typing', handleTyping);
+      socket.off('user_stopped_typing', handleStopTyping);
       console.log(`📋 Left ticket room: ${ticketId}`);
     };
-  }, [socket, ticketId, callbacks]);
+  }, [socket, ticketId, onNewReply, onTicketUpdated, onTyping, onStopTyping]);
 
   // Emit typing event
   const emitTyping = useCallback((isTyping) => {
@@ -125,36 +135,44 @@ export const useTicketSocket = (ticketId, callbacks) => {
 // ── Hook for global notifications ─────────────────────
 export const useNotifications = (callbacks) => {
   const socket = useSocket();
+  const {
+    onNewTicket,
+    onAssigned,
+    onReply,
+    onStatusChange,
+    onOnlineCount,
+    onChatMessage,
+  } = callbacks || {};
 
   useEffect(() => {
     if (!socket) return;
 
-    if (callbacks.onNewTicket) {
-      socket.on('ticket:new',         callbacks.onNewTicket);
+    if (onNewTicket) {
+      socket.on('ticket:new', onNewTicket);
     }
-    if (callbacks.onAssigned) {
-      socket.on('ticket:assigned',    callbacks.onAssigned);
+    if (onAssigned) {
+      socket.on('ticket:assigned', onAssigned);
     }
-    if (callbacks.onReply) {
-      socket.on('notification:new_reply', callbacks.onReply);
+    if (onReply) {
+      socket.on('notification:new_reply', onReply);
     }
-    if (callbacks.onStatusChange) {
-      socket.on('ticket:status_changed', callbacks.onStatusChange);
+    if (onStatusChange) {
+      socket.on('ticket:status_changed', onStatusChange);
     }
-    if (callbacks.onOnlineCount) {
-      socket.on('online_count',       callbacks.onOnlineCount);
+    if (onOnlineCount) {
+      socket.on('online_count', onOnlineCount);
     }
-    if (callbacks.onChatMessage) {
-      socket.on('chat:message', callbacks.onChatMessage);
+    if (onChatMessage) {
+      socket.on('chat:message', onChatMessage);
     }
 
     return () => {
-      socket.off('ticket:new');
-      socket.off('ticket:assigned');
-      socket.off('notification:new_reply');
-      socket.off('ticket:status_changed');
-      socket.off('online_count');
-      socket.off('chat:message');
+      socket.off('ticket:new', onNewTicket);
+      socket.off('ticket:assigned', onAssigned);
+      socket.off('notification:new_reply', onReply);
+      socket.off('ticket:status_changed', onStatusChange);
+      socket.off('online_count', onOnlineCount);
+      socket.off('chat:message', onChatMessage);
     };
-  }, [socket, callbacks]);
+  }, [socket, onAssigned, onChatMessage, onNewTicket, onOnlineCount, onReply, onStatusChange]);
 };

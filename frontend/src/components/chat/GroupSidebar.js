@@ -24,26 +24,26 @@ const GroupAvatar = memo(({ group }) => {
 const GroupItem = memo(({ group, isActive, onClick }) => (
   <button
     onClick={() => onClick(group)}
-    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 ${
+    className={`w-full flex items-center gap-3 rounded-[22px] px-3.5 py-3 text-left transition-all duration-150 ${
       isActive
-        ? 'bg-blue-600 shadow-lg'
-        : 'hover:bg-gray-50'
+        ? 'theme-surface-accent shadow-lg'
+        : 'theme-surface-soft hover:shadow-sm'
     }`}
   >
     <GroupAvatar group={group} />
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between">
-        <p className={`text-sm font-semibold truncate ${isActive ? 'text-white' : 'text-gray-900'}`}>
+        <p className={`truncate text-sm font-semibold ${isActive ? 'theme-text-strong' : 'theme-text-strong'}`}>
           {group.name}
         </p>
         {group.lastMessage?.createdAt && (
-          <span className={`text-xs flex-shrink-0 ml-2 ${isActive ? 'text-blue-200' : 'text-gray-400'}`}>
+          <span className={`ml-2 flex-shrink-0 text-xs ${isActive ? 'theme-text-main' : 'theme-text-muted'}`}>
             {formatRelative(group.lastMessage.createdAt)}
           </span>
         )}
       </div>
       <div className="flex items-center justify-between mt-0.5">
-        <p className={`text-xs truncate ${isActive ? 'text-blue-200' : 'text-gray-500'}`}>
+        <p className={`truncate text-xs ${isActive ? 'theme-text-main' : 'theme-text-muted'}`}>
           {group.lastMessage
             ? group.lastMessage.isDeleted
               ? 'Message deleted'
@@ -57,7 +57,7 @@ const GroupItem = memo(({ group, isActive, onClick }) => (
             : `${group.members?.length || 0} members`}
         </p>
         {group.unreadCount > 0 && !isActive && (
-          <span className="ml-2 min-w-[20px] h-5 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center px-1.5 flex-shrink-0">
+          <span className="ml-2 flex h-5 min-w-[20px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent-primary)] px-1.5 text-xs font-bold text-white">
             {group.unreadCount > 99 ? '99+' : group.unreadCount}
           </span>
         )}
@@ -76,49 +76,60 @@ export default function GroupSidebar({
   );
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-100">
+    <div className="theme-surface flex h-full flex-col border-r border-[color:var(--border-soft)]">
       {/* Header */}
-      <div className="px-4 pt-5 pb-4 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <FiHash size={20} className="text-blue-600" />
-            <h2 className="font-display font-bold text-gray-900 text-lg">Groups</h2>
-            <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${isOnline ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+      <div className="theme-surface-soft border-b border-[color:var(--border-soft)] px-4 pb-4 pt-5">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="theme-icon-surface flex h-10 w-10 items-center justify-center rounded-2xl shadow-sm">
+              <FiHash size={18} className="theme-text-main" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-display text-lg font-bold theme-text-strong">Groups</h2>
+              <p className="text-xs theme-text-muted">Team channels and shared discussions</p>
+            </div>
+          </div>
+
+          <div className="flex flex-shrink-0 items-center gap-3">
+            <div className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
               <FiWifi size={10} />
               {isOnline ? 'Live' : 'Offline'}
             </div>
+            {canCreateGroup && (
+              <button
+                onClick={onCreateGroup}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--button-primary-start),var(--button-primary-mid),var(--button-primary-end))] text-[var(--button-primary-text)] shadow-sm transition hover:-translate-y-0.5"
+                aria-label="Create group"
+              >
+                <FiPlus size={16} />
+              </button>
+            )}
           </div>
-          {canCreateGroup && (
-            <button onClick={onCreateGroup}
-              className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-colors shadow-sm">
-              <FiPlus size={16} />
-            </button>
-          )}
         </div>
 
         {/* Search */}
         <div className="relative">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+          <FiSearch className="theme-text-muted absolute left-3 top-1/2 -translate-y-1/2" size={14} />
           <input
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
+            className="theme-input w-full rounded-2xl py-2.5 pl-9 pr-3 text-sm outline-none transition-all"
             placeholder="Search groups..."
           />
         </div>
       </div>
 
       {/* Group list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+      <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <FiUsers size={32} className="text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500">
+          <div className="theme-surface-soft flex flex-col items-center justify-center rounded-[28px] px-4 py-12 text-center">
+            <FiUsers size={32} className="theme-text-muted mb-3" />
+            <p className="theme-text-muted text-sm">
               {searchQuery ? 'No groups match your search' : 'No groups yet'}
             </p>
             {canCreateGroup && !searchQuery && (
               <button onClick={onCreateGroup}
-                className="mt-3 text-xs text-blue-600 hover:underline font-medium">
+                className="theme-text-main mt-3 text-xs font-medium hover:underline">
                 + Create first group
               </button>
             )}
@@ -136,8 +147,8 @@ export default function GroupSidebar({
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-100">
-        <p className="text-xs text-gray-400 text-center">
+      <div className="theme-surface-soft border-t border-[color:var(--border-soft)] px-4 py-3">
+        <p className="theme-text-muted text-center text-xs">
           {groups.length} group{groups.length !== 1 ? 's' : ''} · Real-time
         </p>
       </div>

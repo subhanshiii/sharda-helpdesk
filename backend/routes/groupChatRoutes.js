@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/groupChatController');
-const { protect, authorize, permissionMiddleware } = require('../middleware/auth');
+const { protect, permissionMiddleware } = require('../middleware/auth');
 
 // ── Multer for chat file uploads ───────────────────────
 const multer = require('multer');
@@ -29,12 +29,13 @@ const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 102
 
 // ── Group routes ───────────────────────────────────────
 router.post('/',                       protect, permissionMiddleware('canManageGroups'), ctrl.createGroup);
-router.get('/',                        protect, authorize('admin'), ctrl.getAllGroups);
+router.get('/',                        protect, permissionMiddleware('canManageGroups'), ctrl.getAllGroups);
 router.get('/my',                      protect, ctrl.getMyGroups);
-router.get('/users/search',            protect, ctrl.searchUsers);
+router.get('/users/options',           protect, permissionMiddleware('canManageGroups'), ctrl.getUserFilterOptions);
+router.get('/users/search',            protect, permissionMiddleware('canManageGroups'), ctrl.searchUsers);
 router.get('/:id',                     protect, ctrl.getGroup);
 router.put('/:id',                     protect, permissionMiddleware('canManageGroups'), ctrl.updateGroup);
-router.delete('/:id',                  protect, authorize('admin'), ctrl.deleteGroup);
+router.delete('/:id',                  protect, permissionMiddleware('canManageGroups'), ctrl.deleteGroup);
 
 // Member management
 router.post('/:id/members',            protect, permissionMiddleware('canManageGroups'), ctrl.addMembers);

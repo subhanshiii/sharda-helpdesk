@@ -120,6 +120,7 @@ const buildUserCreatePayload = async ({
   collegeId,
   sectionId,
   departmentId,
+  orgUnitId,
   programId,
   year,
   section,
@@ -143,6 +144,7 @@ const buildUserCreatePayload = async ({
   sectionId: sectionId || null,
   department: '',
   departmentId: departmentId || null,
+  orgUnitId: orgUnitId || null,
   programId: programId || null,
   year: year || '',
   section: section || '',
@@ -169,6 +171,7 @@ const serializeManagedUser = (user) => {
     isActive: user.isActive,
     department: user.department,
     departmentId: user.departmentId || null,
+    orgUnitId: user.orgUnitId || null,
     programId: user.programId || null,
     year: user.year || '',
     section: user.section || '',
@@ -193,9 +196,7 @@ const serializeManagedUser = (user) => {
       expiryDate: serialized.expiryDate,
       isAssigned: serialized.role === 'student'
         ? Boolean(serialized.sectionId || serialized.section)
-        : serialized.role === 'faculty'
-          ? Boolean(serialized.department || serialized.departmentId)
-          : true,
+        : Boolean(serialized.orgUnitId || serialized.department || serialized.departmentId),
     }),
   };
 };

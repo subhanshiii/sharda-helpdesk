@@ -5,7 +5,7 @@
 const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket, suggestPreTicketSupport } = require('../services/aiService');
 const ticketService = require('../services/ticketService');
 const { withCache, TTL, KEYS } = require('../config/cache');
-const faqData = require('../data/faq.json');
+const { listFaqs, createFaq, updateFaq, deleteFaq } = require('../services/faqService');
 
 // @desc    Chat with AI assistant
 // @route   POST /api/chat
@@ -96,7 +96,7 @@ exports.summarize = async (req, res, next) => {
 // @access  Private
 exports.getFAQs = async (req, res, next) => {
   try {
-    const { data, fromCache } = await withCache(KEYS.faq(), TTL.FAQ, async () => faqData);
+    const { data, fromCache } = await withCache(KEYS.faq(), TTL.FAQ, async () => listFaqs());
     res.json({ success: true, data, fromCache: process.env.NODE_ENV === 'development' ? fromCache : undefined });
   } catch (error) { next(error); }
 };
@@ -104,7 +104,48 @@ exports.getFAQs = async (req, res, next) => {
 // @desc    Get suggested questions
 // @route   GET /api/chat/suggestions
 // @access  Private
-exports.getSuggestions = async (req, res) => {
-  const suggestions = faqData.slice(0, 6).map(f => f.question);
-  res.json({ success: true, data: suggestions });
+exports.getSuggestions = async (req, res, next) => {
+  try {
+    const faqs = await listFaqs();
+    const suggestions = faqs.slice(0, 6).map(f => f.question);
+    res.json({ success: true, data: suggestions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createFAQ = async (req, res, next) => {
+  try {
+    const faq = await createFaq(req.body || {});
+    res.status(201).json({ success: true, data: faq, message: 'FAQ created successfully' });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
+exports.updateFAQ = async (req, res, next) => {
+  try {
+    const faq = await updateFaq(req.params.id, req.body || {});
+    res.status(200).json({ success: true, data: faq, message: 'FAQ updated successfully' });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
+exports.deleteFAQ = async (req, res, next) => {
+  try {
+    await deleteFaq(req.params.id);
+    res.status(200).json({ success: true, message: 'FAQ deleted successfully' });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
 };

@@ -1,6 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import API from '../utils/api';
 import { useAuth } from './AuthContext';
+import { normalizeUserRole } from '../utils/access';
+import {
+  ACTION_DEFINITIONS,
+  RESOURCE_DEFINITIONS,
+  ROLE_SUMMARIES,
+  can as canAccess,
+  normalizeResourcePermissions,
+} from '../utils/rbac';
 
 const PermissionContext = createContext();
 
@@ -36,6 +44,10 @@ export function PermissionProvider({ children }) {
   const [availablePermissions, setAvailablePermissions] = useState(Object.keys(emptyPermissions));
   const [permissionDefinitions, setPermissionDefinitions] = useState([]);
   const [adminTierDefinitions, setAdminTierDefinitions] = useState([]);
+  const [resourcePermissions, setResourcePermissions] = useState(normalizeResourcePermissions('student'));
+  const [resourceDefinitions, setResourceDefinitions] = useState(RESOURCE_DEFINITIONS);
+  const [actionDefinitions, setActionDefinitions] = useState(ACTION_DEFINITIONS);
+  const [roleSummaries, setRoleSummaries] = useState(ROLE_SUMMARIES);
   const [loading, setLoading] = useState(Boolean(token));
 
   const loadPermissions = useCallback(async () => {
@@ -45,6 +57,10 @@ export function PermissionProvider({ children }) {
       setAvailablePermissions(Object.keys(emptyPermissions));
       setPermissionDefinitions([]);
       setAdminTierDefinitions([]);
+      setResourcePermissions(normalizeResourcePermissions('student'));
+      setResourceDefinitions(RESOURCE_DEFINITIONS);
+      setActionDefinitions(ACTION_DEFINITIONS);
+      setRoleSummaries(ROLE_SUMMARIES);
       setLoading(false);
       return;
     }
@@ -60,11 +76,19 @@ export function PermissionProvider({ children }) {
       setAvailablePermissions(nextAvailablePermissions);
       setPermissionDefinitions(data.permissionDefinitions || []);
       setAdminTierDefinitions(data.adminTierDefinitions || []);
+      setResourcePermissions(normalizeResourcePermissions(user.role, data.currentResourcePermissions || {}, user?.adminTier || ''));
+      setResourceDefinitions(data.resourceDefinitions || RESOURCE_DEFINITIONS);
+      setActionDefinitions(data.actionDefinitions || ACTION_DEFINITIONS);
+      setRoleSummaries(data.roleSummaries || ROLE_SUMMARIES);
     } catch {
       setPermissions(emptyPermissions);
       setRolePermissions([]);
       setPermissionDefinitions([]);
       setAdminTierDefinitions([]);
+      setResourcePermissions(normalizeResourcePermissions(user?.role || 'student', {}, user?.adminTier || ''));
+      setResourceDefinitions(RESOURCE_DEFINITIONS);
+      setActionDefinitions(ACTION_DEFINITIONS);
+      setRoleSummaries(ROLE_SUMMARIES);
     } finally {
       setLoading(false);
     }
@@ -81,7 +105,7 @@ export function PermissionProvider({ children }) {
 
   const updateRolePermissions = useCallback(async (role, nextPermissions) => {
     const res = await API.put(`/permissions/${role}`, {
-      permissions: nextPermissions,
+      resourcePermissions: nextPermissions,
     });
 
     const updatedRole = res.data?.data;
@@ -91,13 +115,18 @@ export function PermissionProvider({ children }) {
         return [...next, updatedRole].sort((a, b) => a.role.localeCompare(b.role));
       });
 
-      if (user?.role === role) {
-        setPermissions({ ...buildEmptyPermissions(availablePermissions), ...updatedRole.permissions });
+      if (normalizeUserRole(user?.role) === normalizeUserRole(role)) {
+        await loadPermissions();
       }
     }
 
     return updatedRole;
-  }, [availablePermissions, user]);
+  }, [loadPermissions, user]);
+
+  const can = useCallback(
+    (action, resource) => canAccess(user, action, resource, resourcePermissions),
+    [resourcePermissions, user]
+  );
 
   const value = useMemo(() => ({
     permissions,
@@ -105,12 +134,17 @@ export function PermissionProvider({ children }) {
     availablePermissions,
     permissionDefinitions,
     adminTierDefinitions,
+    resourcePermissions,
+    resourceDefinitions,
+    actionDefinitions,
+    roleSummaries,
     loading,
     isSuperAdmin: user?.adminTier === 'super_admin',
     hasPermission,
+    can,
     refreshPermissions: loadPermissions,
     updateRolePermissions,
-  }), [permissions, rolePermissions, availablePermissions, permissionDefinitions, adminTierDefinitions, loading, user, hasPermission, loadPermissions, updateRolePermissions]);
+  }), [permissions, rolePermissions, availablePermissions, permissionDefinitions, adminTierDefinitions, resourcePermissions, resourceDefinitions, actionDefinitions, roleSummaries, loading, user, hasPermission, can, loadPermissions, updateRolePermissions]);
 
   return (
     <PermissionContext.Provider value={value}>

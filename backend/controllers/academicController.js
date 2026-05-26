@@ -6,7 +6,11 @@ const Course = require('../models/Course');
 const AcademicSession = require('../models/AcademicSession');
 const Section = require('../models/Section');
 const Subject = require('../models/Subject');
-const SectionSubject = require('../models/SectionSubject');
+const OrgUnit = require('../models/OrgUnit');
+const CourseSubject = require('../models/CourseSubject');
+const SubjectTeacher = require('../models/SubjectTeacher');
+const SubjectSectionTeacher = require('../models/SubjectSectionTeacher');
+const TeachingAssignment = require('../models/TeachingAssignment');
 const Enrollment = require('../models/Enrollment');
 const AttendanceSession = require('../models/AttendanceSession');
 const User = require('../models/User');
@@ -14,6 +18,21 @@ const { normalizeRole } = require('../utils/roleHelpers');
 const { getScopeFilter } = require('../utils/scopeGuard');
 const { resolveEffectiveTier } = require('../utils/permissionDefaults');
 const { buildStructureTree, runQuickAcademicSetup } = require('../utils/academicSetupService');
+const {
+  buildSubjectCatalog,
+  getSubjectDetail,
+  getSubjectIdsForCourse,
+  getSubjectIdsForSection,
+  normalizeObjectIdList,
+  syncCourseSubjectMappings,
+  syncSubjectSectionTeacherMappings,
+  syncSubjectTeacherMappings,
+} = require('../utils/subjectManagement');
+const {
+  syncTeachingAssignmentsForSubject,
+  syncTeachingAssignmentsForSection,
+  syncTeachingAssignmentsForSubjectSection,
+} = require('../utils/teachingAssignments');
 
 const normalizeString = (value) => String(value || '').trim();
 const normalizeCode = (value) => normalizeString(value).toUpperCase();
@@ -21,19 +40,6 @@ const normalizeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
-const normalizeObjectIdList = (value) => {
-  if (!value) return [];
-  const values = Array.isArray(value)
-    ? value
-    : String(value).split(',').map((item) => item.trim()).filter(Boolean);
-
-  return [...new Set(
-    values
-      .map((item) => String(item || '').trim())
-      .filter((item) => mongoose.Types.ObjectId.isValid(item))
-  )];
-};
-
 const ensureResourceExists = async (Model, id, label) => {
   const doc = await Model.findById(id).lean();
   if (!doc) {
@@ -99,9 +105,14 @@ const buildAcademicPayload = async (resource, body = {}) => {
   }
 
   if (resource === 'sections') {
+    if (!body.course) {
+      const error = new Error('Section must be linked to a course');
+      error.statusCode = 400;
+      throw error;
+    }
     const [program, course, academicSession, department] = await Promise.all([
       ensureResourceExists(Program, body.program, 'Program'),
-      body.course ? ensureResourceExists(Course, body.course, 'Course') : null,
+      ensureResourceExists(Course, body.course, 'Course'),
       ensureResourceExists(AcademicSession, resolveAcademicSessionId(body), 'Academic Session'),
       ensureResourceExists(Department, body.department, 'Department'),
     ]);
@@ -111,7 +122,7 @@ const buildAcademicPayload = async (resource, body = {}) => {
       error.statusCode = 400;
       throw error;
     }
-    if (course && String(course.program) !== String(program._id)) {
+    if (String(course.program) !== String(program._id)) {
       const error = new Error('Selected course does not belong to the selected program');
       error.statusCode = 400;
       throw error;
@@ -123,7 +134,7 @@ const buildAcademicPayload = async (resource, body = {}) => {
     }
 
     payload.program = program._id;
-    payload.course = course?._id || null;
+    payload.course = course._id;
     payload.academicSession = academicSession._id;
     payload.studyYear = academicSession.yearNumber;
     payload.department = department._id;
@@ -133,20 +144,15 @@ const buildAcademicPayload = async (resource, body = {}) => {
   }
 
   if (resource === 'subjects') {
-    const [department, program, course, academicSession] = await Promise.all([
+    const [department, program, academicSession] = await Promise.all([
       ensureResourceExists(Department, body.department, 'Department'),
       ensureResourceExists(Program, body.program, 'Program'),
-      body.course ? ensureResourceExists(Course, body.course, 'Course') : null,
       ensureResourceExists(AcademicSession, resolveAcademicSessionId(body), 'Academic Session'),
     ]);
+    const courseIds = normalizeObjectIdList(body.courseIds || body.courses || body.course);
 
     if (String(program.department) !== String(department._id)) {
       const error = new Error('Subject department must match the selected program department');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (course && String(course.program) !== String(program._id)) {
-      const error = new Error('Selected course does not belong to the selected program');
       error.statusCode = 400;
       throw error;
     }
@@ -155,56 +161,29 @@ const buildAcademicPayload = async (resource, body = {}) => {
       error.statusCode = 400;
       throw error;
     }
+    if (!courseIds.length) {
+      const error = new Error('Select at least one course for this subject');
+      error.statusCode = 400;
+      throw error;
+    }
 
     payload.code = normalizeCode(body.code);
     payload.name = normalizeString(body.name);
     payload.department = department._id;
     payload.program = program._id;
-    payload.course = course?._id || null;
     payload.academicSession = academicSession._id;
     payload.credits = normalizeNumber(body.credits, 0);
-    return payload;
-  }
-
-  if (resource === 'section-subjects') {
-    const facultyIds = normalizeObjectIdList(body.facultyIds || body.facultyId || body.faculty);
-    const [section, subject, facultyDocs] = await Promise.all([
-      ensureResourceExists(Section, body.section, 'Section'),
-      ensureResourceExists(Subject, body.subject, 'Subject'),
-      facultyIds.length ? User.find({ _id: { $in: facultyIds } }).select('role').lean() : [],
-    ]);
-
-    if (facultyDocs.length !== facultyIds.length) {
-      const error = new Error('One or more faculty users could not be found');
+    payload.courseIds = courseIds;
+    const termValue = normalizeNumber(body.term, 0);
+    if (termValue >= 1 && termValue <= 12) {
+      payload.term = termValue;
+    } else if (body.term === undefined || body.term === null || body.term === '') {
+      payload.term = 1;
+    } else {
+      const error = new Error('Subject term must be between 1 and 12');
       error.statusCode = 400;
       throw error;
     }
-    if (facultyDocs.some((faculty) => normalizeRole(faculty.role) !== 'faculty' && normalizeRole(faculty.role) !== 'admin')) {
-      const error = new Error('Selected user cannot be assigned as faculty');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (String(subject.program) !== String(section.program)) {
-      const error = new Error('Subject program must match the selected section program');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (section.course && subject.course && String(subject.course) !== String(section.course)) {
-      const error = new Error('Subject course must match the selected section course');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (String(subject.academicSession) !== String(section.academicSession)) {
-      const error = new Error('Subject academic session must match the selected section academic session');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    payload.section = section._id;
-    payload.subject = subject._id;
-    payload.faculty = facultyIds[0] || null;
-    payload.facultyMembers = facultyIds;
-    payload.semester = normalizeString(body.semester);
     return payload;
   }
 
@@ -220,6 +199,11 @@ const buildAcademicPayload = async (resource, body = {}) => {
       error.statusCode = 400;
       throw error;
     }
+    if (String(student.status || '').trim().toLowerCase() !== 'approved') {
+      const error = new Error('Only approved student accounts can be enrolled into sections');
+      error.statusCode = 400;
+      throw error;
+    }
     if (String(section.academicSession) !== String(academicSession._id)) {
       const error = new Error('Enrollment academic session must match the selected section academic session');
       error.statusCode = 400;
@@ -230,6 +214,10 @@ const buildAcademicPayload = async (resource, body = {}) => {
     payload.section = section._id;
     payload.academicSession = academicSession._id;
     payload.semester = normalizeString(body.semester);
+    const termValue = normalizeNumber(body.term, 0);
+    if (termValue >= 1 && termValue <= 12) {
+      payload.term = termValue;
+    }
     payload.status = normalizeString(body.status) || 'active';
     return payload;
   }
@@ -246,7 +234,6 @@ const modelMap = {
   'academic-sessions': AcademicSession,
   sections: Section,
   subjects: Subject,
-  'section-subjects': SectionSubject,
   enrollments: Enrollment,
 };
 
@@ -258,20 +245,6 @@ const populateMap = {
   'academic-sessions': 'program',
   sections: 'program course academicSession department advisorFaculty',
   subjects: 'department program course academicSession',
-  'section-subjects': [
-    {
-      path: 'section',
-      populate: [
-        { path: 'program', select: 'name code department' },
-        { path: 'course', select: 'name code' },
-        { path: 'academicSession', select: 'label yearNumber' },
-        { path: 'department', select: 'name code college' },
-      ],
-    },
-    { path: 'subject', populate: [{ path: 'department', select: 'name code' }, { path: 'program', select: 'name code department' }, { path: 'course', select: 'name code' }, { path: 'academicSession', select: 'label yearNumber' }] },
-    { path: 'faculty', select: 'name email systemId role' },
-    { path: 'facultyMembers', select: 'name email systemId role' },
-  ],
   enrollments: [
     { path: 'student', select: 'systemId name email role department section status isActive emailVerified passwordNeedsSetup expiryDate' },
     {
@@ -290,6 +263,117 @@ const populateMap = {
 const getModel = (resource) => modelMap[resource];
 const SCOPED_ADMIN_TIERS = ['college_admin', 'department_admin', 'program_coordinator', 'section_moderator'];
 
+const buildOrgUnitPayload = async (body = {}) => {
+  const payload = {
+    name: normalizeString(body.name),
+    code: normalizeCode(body.code),
+    type: normalizeString(body.type) === 'academic' ? 'academic' : 'operational',
+    description: normalizeString(body.description),
+    collegeId: body.collegeId || null,
+    linkedDepartmentId: body.linkedDepartmentId || null,
+    isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+  };
+
+  if (!payload.name) {
+    const error = new Error('Organization unit name is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!payload.code) {
+    payload.code = payload.name.slice(0, 4).toUpperCase();
+  }
+
+  if (payload.linkedDepartmentId) {
+    const linkedDepartment = await ensureResourceExists(Department, payload.linkedDepartmentId, 'Linked department');
+    payload.collegeId = linkedDepartment.college || payload.collegeId || null;
+  }
+
+  if (payload.collegeId) {
+    await ensureResourceExists(College, payload.collegeId, 'College');
+  }
+
+  return payload;
+};
+
+const getOrganizationWorkspacePayload = async () => {
+  const units = await OrgUnit.find({ isActive: true })
+    .sort({ type: 1, name: 1 })
+    .populate('collegeId', 'name code')
+    .populate({
+      path: 'linkedDepartmentId',
+      select: 'name code college',
+      populate: { path: 'college', select: 'name code' },
+    })
+    .lean();
+
+  const users = await User.find({
+    isActive: true,
+    role: { $in: ['faculty', 'staff', 'admin'] },
+  })
+    .select('name email systemId role adminTier status department departmentId orgUnitId')
+    .populate('departmentId', 'name code college')
+    .lean();
+
+  const unitsWithMembers = units.map((unit) => {
+    const linkedDepartmentId = String(unit.linkedDepartmentId?._id || unit.linkedDepartmentId || '');
+    const directMembers = users.filter((member) => String(member.orgUnitId || '') === String(unit._id));
+    const inferredAcademicMembers = unit.type === 'academic'
+      ? users.filter((member) => (
+        !member.orgUnitId
+        && member.role === 'faculty'
+        && linkedDepartmentId
+        && String(member.departmentId?._id || member.departmentId || '') === linkedDepartmentId
+      ))
+      : [];
+
+    const mergedMembers = [...directMembers];
+    inferredAcademicMembers.forEach((member) => {
+      if (!mergedMembers.some((entry) => String(entry._id) === String(member._id))) {
+        mergedMembers.push({ ...member, inferredOrgUnit: true });
+      }
+    });
+
+    const byRole = {
+      faculty: mergedMembers.filter((member) => member.role === 'faculty'),
+      staff: mergedMembers.filter((member) => member.role === 'staff'),
+      admin: mergedMembers.filter((member) => member.role === 'admin'),
+    };
+
+    return {
+      ...unit,
+      membersByRole: byRole,
+      memberCounts: {
+        faculty: byRole.faculty.length,
+        staff: byRole.staff.length,
+        admin: byRole.admin.length,
+        total: mergedMembers.length,
+      },
+    };
+  });
+
+  const summary = unitsWithMembers.reduce((accumulator, unit) => {
+    accumulator.total += 1;
+    accumulator[unit.type] += 1;
+    accumulator.faculty += unit.memberCounts.faculty;
+    accumulator.staff += unit.memberCounts.staff;
+    accumulator.admin += unit.memberCounts.admin;
+    return accumulator;
+  }, {
+    total: 0,
+    academic: 0,
+    operational: 0,
+    faculty: 0,
+    staff: 0,
+    admin: 0,
+  });
+
+  return {
+    summary,
+    units: unitsWithMembers,
+  };
+};
+
 const countDocumentsForScope = async (Model, scope = {}, extra = {}) => (
   Model.countDocuments({ ...scope, ...extra })
 );
@@ -305,7 +389,6 @@ const getWorkspaceCollections = async (user) => {
     academicSessionScope,
     sectionScope,
     subjectScope,
-    sectionSubjectScope,
     enrollmentScope,
   ] = await Promise.all([
     buildStructureTree(user),
@@ -361,11 +444,13 @@ const getWorkspaceCollections = async (user) => {
     getScopeFilter(user, 'academic-sessions'),
     getScopeFilter(user, 'sections'),
     getScopeFilter(user, 'subjects'),
-    getScopeFilter(user, 'section-subjects'),
     getScopeFilter(user, 'enrollments'),
   ]);
 
-  const [colleges, departments, programs, courses, academicSessions, sections, subjects, sectionSubjects, enrollments, faculty, students] = await Promise.all([
+  const scopedSubjectIds = await Subject.find({ isActive: true, ...subjectScope }).distinct('_id');
+  const scopedSectionIds = await Section.find({ isActive: true, ...sectionScope }).distinct('_id');
+
+  const [colleges, departments, programs, courses, academicSessions, sections, subjects, courseSubjects, subjectTeachers, subjectSectionTeachers, enrollments, faculty, students] = await Promise.all([
     College.find({ isActive: true, ...collegeScope }).sort({ name: 1 }).lean(),
     Department.find({ isActive: true, ...departmentScope }).sort({ name: 1 }).populate('college', 'name code').lean(),
     Program.find({ isActive: true, ...programScope }).sort({ name: 1 }).populate('department', 'name code college').lean(),
@@ -378,12 +463,28 @@ const getWorkspaceCollections = async (user) => {
       .populate('course', 'name code')
       .populate('academicSession', 'label yearNumber')
       .lean(),
-    Subject.find({ isActive: true, ...subjectScope }).sort({ code: 1 }).populate('department program course academicSession').lean(),
-    SectionSubject.find({ isActive: true, ...sectionSubjectScope }).populate(populateMap['section-subjects']).lean(),
+    buildSubjectCatalog({ subjectQuery: { _id: { $in: scopedSubjectIds } }, scopedSectionIds }),
+    CourseSubject.find({ isActive: true, subject: { $in: scopedSubjectIds } }).populate('course subject').lean(),
+    SubjectTeacher.find({ isActive: true, subject: { $in: scopedSubjectIds } }).populate('subject teacher', 'name code email systemId role').lean(),
+    SubjectSectionTeacher.find({ isActive: true, subject: { $in: scopedSubjectIds }, section: { $in: scopedSectionIds } })
+      .populate('subject', 'name code')
+      .populate({
+        path: 'section',
+        populate: [
+          { path: 'program', select: 'name code department' },
+          { path: 'course', select: 'name code' },
+          { path: 'academicSession', select: 'label yearNumber' },
+          { path: 'department', select: 'name code college' },
+        ],
+      })
+      .populate('teacher', 'name email systemId role')
+      .lean(),
     Enrollment.find({ ...enrollmentScope }).populate(populateMap.enrollments).lean(),
     User.find({ role: 'faculty', isActive: true }).select('name email systemId role section sectionId department').sort({ name: 1 }).lean(),
-    User.find({ role: 'student', isActive: true }).select('name email systemId role section sectionId department year').sort({ name: 1 }).lean(),
+    User.find({ role: 'student', isActive: true, status: 'approved' }).select('name email systemId role section sectionId department year status isActive').sort({ name: 1 }).lean(),
   ]);
+
+  const approvedEnrollments = enrollments.filter((entry) => entry?.student?.status === 'approved');
 
   return {
     treeData,
@@ -396,8 +497,10 @@ const getWorkspaceCollections = async (user) => {
       academicSessions,
       sections,
       subjects,
-      'section-subjects': sectionSubjects,
-      enrollments,
+      courseSubjects,
+      subjectTeachers,
+      subjectSectionTeachers,
+      enrollments: approvedEnrollments,
       faculty,
       students,
     },
@@ -451,7 +554,7 @@ const ensureScopedMutationAccess = async (user, resource, source = {}) => {
     return;
   }
 
-  if (resource === 'section-subjects' || resource === 'enrollments') {
+  if (resource === 'enrollments') {
     await ensureScopedParent('sections', { _id: source.section });
   }
 };
@@ -460,7 +563,7 @@ const cascadeDeleteSections = async (sectionIds = []) => {
   if (!sectionIds.length) return;
 
   await Promise.all([
-    SectionSubject.deleteMany({ section: { $in: sectionIds } }),
+    SubjectSectionTeacher.deleteMany({ section: { $in: sectionIds } }),
     Enrollment.deleteMany({ section: { $in: sectionIds } }),
     AttendanceSession.deleteMany({ sectionId: { $in: sectionIds } }),
     User.updateMany(
@@ -493,7 +596,14 @@ const cascadeDeletePrograms = async (programIds = []) => {
   await cascadeDeleteSections(sectionIds);
 
   await Promise.all([
-    SectionSubject.deleteMany({
+    CourseSubject.deleteMany({
+      $or: [
+        { course: { $in: courseIds } },
+        { subject: { $in: subjectIds } },
+      ],
+    }),
+    SubjectTeacher.deleteMany({ subject: { $in: subjectIds } }),
+    SubjectSectionTeacher.deleteMany({
       $or: [
         { section: { $in: sectionIds } },
         { subject: { $in: subjectIds } },
@@ -638,9 +748,19 @@ exports.getProgramReport = async (req, res, next) => {
         { $match: { program: { $in: programIds }, isActive: true } },
         { $group: { _id: '$program', courseIds: { $addToSet: '$_id' }, courseCount: { $sum: 1 } } },
       ]),
-      Subject.aggregate([
-        { $match: { program: { $in: programIds }, isActive: true } },
-        { $group: { _id: '$course', subjectCount: { $sum: 1 } } },
+      CourseSubject.aggregate([
+        { $match: { isActive: true } },
+        {
+          $lookup: {
+            from: 'courses',
+            localField: 'course',
+            foreignField: '_id',
+            as: 'course',
+          },
+        },
+        { $unwind: '$course' },
+        { $match: { 'course.program': { $in: programIds }, 'course.isActive': true } },
+        { $group: { _id: '$course._id', subjectCount: { $sum: 1 } } },
       ]),
       Section.aggregate([
         { $match: { program: { $in: programIds }, isActive: true } },
@@ -749,6 +869,207 @@ exports.getWorkspaceData = async (req, res, next) => {
   }
 };
 
+exports.getOrganizationWorkspace = async (req, res, next) => {
+  try {
+    const data = await getOrganizationWorkspacePayload();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createOrgUnit = async (req, res, next) => {
+  try {
+    const payload = await buildOrgUnitPayload(req.body);
+    const orgUnit = await OrgUnit.create(payload);
+    res.status(201).json({ success: true, data: orgUnit });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateOrgUnit = async (req, res, next) => {
+  try {
+    const existing = await OrgUnit.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Organization unit not found' });
+    }
+
+    const payload = await buildOrgUnitPayload({ ...existing.toObject(), ...req.body });
+    Object.assign(existing, payload);
+    await existing.save();
+
+    res.status(200).json({ success: true, data: existing });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteOrgUnit = async (req, res, next) => {
+  try {
+    const orgUnit = await OrgUnit.findById(req.params.id);
+    if (!orgUnit) {
+      return res.status(404).json({ success: false, message: 'Organization unit not found' });
+    }
+
+    const activeMembers = await User.countDocuments({ orgUnitId: orgUnit._id, isActive: true });
+    if (activeMembers > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Move or remove members from this organization unit before deleting it',
+      });
+    }
+
+    orgUnit.isActive = false;
+    await orgUnit.save();
+
+    res.status(200).json({ success: true, message: 'Organization unit archived successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getSubjectManagementWorkspace = async (req, res, next) => {
+  try {
+    const data = await getWorkspaceCollections(req.user);
+    res.status(200).json({
+      success: true,
+      data: {
+        subjects: data.options.subjects || [],
+        courses: data.options.courses || [],
+        sections: data.options.sections || [],
+        faculty: data.options.faculty || [],
+        courseSubjects: data.options.courseSubjects || [],
+        subjectTeachers: data.options.subjectTeachers || [],
+        subjectSectionTeachers: data.options.subjectSectionTeachers || [],
+        departments: data.options.departments || [],
+        programs: data.options.programs || [],
+        academicSessions: data.options.academicSessions || [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getSubjectRecord = async (req, res, next) => {
+  try {
+    const detail = await getSubjectDetail(req.params.id);
+    if (!detail) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+
+    const subjectScope = await getScopeFilter(req.user, 'subjects');
+    const scopedSubject = await Subject.findOne({ _id: detail._id, isActive: true, ...subjectScope }).select('_id').lean();
+    if (!scopedSubject) {
+      return res.status(403).json({ success: false, message: 'This subject is outside your assigned academic scope' });
+    }
+
+    res.status(200).json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.linkCourseToSubject = async (req, res, next) => {
+  try {
+    const subject = await Subject.findById(req.body?.subjectId || req.params.id);
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+
+    await ensureScopedMutationAccess(req.user, 'subjects', subject);
+
+    const existingCourseIds = await CourseSubject.find({ subject: subject._id, isActive: true }).distinct('course');
+    const nextCourseIds = normalizeObjectIdList([
+      ...(Array.isArray(req.body?.courseIds) ? req.body.courseIds : []),
+      req.body?.courseId,
+      ...existingCourseIds,
+    ]);
+    await syncCourseSubjectMappings(subject, nextCourseIds);
+    await syncTeachingAssignmentsForSubject(subject._id);
+
+    const data = await getSubjectDetail(subject._id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.unlinkCourseFromSubject = async (req, res, next) => {
+  try {
+    const subject = await Subject.findById(req.params.id);
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+
+    await ensureScopedMutationAccess(req.user, 'subjects', subject);
+
+    await CourseSubject.findOneAndUpdate(
+      { subject: subject._id, course: req.params.courseId },
+      { $set: { isActive: false } }
+    );
+    await syncTeachingAssignmentsForSubject(subject._id);
+
+    const data = await getSubjectDetail(subject._id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateSubjectTeachers = async (req, res, next) => {
+  try {
+    const subject = await Subject.findById(req.params.id);
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+
+    await ensureScopedMutationAccess(req.user, 'subjects', subject);
+    await syncSubjectTeacherMappings(subject._id, req.body?.teacherIds || req.body?.teachers || []);
+    await syncTeachingAssignmentsForSubject(subject._id);
+
+    const data = await getSubjectDetail(subject._id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateSubjectSectionTeachers = async (req, res, next) => {
+  try {
+    const [subject, section] = await Promise.all([
+      Subject.findById(req.params.id).lean(),
+      Section.findById(req.params.sectionId).lean(),
+    ]);
+
+    if (!subject) {
+      return res.status(404).json({ success: false, message: 'Subject not found' });
+    }
+    if (!section) {
+      return res.status(404).json({ success: false, message: 'Section not found' });
+    }
+
+    if (String(subject.program) !== String(section.program)) {
+      return res.status(400).json({ success: false, message: 'Subject and section must belong to the same program' });
+    }
+
+    const subjectIdsForSection = await getSubjectIdsForSection(section._id);
+    if (!subjectIdsForSection.includes(String(subject._id))) {
+      return res.status(400).json({ success: false, message: 'This section does not inherit the selected subject from its course' });
+    }
+
+    await ensureScopedMutationAccess(req.user, 'sections', section);
+    await syncSubjectSectionTeacherMappings(subject._id, section._id, req.body?.teacherIds || req.body?.teachers || []);
+    await syncTeachingAssignmentsForSubjectSection(subject._id, section._id);
+
+    const data = await getSubjectDetail(subject._id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getWorkspaceOptions = async (req, res, next) => {
   try {
     const data = await getWorkspaceCollections(req.user);
@@ -828,16 +1149,18 @@ exports.getEnrollmentReport = async (req, res, next) => {
       .lean();
 
     const sectionIds = [...new Set(enrollments.map((entry) => entry.section?._id).filter(Boolean).map(String))];
-    const sectionObjectIds = sectionIds.map((id) => new mongoose.Types.ObjectId(id));
-    const subjectsBySection = await SectionSubject.aggregate([
-      { $match: { section: { $in: sectionObjectIds }, isActive: true } },
-      { $group: { _id: '$section', subjectCount: { $sum: 1 } } },
+    const sections = await Section.find({ _id: { $in: sectionIds } }).select('course').lean();
+    const courseIds = [...new Set(sections.map((section) => String(section.course || '')).filter(Boolean))];
+    const courseSubjectRows = await CourseSubject.aggregate([
+      { $match: { course: { $in: courseIds.map((id) => new mongoose.Types.ObjectId(id)) }, isActive: true } },
+      { $group: { _id: '$course', subjectCount: { $sum: 1 } } },
     ]);
-    const subjectCountMap = new Map(subjectsBySection.map((entry) => [String(entry._id), entry.subjectCount]));
+    const courseSubjectCountMap = new Map(courseSubjectRows.map((entry) => [String(entry._id), entry.subjectCount]));
+    const sectionCourseMap = new Map(sections.map((section) => [String(section._id), String(section.course || '')]));
 
     const data = enrollments.map((entry) => ({
       ...entry,
-      subjectCount: subjectCountMap.get(String(entry.section?._id)) || 0,
+      subjectCount: courseSubjectCountMap.get(sectionCourseMap.get(String(entry.section?._id))) || 0,
     }));
 
     res.status(200).json({ success: true, count: data.length, data });
@@ -890,13 +1213,8 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
 
     const sectionId = enrollment.section._id;
 
-    const [subjects, attendanceRows] = await Promise.all([
-      SectionSubject.find({ section: sectionId, isActive: true })
-        .populate('subject', 'name code credits')
-        .populate('faculty', 'name email')
-        .populate('facultyMembers', 'name email systemId')
-        .sort({ createdAt: 1 })
-        .lean(),
+    const [subjectIds, attendanceRows] = await Promise.all([
+      getSubjectIdsForSection(sectionId),
       AttendanceSession.aggregate([
         { $match: { sectionId, 'records.student': enrollment.student._id } },
         { $unwind: '$records' },
@@ -916,6 +1234,11 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
       ]),
     ]);
 
+    const subjects = await buildSubjectCatalog({
+      subjectQuery: { _id: { $in: subjectIds } },
+      scopedSectionIds: [sectionId],
+    });
+
     const attendanceMap = new Map(
       attendanceRows.map((entry) => [
         String(entry._id || 'general'),
@@ -930,15 +1253,41 @@ exports.getStudentAcademicOverview = async (req, res, next) => {
 
     const data = {
       enrollment,
-      subjects: subjects.map((entry) => ({
-        ...entry,
-        attendance: attendanceMap.get(String(entry.subject?._id)) || {
+      subjects: subjects.map((entry) => {
+        const sectionTeachers = (entry.sectionTeachers || [])
+          .filter((mapping) => String(mapping.section?._id || mapping.section) === String(sectionId))
+          .map((mapping) => mapping.teacher)
+          .filter(Boolean);
+        const assignedTeachers = sectionTeachers.length ? sectionTeachers : (entry.teachers || []);
+
+        return {
+          id: entry._id,
+          code: entry.code,
+          name: entry.name,
+          credits: entry.credits,
+          semester: enrollment.semester,
+          facultyMembers: assignedTeachers.map((teacher) => ({
+            id: teacher._id,
+            systemId: teacher.systemId,
+            name: teacher.name,
+            email: teacher.email,
+          })),
+          faculty: assignedTeachers[0]
+            ? {
+                id: assignedTeachers[0]._id,
+                systemId: assignedTeachers[0].systemId,
+                name: assignedTeachers[0].name,
+                email: assignedTeachers[0].email,
+              }
+            : null,
+          attendance: attendanceMap.get(String(entry._id)) || {
           totalSessions: 0,
           attendedSessions: 0,
           percentage: 0,
           lastMarkedAt: null,
-        },
-      })),
+          },
+        };
+      }),
     };
 
     res.status(200).json({ success: true, data });
@@ -962,6 +1311,10 @@ exports.list = async (req, res, next) => {
     if (req.query.subject) query.subject = req.query.subject;
     if (req.query.faculty) query.faculty = req.query.faculty;
     if (req.query.status) query.status = req.query.status;
+    if (req.params.resource === 'subjects' && req.query.course) {
+      const subjectIds = await CourseSubject.find({ course: req.query.course, isActive: true }).distinct('subject');
+      query._id = { $in: subjectIds };
+    }
 
     let cursor = model.find(query).sort({ createdAt: -1 });
     if (populateMap[req.params.resource]) {
@@ -1005,9 +1358,17 @@ exports.create = async (req, res, next) => {
       }
     }
 
-    const doc = await model.create(payload);
+    const createPayload = { ...payload };
+    delete createPayload.courseIds;
+
+    const doc = await model.create(createPayload);
+    if (req.params.resource === 'subjects') {
+      await syncCourseSubjectMappings(doc, payload.courseIds || []);
+      await syncTeachingAssignmentsForSubject(doc._id);
+    }
     if (req.params.resource === 'sections') {
       await syncStudentsForSection(doc._id);
+      await syncTeachingAssignmentsForSection(doc._id);
     }
     const data = populateMap[req.params.resource]
       ? await model.findById(doc._id).populate(populateMap[req.params.resource]).lean()
@@ -1032,7 +1393,14 @@ exports.update = async (req, res, next) => {
       ...existingDoc,
       ...payload,
     });
-    const doc = await model.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+    const updatePayload = { ...payload };
+    delete updatePayload.courseIds;
+
+    const doc = await model.findByIdAndUpdate(req.params.id, updatePayload, { new: true, runValidators: true });
+    if (req.params.resource === 'subjects') {
+      await syncCourseSubjectMappings(doc, payload.courseIds || []);
+      await syncTeachingAssignmentsForSubject(doc._id);
+    }
 
     if (req.params.resource === 'enrollments' && payload.section && payload.student) {
       await deactivateOtherActiveEnrollments(payload, req.params.id);
@@ -1051,6 +1419,7 @@ exports.update = async (req, res, next) => {
 
     if (req.params.resource === 'sections') {
       await syncStudentsForSection(doc._id);
+      await syncTeachingAssignmentsForSection(doc._id);
     }
     if (req.params.resource === 'departments') {
       await syncStudentsForSectionQuery({ department: doc._id });
@@ -1117,10 +1486,12 @@ exports.remove = async (req, res, next) => {
 
     if (req.params.resource === 'courses') {
       const sectionIds = await Section.find({ course: req.params.id }).distinct('_id');
-      const subjectIds = await Subject.find({ course: req.params.id }).distinct('_id');
+      const subjectIds = await CourseSubject.find({ course: req.params.id, isActive: true }).distinct('subject');
       await cascadeDeleteSections(sectionIds);
       await Promise.all([
-        SectionSubject.deleteMany({
+        CourseSubject.deleteMany({ course: req.params.id }),
+        SubjectSectionTeacher.deleteMany({ section: { $in: sectionIds } }),
+        TeachingAssignment.deleteMany({
           $or: [
             { section: { $in: sectionIds } },
             { subject: { $in: subjectIds } },
@@ -1132,7 +1503,6 @@ exports.remove = async (req, res, next) => {
             { subjectId: { $in: subjectIds } },
           ],
         }),
-        Subject.deleteMany({ course: req.params.id }),
         Section.deleteMany({ course: req.params.id }),
       ]);
     }
@@ -1142,7 +1512,15 @@ exports.remove = async (req, res, next) => {
       const subjectIds = await Subject.find({ academicSession: req.params.id }).distinct('_id');
       await cascadeDeleteSections(sectionIds);
       await Promise.all([
-        SectionSubject.deleteMany({
+        CourseSubject.deleteMany({ subject: { $in: subjectIds } }),
+        SubjectTeacher.deleteMany({ subject: { $in: subjectIds } }),
+        SubjectSectionTeacher.deleteMany({
+          $or: [
+            { section: { $in: sectionIds } },
+            { subject: { $in: subjectIds } },
+          ],
+        }),
+        TeachingAssignment.deleteMany({
           $or: [
             { section: { $in: sectionIds } },
             { subject: { $in: subjectIds } },
@@ -1166,7 +1544,10 @@ exports.remove = async (req, res, next) => {
 
     if (req.params.resource === 'subjects') {
       await Promise.all([
-        SectionSubject.deleteMany({ subject: req.params.id }),
+        CourseSubject.deleteMany({ subject: req.params.id }),
+        SubjectTeacher.deleteMany({ subject: req.params.id }),
+        SubjectSectionTeacher.deleteMany({ subject: req.params.id }),
+        TeachingAssignment.deleteMany({ subject: req.params.id }),
         AttendanceSession.deleteMany({ subjectId: req.params.id }),
       ]);
     }
@@ -1179,31 +1560,6 @@ exports.remove = async (req, res, next) => {
     if (!doc) return res.status(404).json({ success: false, message: 'Academic record not found' });
 
     res.status(200).json({ success: true, message: 'Academic record deleted' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.updateSectionSubjectFaculty = async (req, res, next) => {
-  try {
-    const facultyIds = normalizeObjectIdList(req.body?.facultyIds || req.body?.facultyId || []);
-    const sectionSubject = await SectionSubject.findById(req.params.id);
-    if (!sectionSubject) {
-      return res.status(404).json({ success: false, message: 'Teaching assignment not found' });
-    }
-
-    if (facultyIds.length) {
-      const facultyDocs = await User.find({ _id: { $in: facultyIds } }).select('role').lean();
-      if (facultyDocs.length !== facultyIds.length || facultyDocs.some((faculty) => !['faculty', 'admin'].includes(normalizeRole(faculty.role)))) {
-        return res.status(400).json({ success: false, message: 'Selected user cannot be assigned as faculty' });
-      }
-    }
-    sectionSubject.faculty = facultyIds[0] || null;
-    sectionSubject.facultyMembers = facultyIds;
-
-    await sectionSubject.save();
-    const data = await SectionSubject.findById(sectionSubject._id).populate(populateMap['section-subjects']).lean();
-    res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }

@@ -8,6 +8,21 @@ export const emptyAcademicScopeFilters = {
 };
 
 export const getEntityId = (value) => String(value?._id || value || '');
+export const getSubjectCourseIds = (subject) => {
+  const courseIds = Array.isArray(subject?.courses)
+    ? subject.courses.map((course) => getEntityId(course)).filter(Boolean)
+    : [];
+  const primaryCourseId = getEntityId(subject?.course);
+  if (primaryCourseId && !courseIds.includes(primaryCourseId)) {
+    courseIds.push(primaryCourseId);
+  }
+  return courseIds;
+};
+
+export const subjectMatchesCourse = (subject, courseId) => {
+  if (!courseId) return true;
+  return getSubjectCourseIds(subject).includes(String(courseId));
+};
 
 export const buildDepartmentCollegeMap = (departments = []) => new Map(
   departments.map((department) => [getEntityId(department), getEntityId(department.college)])
