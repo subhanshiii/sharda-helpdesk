@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiClock, FiEdit2, FiMapPin, FiTrash2, FiUsers } from 'react-icons/fi';
+import { FiClock, FiMapPin, FiUsers } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, ConfirmDialog, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { usePermissions } from '../context/PermissionContext';
 import AcademicScopeFilters from '../components/academics/AcademicScopeFilters';
 import {
   buildDepartmentCollegeMap,
@@ -16,6 +15,76 @@ import { isStudentUser } from '../utils/access';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const formatLongDate = (date) => date.toLocaleDateString('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+const formatShortDate = (date) => date.toLocaleDateString('en-IN', {
+  day: 'numeric',
+  month: 'short',
+});
+
+const toDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDate = (value) => {
+  const [yearValue, monthValue, dayValue] = String(value).split('-').map(Number);
+  if (!yearValue || !monthValue || !dayValue) return null;
+  return new Date(yearValue, monthValue - 1, dayValue);
+};
+
+const startOfWeek = (date) => {
+  const next = new Date(date);
+  next.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return next;
+};
+
+const endOfWeek = (date) => {
+  const next = startOfWeek(date);
+  next.setDate(next.getDate() + 6);
+  return next;
+};
+
+const enumerateDates = (startDate, endDate) => {
+  if (!startDate || !endDate || startDate > endDate) return [];
+  const dates = [];
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const value = new Date(cursor);
+    const weekdayIndex = value.getDay() === 0 ? 6 : value.getDay() - 1;
+    dates.push({
+      key: toDateInputValue(value),
+      label: formatShortDate(value),
+      longLabel: formatLongDate(value),
+      weekday: DAYS[weekdayIndex],
+      date: value,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+};
+
+const SummaryChip = ({ label, value, accent = 'default' }) => {
+  const accentClass = accent === 'primary'
+    ? 'border-[var(--accent-primary)]/20 bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]'
+    : accent === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-[var(--border-strong)] bg-[var(--surface-card)] text-[var(--text-strong)]';
+
+  return (
+    <div className={`rounded-2xl border px-3.5 py-3 ${accentClass}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-70">{label}</p>
+      <p className="mt-1.5 break-words text-lg font-black leading-5">{value}</p>
+    </div>
+  );
+};
+
 const SectionCard = ({ section, onClick, slotCount }) => (
   <button
     type="button"
@@ -23,10 +92,10 @@ const SectionCard = ({ section, onClick, slotCount }) => (
     className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-card)] p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md"
   >
     <div className="flex items-start justify-between gap-3">
-      <div>
+      <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Section</p>
-        <h3 className="mt-2 font-display text-xl font-bold text-[var(--text-strong)]">{section.name}</h3>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
+        <h3 className="mt-2 break-words font-display text-xl font-bold text-[var(--text-strong)]">{section.name}</h3>
+        <p className="mt-2 break-words text-sm leading-6 text-[var(--text-muted)]">
           {[section.department?.name, section.program?.name, section.course?.name].filter(Boolean).join(' · ')}
         </p>
       </div>
@@ -34,13 +103,13 @@ const SectionCard = ({ section, onClick, slotCount }) => (
         Year {section.studyYear || section.academicSession?.yearNumber || '—'}
       </div>
     </div>
-    <div className="mt-5 flex items-center justify-between">
+    <div className="mt-5 flex items-center justify-between gap-3">
       <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-3 text-sm text-[var(--text-main)]">
-        <p className="text-xs uppercase tracking-wide opacity-70">Existing Slots</p>
+        <p className="text-xs uppercase tracking-wide opacity-70">Template Slots</p>
         <p className="mt-2 text-lg font-bold">{slotCount}</p>
       </div>
       <div className="rounded-full bg-[var(--accent-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent-primary)]">
-        Open Section
+        Open Range View
       </div>
     </div>
   </button>
@@ -49,7 +118,6 @@ const SectionCard = ({ section, onClick, slotCount }) => (
 export default function TimetablePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { can } = usePermissions();
   const [entries, setEntries] = useState([]);
   const [sections, setSections] = useState([]);
   const [colleges, setColleges] = useState([]);
@@ -59,13 +127,15 @@ export default function TimetablePage() {
   const [filters, setFilters] = useState(emptyAcademicScopeFilters);
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const initialStartDate = startOfWeek(new Date());
+  const initialEndDate = endOfWeek(new Date());
+  const [rangeStart, setRangeStart] = useState(toDateInputValue(initialStartDate));
+  const [rangeEnd, setRangeEnd] = useState(toDateInputValue(initialEndDate));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleteState, setDeleteState] = useState({ open: false, entryId: '', loading: false });
 
   const studentView = isStudentUser(user);
-  const canManage = can('create', 'timetable') || can('edit', 'timetable') || can('delete', 'timetable');
 
   const loadTimetable = useCallback(async () => {
     setLoading(true);
@@ -132,10 +202,33 @@ export default function TimetablePage() {
     return true;
   }), [entries, filters.sectionId, selectedSubjectId, selectedTeacherId]);
 
-  const groupedEntries = useMemo(() => DAYS.map((day) => ({
-    day,
-    items: filteredEntries.filter((entry) => entry.dayOfWeek === day),
-  })), [filteredEntries]);
+  const startDate = parseLocalDate(rangeStart);
+  const endDate = parseLocalDate(rangeEnd);
+  const effectiveStartDate = startDate && endDate && startDate <= endDate ? startDate : null;
+  const effectiveEndDate = startDate && endDate && startDate <= endDate ? endDate : null;
+  const rangeDates = useMemo(() => enumerateDates(effectiveStartDate, effectiveEndDate), [effectiveEndDate, effectiveStartDate]);
+  const rangeLabel = effectiveStartDate && effectiveEndDate
+    ? `${formatLongDate(effectiveStartDate)} - ${formatLongDate(effectiveEndDate)}`
+    : 'Choose a valid date range';
+
+  const studentDateGroups = useMemo(() => rangeDates.map((dateInfo) => ({
+    ...dateInfo,
+    items: filteredEntries
+      .filter((entry) => entry.dayOfWeek === dateInfo.weekday)
+      .sort((left, right) => String(left.startTime).localeCompare(String(right.startTime))),
+  })), [filteredEntries, rangeDates]);
+
+  const timetableStats = useMemo(() => {
+    const activeDates = studentDateGroups.filter(({ items }) => items.length).length;
+    const uniqueSubjects = new Set(filteredEntries.map((entry) => String(entry.subjectId?._id || entry.subjectId || '')).filter(Boolean)).size;
+    return {
+      activeDates,
+      totalSlots: filteredEntries.length,
+      uniqueSubjects,
+      scopedSections: scopedSections.length,
+      rangeDays: rangeDates.length,
+    };
+  }, [filteredEntries, rangeDates.length, scopedSections.length, studentDateGroups]);
 
   const handleScopeChange = (key, value) => {
     if (key === 'sectionId') {
@@ -211,114 +304,161 @@ export default function TimetablePage() {
       <PageHeader
         title="Timetable"
         subtitle={studentView
-          ? 'See your weekly subject schedule with room and faculty details.'
-          : 'Choose a section first, then build its weekly timetable on the dedicated section page.'}
+          ? 'Review your timetable across a selected start and end date range.'
+          : 'Choose a date range, then open a section to build the recurring timetable within that calendar window.'}
       />
 
       {error ? <Alert type="error" message={error} /> : null}
 
       {!studentView ? (
-        <div className="card p-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px] xl:items-end">
-            <div className="min-w-0">
-              <AcademicScopeFilters
-                filters={filters}
-                onChange={handleScopeChange}
-                options={{ colleges, departments, programs, courses, sections }}
-                departmentCollegeMap={departmentCollegeMap}
-                singleLine
-              />
-            </div>
-            <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-3">
-              <label className="label">Date</label>
-              <input type="date" className="input" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+        <>
+          <div className="rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-card)] px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap gap-2">
+                  <SummaryChip label="Sections" value={timetableStats.scopedSections} accent="primary" />
+                  <SummaryChip label="Range Days" value={timetableStats.rangeDays} />
+                  <SummaryChip label="Template Slots" value={entries.length} accent="success" />
+                  <SummaryChip label="Week Window" value={rangeLabel} />
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[320px] xl:max-w-[360px] xl:flex-none">
+                <div className="rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2.5">
+                  <label className="label mb-1 whitespace-nowrap text-[10px]">Start Date</label>
+                  <input type="date" className="input h-9 min-h-9 rounded-2xl px-3 py-1.5 text-sm" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} />
+                </div>
+                <div className="rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2.5">
+                  <label className="label mb-1 whitespace-nowrap text-[10px]">End Date</label>
+                  <input type="date" className="input h-9 min-h-9 rounded-2xl px-3 py-1.5 text-sm" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+          <div className="card p-3.5">
+            <AcademicScopeFilters
+              filters={filters}
+              onChange={handleScopeChange}
+              options={{ colleges, departments, programs, courses, sections }}
+              departmentCollegeMap={departmentCollegeMap}
+              singleLine
+              compact
+              className="min-w-0"
+            />
+          </div>
+        </>
       ) : (
-        <div className="card p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="label">Subject</label>
-              <select className="input" value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
-                <option value="">All subjects</option>
-                {subjectOptions.map((subject) => (
-                  <option key={subject._id} value={subject._id}>{subject.name} ({subject.code || '—'})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Faculty</label>
-              <select className="input" value={selectedTeacherId} onChange={(event) => setSelectedTeacherId(event.target.value)}>
-                <option value="">All faculty</option>
-                {teacherOptions.map((teacher) => (
-                  <option key={teacher._id} value={teacher._id}>{teacher.name}</option>
-                ))}
-              </select>
+        <>
+          <div className="rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-card)] px-4 py-4 shadow-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap gap-2">
+                  <SummaryChip label="Visible Slots" value={timetableStats.totalSlots} accent="primary" />
+                  <SummaryChip label="Subjects" value={timetableStats.uniqueSubjects} />
+                  <SummaryChip label="Range Days" value={timetableStats.rangeDays} accent="success" />
+                  <SummaryChip label="Week Window" value={rangeLabel} />
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[320px] xl:max-w-[360px] xl:flex-none">
+                <div className="rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2.5">
+                  <label className="label mb-1 whitespace-nowrap text-[10px]">Start Date</label>
+                  <input type="date" className="input h-9 min-h-9 rounded-2xl px-3 py-1.5 text-sm" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} />
+                </div>
+                <div className="rounded-[22px] border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2.5">
+                  <label className="label mb-1 whitespace-nowrap text-[10px]">End Date</label>
+                  <input type="date" className="input h-9 min-h-9 rounded-2xl px-3 py-1.5 text-sm" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+          <div className="card p-3.5">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid flex-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="label mb-1 text-[10px]">Subject</label>
+                  <select className="input h-10 min-h-10 rounded-2xl px-3 py-2 text-sm" value={selectedSubjectId} onChange={(event) => setSelectedSubjectId(event.target.value)}>
+                    <option value="">All subjects</option>
+                    {subjectOptions.map((subject) => (
+                      <option key={subject._id} value={subject._id}>{subject.name} ({subject.code || '—'})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label mb-1 text-[10px]">Faculty</label>
+                  <select className="input h-10 min-h-10 rounded-2xl px-3 py-2 text-sm" value={selectedTeacherId} onChange={(event) => setSelectedTeacherId(event.target.value)}>
+                    <option value="">All faculty</option>
+                    {teacherOptions.map((teacher) => (
+                      <option key={teacher._id} value={teacher._id}>{teacher.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {!studentView && scopedSections.length ? (
         <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {scopedSections.map((section) => {
             const count = entries.filter((entry) => String(entry.sectionId?._id || entry.sectionId) === String(section._id)).length;
+            const params = new URLSearchParams({ startDate: rangeStart, endDate: rangeEnd });
             return (
               <SectionCard
                 key={section._id}
                 section={section}
                 slotCount={count}
-                onClick={() => navigate(`/timetable/sections/${section._id}?date=${selectedDate}`)}
+                onClick={() => navigate(`/timetable/sections/${section._id}?${params.toString()}`)}
               />
             );
           })}
         </div>
       ) : null}
 
-      {studentView && filteredEntries.length === 0 ? (
+      {studentView && !rangeDates.length ? (
         <EmptyState
           icon="🗓️"
-          title="No timetable entries match this view"
-          description="Your schedule will appear here once it is published."
+          title="Choose a valid date range"
+          description="Set a start and end date to map your recurring timetable onto calendar dates."
+        />
+      ) : studentView && studentDateGroups.every(({ items }) => items.length === 0) ? (
+        <EmptyState
+          icon="🗓️"
+          title="No timetable entries match this range"
+          description="Your schedule will appear here once it is published for the selected filters and date range."
         />
       ) : studentView ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          {groupedEntries.map(({ day, items }) => (
-            <section key={day} className="card overflow-hidden">
-              <div className="border-b border-gray-100 px-4 py-3.5">
-                <h2 className="font-display text-base font-bold text-gray-900">{day}</h2>
+          {studentDateGroups.map(({ key, weekday, label, items }) => (
+            <section key={key} className="card overflow-hidden rounded-[28px]">
+              <div className="border-b border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="font-display text-base font-bold text-[var(--text-strong)]">{weekday}</h2>
+                    <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">{label}</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--surface-card)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">{items.length} slot{items.length === 1 ? '' : 's'}</span>
+                </div>
               </div>
               <div className="min-h-[180px] space-y-3 p-4">
                 {items.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400">No classes scheduled.</div>
+                  <div className="rounded-2xl border border-dashed border-[var(--border-strong)] p-4 text-center text-sm text-[var(--text-muted)]">No classes scheduled.</div>
                 ) : items.map((entry) => (
-                  <div key={entry._id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <div key={`${key}-${entry._id}`} className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-gray-900">{entry.subjectId?.name || entry.title}</p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          {studentView
-                            ? [entry.sectionId?.name ? `Section ${entry.sectionId.name}` : null, entry.faculty?.name || null].filter(Boolean).join(' · ')
-                            : [entry.faculty?.name || 'Unassigned', entry.sectionId?.name ? `Section ${entry.sectionId.name}` : null].filter(Boolean).join(' · ')}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="break-words font-semibold text-[var(--text-strong)]">{entry.subjectId?.name || entry.title}</p>
+                          {entry.subjectId?.code ? <span className="rounded-full bg-[var(--surface-card)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">{entry.subjectId.code}</span> : null}
+                        </div>
+                        <p className="mt-1 break-words text-sm text-[var(--text-muted)]">
+                          {[entry.sectionId?.name ? `Section ${entry.sectionId.name}` : null, entry.faculty?.name || null].filter(Boolean).join(' · ')}
                         </p>
                       </div>
-                      {canManage ? (
-                        <div className="flex items-center gap-2">
-                          <button type="button" onClick={() => navigate(`/timetable/${entry._id}/edit`)} className="rounded-lg p-2 text-gray-400 hover:bg-white hover:text-blue-700">
-                            <FiEdit2 size={15} />
-                          </button>
-                          <button type="button" onClick={() => setDeleteState({ open: true, entryId: entry._id, loading: false })} className="rounded-lg p-2 text-gray-400 hover:bg-white hover:text-red-600">
-                            <FiTrash2 size={15} />
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
                       <span className="inline-flex items-center gap-1"><FiClock size={12} /> {entry.startTime} - {entry.endTime}</span>
                       {entry.room ? <span className="inline-flex items-center gap-1"><FiMapPin size={12} /> {entry.room}</span> : null}
-                      {!studentView && entry.subjectId?.code ? <span>{entry.subjectId.code}</span> : null}
-                      {studentView && entry.sectionId?.course?.name ? <span className="inline-flex items-center gap-1"><FiUsers size={12} /> {entry.sectionId.course.name}</span> : null}
+                      {entry.sectionId?.course?.name ? <span className="inline-flex items-center gap-1"><FiUsers size={12} /> {entry.sectionId.course.name}</span> : null}
                     </div>
                   </div>
                 ))}

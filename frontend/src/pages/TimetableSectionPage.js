@@ -1,12 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiClock, FiEdit2, FiMapPin, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiClock, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi';
 import API from '../utils/api';
 import { Alert, ConfirmDialog, EmptyState, FullPageSpinner, Modal, PageHeader } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const BASE_TIME_SLOTS = [
+  ['09:00', '10:00'],
+  ['10:00', '11:00'],
+  ['11:00', '12:00'],
+  ['12:00', '13:00'],
+  ['14:00', '15:00'],
+  ['15:00', '16:00'],
+  ['16:00', '17:00'],
+];
 
 const emptyForm = {
   id: '',
@@ -18,10 +27,91 @@ const emptyForm = {
   notes: '',
 };
 
-const getWeekdayFromDate = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  return DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1] || '';
+const timeToMinutes = (value = '') => {
+  const [hours, minutes] = String(value).split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+  return hours * 60 + minutes;
+};
+
+const formatTimeLabel = (value = '') => {
+  if (!value) return '--';
+  const [hourValue, minuteValue] = String(value).split(':');
+  const hour = Number(hourValue);
+  const minute = minuteValue || '00';
+  if (Number.isNaN(hour)) return value;
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  const normalizedHour = hour % 12 || 12;
+  return `${normalizedHour}:${minute} ${suffix}`;
+};
+
+const formatLongDate = (date) => date.toLocaleDateString('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+const formatShortDate = (date) => date.toLocaleDateString('en-IN', {
+  day: 'numeric',
+  month: 'short',
+});
+
+const toDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDate = (value) => {
+  const [yearValue, monthValue, dayValue] = String(value).split('-').map(Number);
+  if (!yearValue || !monthValue || !dayValue) return null;
+  return new Date(yearValue, monthValue - 1, dayValue);
+};
+
+const startOfWeek = (date) => {
+  const next = new Date(date);
+  next.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return next;
+};
+
+const endOfWeek = (date) => {
+  const next = startOfWeek(date);
+  next.setDate(next.getDate() + 6);
+  return next;
+};
+
+const enumerateDates = (startDate, endDate) => {
+  if (!startDate || !endDate || startDate > endDate) return [];
+  const dates = [];
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const value = new Date(cursor);
+    const weekdayIndex = value.getDay() === 0 ? 6 : value.getDay() - 1;
+    dates.push({
+      key: toDateInputValue(value),
+      label: formatShortDate(value),
+      longLabel: formatLongDate(value),
+      weekday: DAYS[weekdayIndex],
+      date: value,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+};
+
+const OverviewPill = ({ label, value, accent = 'default' }) => {
+  const accentClass = accent === 'primary'
+    ? 'border-[var(--accent-primary)]/25 bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]'
+    : accent === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-[var(--border-strong)] bg-[var(--surface-card)] text-[var(--text-strong)]';
+
+  return (
+    <div className={`rounded-3xl border px-4 py-4 ${accentClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">{label}</p>
+      <p className="mt-3 break-words text-xl font-black">{value}</p>
+    </div>
+  );
 };
 
 export default function TimetableSectionPage() {
@@ -29,8 +119,18 @@ export default function TimetableSectionPage() {
   const { sectionId } = useParams();
   const [searchParams] = useSearchParams();
   const { can } = usePermissions();
-  const selectedDate = searchParams.get('date') || new Date().toISOString().slice(0, 10);
-  const focusedDay = getWeekdayFromDate(selectedDate) || 'Monday';
+  const initialStartDate = startOfWeek(new Date());
+  const initialEndDate = endOfWeek(new Date());
+  const rangeStart = searchParams.get('startDate') || toDateInputValue(initialStartDate);
+  const rangeEnd = searchParams.get('endDate') || toDateInputValue(initialEndDate);
+  const rangeStartDate = parseLocalDate(rangeStart);
+  const rangeEndDate = parseLocalDate(rangeEnd);
+  const effectiveStartDate = rangeStartDate && rangeEndDate && rangeStartDate <= rangeEndDate ? rangeStartDate : null;
+  const effectiveEndDate = rangeStartDate && rangeEndDate && rangeStartDate <= rangeEndDate ? rangeEndDate : null;
+  const rangeDates = useMemo(() => enumerateDates(effectiveStartDate, effectiveEndDate), [effectiveEndDate, effectiveStartDate]);
+  const rangeLabel = effectiveStartDate && effectiveEndDate
+    ? `${formatLongDate(effectiveStartDate)} - ${formatLongDate(effectiveEndDate)}`
+    : 'Choose a valid date range';
   const canCreate = can('create', 'timetable');
   const canEdit = can('edit', 'timetable');
   const canDelete = can('delete', 'timetable');
@@ -41,7 +141,9 @@ export default function TimetableSectionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
+  const [detailState, setDetailState] = useState(null);
   const [editorDay, setEditorDay] = useState('Monday');
+  const [editorDateLabel, setEditorDateLabel] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteState, setDeleteState] = useState({ open: false, id: '', loading: false });
@@ -105,26 +207,48 @@ export default function TimetableSectionPage() {
     return options;
   }, [activeSubjects]);
 
-  const groupedEntries = useMemo(() => DAYS.map((day) => ({
-    day,
-    items: entries
-      .filter((entry) => entry.dayOfWeek === day)
-      .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime))),
-  })), [entries]);
+  const boardSummary = useMemo(() => ({
+    templateSlots: entries.length,
+    linkedSubjects: new Set(activeSubjects.map((entry) => String(entry?.subject?._id || '')).filter(Boolean)).size,
+  }), [activeSubjects, entries.length]);
 
-  const openCreateModal = (day) => {
+  const timeRows = useMemo(() => {
+    const rowMap = new Map();
+
+    BASE_TIME_SLOTS.forEach(([startTime, endTime]) => {
+      rowMap.set(`${startTime}-${endTime}`, { key: `${startTime}-${endTime}`, startTime, endTime });
+    });
+
+    entries.forEach((entry) => {
+      const startTime = entry.startTime || '09:00';
+      const endTime = entry.endTime || '10:00';
+      rowMap.set(`${startTime}-${endTime}`, { key: `${startTime}-${endTime}`, startTime, endTime });
+    });
+
+    return [...rowMap.values()].sort((left, right) => {
+      const startDiff = timeToMinutes(left.startTime) - timeToMinutes(right.startTime);
+      if (startDiff !== 0) return startDiff;
+      return timeToMinutes(left.endTime) - timeToMinutes(right.endTime);
+    });
+  }, [entries]);
+
+  const openCreateModal = (day, slot = null, dateLabel = '') => {
     setEditorDay(day);
+    setEditorDateLabel(dateLabel);
     const defaultSubject = subjectOptions[0] || null;
     setForm({
       ...emptyForm,
       subjectId: defaultSubject?._id || '',
       teachingAssignmentId: defaultSubject?.teachingAssignmentId || '',
+      startTime: slot?.startTime || emptyForm.startTime,
+      endTime: slot?.endTime || emptyForm.endTime,
     });
     setEditorOpen(true);
   };
 
-  const openEditModal = (entry) => {
+  const openEditModal = (entry, dateLabel = '') => {
     setEditorDay(entry.dayOfWeek);
+    setEditorDateLabel(dateLabel);
     setForm({
       id: entry._id,
       subjectId: entry.subjectId?._id || entry.subjectId || '',
@@ -176,6 +300,7 @@ export default function TimetableSectionPage() {
       }
       setEditorOpen(false);
       setForm(emptyForm);
+      setEditorDateLabel('');
       await loadPage();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Failed to save timetable slot.');
@@ -213,18 +338,92 @@ export default function TimetableSectionPage() {
       />
 
       <Modal
+        open={Boolean(detailState)}
+        onClose={() => setDetailState(null)}
+        panelClassName="max-w-lg"
+        contentClassName="rounded-[30px] border border-[var(--border-strong)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-floating)]"
+      >
+        {detailState ? (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Timetable Slot</p>
+                <h2 className="mt-2 break-words font-display text-2xl font-bold text-[var(--text-strong)]">{detailState.entry.subjectId?.name || detailState.entry.title}</h2>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">{detailState.entry.dayOfWeek} · {detailState.dateLabel}</p>
+              </div>
+              <span className="inline-flex shrink-0 rounded-full bg-[var(--accent-primary-soft)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--accent-primary)]">
+                {detailState.entry.subjectId?.code || 'SUBJ'}
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Subject Code</p>
+                <p className="mt-2 break-words text-sm font-semibold text-[var(--text-strong)]">{detailState.entry.subjectId?.code || '—'}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Teacher</p>
+                <p className="mt-2 break-words text-sm font-semibold text-[var(--text-strong)]">{detailState.entry.faculty?.name || 'Faculty not assigned'}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Timing</p>
+                <p className="mt-2 text-sm font-semibold text-[var(--text-strong)]">{detailState.entry.startTime} - {detailState.entry.endTime}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Room</p>
+                <p className="mt-2 break-words text-sm font-semibold text-[var(--text-strong)]">{detailState.entry.room || 'Not provided'}</p>
+              </div>
+            </div>
+
+            {(canEdit || canDelete) ? (
+              <div className="flex flex-wrap gap-3 pt-1">
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      const current = detailState;
+                      setDetailState(null);
+                      openEditModal(current.entry, current.dateLabel);
+                    }}
+                  >
+                    <FiEdit2 size={14} />
+                    Edit Slot
+                  </button>
+                ) : null}
+                {canDelete ? (
+                  <button
+                    type="button"
+                    className="btn-secondary text-rose-600 hover:text-rose-700"
+                    onClick={() => {
+                      setDeleteState({ open: true, id: detailState.entry._id, loading: false });
+                      setDetailState(null);
+                    }}
+                  >
+                    <FiTrash2 size={14} />
+                    Delete Slot
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         panelClassName="max-w-xl"
         contentClassName="rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-floating)]"
       >
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{editorDay}</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-[var(--text-strong)]">{form.id ? 'Edit Slot' : 'Create Slot'}</h2>
+              {editorDateLabel ? <p className="mt-2 text-sm text-[var(--text-muted)]">Applies to recurring classes that appear on {editorDateLabel}</p> : null}
             </div>
-            <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-2 text-sm font-semibold text-[var(--text-main)]">{selectedDate}</div>
+            <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-2 text-sm font-semibold text-[var(--text-main)]">{rangeLabel}</div>
           </div>
 
           <div>
@@ -273,10 +472,12 @@ export default function TimetableSectionPage() {
             <div>
               <label className="label">Start Time</label>
               <input type="time" className="input" value={form.startTime} onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))} required />
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Editable for each recurring timetable slot.</p>
             </div>
             <div>
               <label className="label">End Time</label>
               <input type="time" className="input" value={form.endTime} onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))} required />
+              <p className="mt-2 text-xs text-[var(--text-muted)]">Use custom timings whenever the class differs from the default row.</p>
             </div>
           </div>
 
@@ -290,7 +491,7 @@ export default function TimetableSectionPage() {
             <input className="input" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional note" />
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-wrap gap-3 pt-2">
             <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
               {saving ? 'Saving...' : form.id ? 'Update Slot' : 'Create Slot'}
             </button>
@@ -301,12 +502,8 @@ export default function TimetableSectionPage() {
 
       <PageHeader
         title="Section Timetable"
-        subtitle={section ? `Build the weekly timetable for Section ${section.name}.` : 'Build the weekly timetable for this section.'}
-        meta={[
-          selectedDate,
-          focusedDay,
-          section?.program?.name || section?.course?.name || '',
-        ]}
+        subtitle={section ? `Build the recurring timetable for Section ${section.name} across the selected date range.` : 'Build the recurring timetable for this section.'}
+        meta={[rangeLabel, `${rangeDates.length} visible date${rangeDates.length === 1 ? '' : 's'}`, section?.program?.name || section?.course?.name || '']}
         action={<button type="button" onClick={() => navigate('/timetable')} className="btn-secondary">Back to Sections</button>}
       />
 
@@ -314,51 +511,137 @@ export default function TimetableSectionPage() {
 
       {!section ? (
         <EmptyState icon="🗓️" title="Section not found" description="Go back and choose another section." />
+      ) : !rangeDates.length ? (
+        <EmptyState icon="🗓️" title="Choose a valid date range" description="Open this section from the timetable page with a valid start and end date." />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-7">
-          {groupedEntries.map(({ day, items }) => (
-            <section
-              key={day}
-              className={`rounded-3xl border bg-[var(--surface-card)] p-4 ${day === focusedDay ? 'border-[var(--accent-primary)] shadow-lg' : 'border-[var(--border-strong)]'}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-bold text-[var(--text-strong)]">{day}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{day === focusedDay ? selectedDate : 'Weekly slot'}</p>
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <OverviewPill label="Date Range" value={rangeLabel} accent="primary" />
+            <OverviewPill label="Visible Dates" value={rangeDates.length} />
+            <OverviewPill label="Template Slots" value={boardSummary.templateSlots} />
+            <OverviewPill label="Linked Subjects" value={boardSummary.linkedSubjects} accent="success" />
+          </div>
+
+          <div className="overflow-hidden rounded-[32px] border border-[var(--border-strong)] bg-[var(--surface-card)] shadow-[var(--shadow-soft)]">
+            <div className="flex flex-col gap-4 border-b border-[var(--border-strong)] px-5 py-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Range Planner</p>
+                <h2 className="mt-2 font-display text-2xl font-bold text-[var(--text-strong)]">Recurring Calendar Grid</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+                  Recurring weekday slots are mapped onto each actual date inside the selected range, so you can review the timetable as a real calendar window.
+                </p>
+                <p className="mt-3 text-sm font-semibold text-[var(--text-main)]">Date Range: {rangeLabel}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Section</p>
+                  <p className="mt-2 break-words text-base font-bold text-[var(--text-strong)]">{section.name}</p>
+                </div>
+                <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Visible Dates</p>
+                  <p className="mt-2 text-base font-bold text-[var(--text-strong)]">{rangeDates.length} day view</p>
                 </div>
               </div>
+            </div>
 
-              <div className="mt-4 space-y-3">
-                {items.length ? items.map((entry) => (
-                  <div key={entry._id} className="rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-3">
-                    <p className="text-sm font-semibold text-[var(--text-strong)]">{entry.subjectId?.name || entry.title}</p>
-                    <div className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
-                      <p className="inline-flex items-center gap-1"><FiClock size={12} /> {entry.startTime} - {entry.endTime}</p>
-                      {entry.room ? <p className="inline-flex items-center gap-1"><FiMapPin size={12} /> {entry.room}</p> : null}
-                    </div>
-                    {(canEdit || canDelete) ? (
-                      <div className="mt-3 flex gap-2">
-                        {canEdit ? <button type="button" onClick={() => openEditModal(entry)} className="btn-secondary text-xs"><FiEdit2 size={13} /> Edit</button> : null}
-                        {canDelete ? <button type="button" onClick={() => setDeleteState({ open: true, id: entry._id, loading: false })} className="btn-secondary text-xs text-red-600 hover:text-red-700"><FiTrash2 size={13} /> Delete</button> : null}
+            <div className="overflow-x-auto px-4 py-4 sm:px-5 sm:py-5">
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: `180px repeat(${rangeDates.length}, minmax(150px, 1fr))`, minWidth: `${180 + (rangeDates.length * 150)}px` }}
+              >
+                <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Time Slots</p>
+                  <p className="mt-2 text-sm font-semibold text-[var(--text-main)]">{rangeLabel}</p>
+                </div>
+
+                {rangeDates.map((dateInfo) => (
+                  <div
+                    key={dateInfo.key}
+                    className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4 text-[var(--text-strong)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-bold">{dateInfo.weekday}</p>
+                        <p className="mt-1 text-xs font-medium text-[var(--text-muted)]">{dateInfo.label}</p>
                       </div>
-                    ) : null}
+                      {canCreate ? (
+                        <button
+                          type="button"
+                          onClick={() => openCreateModal(dateInfo.weekday, null, dateInfo.longLabel)}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-card)] text-[var(--text-main)] transition hover:-translate-y-0.5 hover:shadow-md"
+                          aria-label={`Add slot for ${dateInfo.weekday}`}
+                        >
+                          <FiPlus size={15} />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                )) : (
-                  <div className="rounded-2xl border border-dashed border-[var(--border-strong)] px-3 py-6 text-center text-sm text-[var(--text-muted)]">
-                    No slot yet.
-                  </div>
-                )}
-              </div>
+                ))}
 
-              {canCreate ? (
-                <button type="button" onClick={() => openCreateModal(day)} className="btn-secondary mt-4 w-full justify-center">
-                  <FiPlus size={14} />
-                  Add Slot
-                </button>
-              ) : null}
-            </section>
-          ))}
-        </div>
+                {timeRows.map((row) => (
+                  <React.Fragment key={row.key}>
+                    <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-4 py-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">{formatTimeLabel(row.startTime)}</p>
+                      <p className="mt-2 text-sm font-semibold text-[var(--text-strong)]">{formatTimeLabel(row.startTime)} - {formatTimeLabel(row.endTime)}</p>
+                    </div>
+
+                    {rangeDates.map((dateInfo) => {
+                      const cellEntries = entries
+                        .filter((entry) => entry.dayOfWeek === dateInfo.weekday && String(entry.startTime) === String(row.startTime) && String(entry.endTime) === String(row.endTime))
+                        .sort((left, right) => String(left.startTime).localeCompare(String(right.startTime)));
+
+                      return (
+                        <div
+                          key={`${dateInfo.key}-${row.key}`}
+                          className="flex h-[168px] min-h-[168px] max-h-[168px] flex-col rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-card)] p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                        >
+                          {cellEntries.length ? (
+                            <div className="flex h-full flex-col gap-2 overflow-hidden">
+                              {cellEntries.map((entry) => (
+                                <button
+                                  key={`${dateInfo.key}-${entry._id}`}
+                                  type="button"
+                                  onClick={() => setDetailState({ entry, dateLabel: dateInfo.longLabel })}
+                                  className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-3 text-left shadow-sm transition hover:border-[var(--accent-primary)]/30 hover:shadow-md"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold uppercase tracking-[0.08em] text-[var(--text-strong)]">{entry.subjectId?.code || 'SUBJ'}</p>
+                                    <p className="mt-2 truncate text-xs font-medium text-[var(--text-muted)]">{entry.room ? `Room ${entry.room}` : 'No room assigned'}</p>
+                                  </div>
+                                  <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+                                    <FiClock size={11} />
+                                    <span className="truncate">{entry.startTime} - {entry.endTime}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-soft)]/55 px-3 py-4 text-left">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-[var(--text-main)]">Open slot</p>
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">No subject scheduled for this date and time yet.</p>
+                              </div>
+                              {canCreate ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openCreateModal(dateInfo.weekday, row, dateInfo.longLabel)}
+                                  className="mt-3 inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-xs font-semibold text-[var(--text-main)] transition hover:-translate-y-0.5 hover:border-[var(--accent-primary)]/30 hover:text-[var(--accent-primary)]"
+                                >
+                                  <FiPlus size={13} />
+                                  Create Slot
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

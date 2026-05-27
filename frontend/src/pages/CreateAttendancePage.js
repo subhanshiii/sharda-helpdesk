@@ -14,6 +14,30 @@ import {
 
 const STATUS_OPTIONS = ['present', 'absent'];
 
+const SummaryMetric = ({ label, value, hint, accent = 'default' }) => {
+  const accentClass = accent === 'primary'
+    ? 'border-[var(--accent-primary)]/25 bg-[var(--accent-primary-soft)] text-[var(--accent-primary)]'
+    : accent === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : accent === 'danger'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : 'border-[var(--border-strong)] bg-[var(--surface-card)] text-[var(--text-strong)]';
+
+  return (
+    <div className={`rounded-3xl border px-4 py-4 ${accentClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">{label}</p>
+      <p className="mt-3 break-words text-2xl font-black">{value}</p>
+      {hint ? <p className="mt-2 text-xs leading-5 opacity-80">{hint}</p> : null}
+    </div>
+  );
+};
+
+const SummaryProgress = ({ value = 0 }) => (
+  <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-soft)]">
+    <div className="h-full rounded-full bg-[var(--accent-primary)]" style={{ width: `${Math.max(0, Math.min(100, Math.round(value)))}%` }} />
+  </div>
+);
+
 export default function CreateAttendancePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -282,6 +306,14 @@ export default function CreateAttendancePage() {
     loadStudents(sectionId);
   };
 
+  const attendanceSummary = useMemo(() => {
+    const total = form.records.length;
+    const present = form.records.filter((entry) => entry.status === 'present').length;
+    const absent = form.records.filter((entry) => entry.status === 'absent').length;
+    const percentage = total ? Math.round((present / total) * 100) : 0;
+    return { total, present, absent, percentage };
+  }, [form.records]);
+
   const updateRecordStatus = (studentId, status) => {
     setError('');
     setForm((current) => ({
@@ -383,12 +415,33 @@ export default function CreateAttendancePage() {
         subtitle="Review the selected section and subject, then mark each student from the vertical roster below."
       />
 
-      <div className="card p-6">
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryMetric label="Students" value={attendanceSummary.total} hint="Loaded in the current roster" accent="primary" />
+          <SummaryMetric label="Present" value={attendanceSummary.present} hint="Currently marked present" accent="success" />
+          <SummaryMetric label="Absent" value={attendanceSummary.absent} hint="Currently marked absent" accent="danger" />
+          <SummaryMetric label="Completion" value={`${attendanceSummary.percentage}%`} hint="Present ratio across the roster" />
+        </div>
+
+        <div className="card p-6">
         {error ? <div className="mb-4"><Alert type="error" message={error} /></div> : null}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-card)] px-5 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg font-bold text-[var(--text-strong)]">Marking Progress</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">A quick summary of the current attendance selection before you save.</p>
+              </div>
+              <span className="rounded-full bg-[var(--surface-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--text-main)]">{attendanceSummary.percentage}%</span>
+            </div>
+            <div className="mt-4">
+              <SummaryProgress value={attendanceSummary.percentage} />
+            </div>
+          </div>
+
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-            <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
+            <div className="min-w-0 rounded-3xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
               <AcademicScopeFilters
                 filters={filters}
                 onChange={handleScopeChange}
@@ -502,38 +555,43 @@ export default function CreateAttendancePage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-[var(--border-strong)]">
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--border-strong)] px-4 py-3">
-              <div>
+          <div className="overflow-hidden rounded-[32px] border border-[var(--border-strong)] bg-[var(--surface-card)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-strong)] px-4 py-4">
+              <div className="min-w-0">
                 <p className="font-semibold text-[var(--text-strong)]">Student Roster {loadingSectionData ? '(Loading...)' : `(${form.records.length} students)`}</p>
-                <p className="mt-1 text-sm text-[var(--text-muted)]">Each student is listed vertically with a simple present or absent toggle.</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Each student is listed vertically with a clear present or absent toggle.</p>
               </div>
-              <div className="rounded-2xl bg-[var(--surface-soft)] px-3 py-2 text-sm font-semibold text-[var(--text-main)]">
+              <div className="shrink-0 rounded-2xl bg-[var(--surface-soft)] px-3 py-2 text-sm font-semibold text-[var(--text-main)]">
                 <FiCalendar className="mr-2 inline-flex" size={14} />
                 {form.date}
               </div>
             </div>
-            <div className="max-h-[520px] divide-y divide-[var(--border-strong)] overflow-y-auto">
+            <div className="max-h-[560px] space-y-3 overflow-y-auto bg-[var(--surface-soft)]/35 p-4">
               {form.records.length === 0 ? (
-                <div className="p-5 text-center text-sm text-[var(--text-muted)]">
+                <div className="rounded-3xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-card)] p-5 text-center text-sm text-[var(--text-muted)]">
                   {loadingSectionData ? 'Loading roster...' : 'Select a section to load the student roster.'}
                 </div>
               ) : form.records.map((record) => {
                 const student = students.find((entry) => entry._id === record.student);
                 return (
-                  <div key={record.student} className="grid gap-3 px-4 py-4 md:grid-cols-[1fr_200px] md:items-center">
-                    <div>
-                      <p className="font-medium text-[var(--text-strong)]">{student?.name || 'Student'}</p>
-                      <p className="mt-1 text-xs text-[var(--text-muted)]">{student?.email || ''}</p>
+                  <div key={record.student} className="grid gap-4 rounded-[28px] border border-[var(--border-strong)] bg-[var(--surface-card)] px-4 py-4 shadow-sm md:grid-cols-[minmax(0,1fr)_240px] md:items-center">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface-soft)] text-sm font-bold text-[var(--text-main)]">{(student?.name || 'S').trim().charAt(0).toUpperCase()}</div>
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold text-[var(--text-strong)]">{student?.name || 'Student'}</p>
+                          <p className="mt-1 break-all text-xs leading-5 text-[var(--text-muted)]">{student?.email || 'No email available'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <div className="inline-flex rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-card)] p-1">
+                    <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+                      <div className="inline-flex w-full rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-soft)] p-1 sm:w-auto">
                         {STATUS_OPTIONS.map((status) => (
                           <button
                             key={status}
                             type="button"
                             onClick={() => updateRecordStatus(record.student, status)}
-                            className={`rounded-xl px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${record.status === status ? status === 'present' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white' : 'text-[var(--text-main)] hover:bg-[var(--surface-soft)]'}`}
+                            className={`flex-1 rounded-xl px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition sm:flex-none ${record.status === status ? status === 'present' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-rose-500 text-white shadow-sm' : 'text-[var(--text-main)] hover:bg-[var(--surface-card)]'}`}
                           >
                             {status}
                           </button>
@@ -553,6 +611,7 @@ export default function CreateAttendancePage() {
             <button type="button" onClick={() => navigate('/attendance')} className="btn-secondary">Cancel</button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
