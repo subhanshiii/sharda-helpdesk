@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Avatar } from './ui';
 import PreviewBanner from './ui/PreviewBanner';
 import ViewAsModal from './ui/ViewAsModal';
+import Breadcrumbs from './ui/Breadcrumbs';
 import { hasRole, isAdminUser, isFacultyUser, isStaffUser } from '../utils/access';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
@@ -371,6 +372,7 @@ export default function Layout() {
 
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 animate-fade-in-up">
+            <Breadcrumbs />
             <Outlet />
           </div>
         </main>
