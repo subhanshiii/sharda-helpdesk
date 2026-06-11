@@ -3034,6 +3034,21 @@ export default function AcademicStructurePage() {
 
                           {focusLevel === 'course' ? (
                             <>
+                              <FocusPanel eyebrow="Enrollment" title="Batches" description="Student enrollment cohorts for this course." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.batches || []).length ? (focusedEntity.batches || []).map((batch) => (
+                                    <LinkedRecordButton key={batch._id} title={batch.name} subtitle={`Year ${batch.enrollmentYear}`} onClick={() => {}} />
+                                  )) : <p className="text-sm text-slate-500">No batches created for this course.</p>}
+                                </div>
+                              </FocusPanel>
+
+                              <FocusPanel eyebrow="Blueprint" title="Curriculums" description="Master academic blueprints assigned to batches." bodyClassName="max-h-64 overflow-y-auto pr-1">
+                                <div className="space-y-2">
+                                  {(focusedEntity.curriculums || []).length ? (focusedEntity.curriculums || []).map((curriculum) => (
+                                    <LinkedRecordButton key={curriculum._id} title={curriculum.name} subtitle={`v${curriculum.version}`} onClick={() => {}} />
+                                  )) : <p className="text-sm text-slate-500">No curriculums defined for this course.</p>}
+                                </div>
+                              </FocusPanel>
                               <FocusPanel eyebrow="Delivery" title="Sections in this Course" description="Operational teaching groups attached to this course." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 <div className="space-y-2">
                                   {(focusedEntity.sections || []).length ? (focusedEntity.sections || []).map((section) => (
