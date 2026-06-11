@@ -499,6 +499,10 @@ export default function AttendancePage() {
                   onChange={handleScopeChange}
                   options={{ colleges, departments, programs, courses, sections }}
                   departmentCollegeMap={departmentCollegeMap}
+                  showSection={false}
+                  showLevel={false}
+                  showBatch={true}
+                  showSemester={true}
                   singleLine
                 />
               </div>

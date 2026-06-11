@@ -432,11 +432,15 @@ class AcademicService {
       ],
     };
 
-    const [colleges, departments, programs, courses, academicSessions, sections, subjects, courseSubjects, subjectTeachers, subjectSectionTeachers, enrollments, faculty, students] = await Promise.all([
+    const [colleges, departments, programs, courses, curriculums, semesters, batches, studentProgress, academicSessions, sections, subjects, courseSubjects, subjectTeachers, subjectSectionTeachers, enrollments, faculty, students] = await Promise.all([
       College.find({ isActive: true, ...collegeScope }).sort({ name: 1 }).lean(),
       Department.find({ isActive: true, ...departmentScope }).sort({ name: 1 }).populate('college', 'name code').lean(),
       Program.find({ isActive: true, ...programScope }).sort({ name: 1 }).populate('department', 'name code college').lean(),
       Course.find({ isActive: true, ...courseScope }).sort({ name: 1 }).populate('program department', 'name code').lean(),
+      mongoose.model('Curriculum').find({ isActive: true }).lean(),
+      mongoose.model('Semester').find().lean(),
+      mongoose.model('Batch').find({ isActive: true }).lean(),
+      mongoose.model('StudentProgress').find().populate('batch').lean(),
       AcademicSession.find({ isActive: true, ...academicSessionScope }).sort({ yearNumber: 1, label: 1 }).populate('program', 'name code department').lean(),
       Section.find({ isActive: true, ...sectionScope })
         .sort({ studyYear: 1, name: 1 })
@@ -444,6 +448,7 @@ class AcademicService {
         .populate('program', 'name code department')
         .populate('course', 'name code')
         .populate('academicSession', 'label yearNumber')
+        .populate('batch', 'enrollmentYear')
         .lean(),
       buildSubjectCatalog({ subjectQuery: { _id: { $in: scopedSubjectIds } }, scopedSectionIds }),
       CourseSubject.find({ isActive: true, subject: { $in: scopedSubjectIds } }).populate('course subject').lean(),
@@ -457,6 +462,7 @@ class AcademicService {
             { path: 'course', select: 'name code' },
             { path: 'academicSession', select: 'label yearNumber' },
             { path: 'department', select: 'name code college' },
+            { path: 'batch', select: 'enrollmentYear' }
           ],
         })
         .populate('teacher', 'name email systemId role')
@@ -476,6 +482,10 @@ class AcademicService {
         departments,
         programs,
         courses,
+        curriculums,
+        semesters,
+        batches,
+        studentProgress,
         academicSessions,
         sections,
         subjects,

@@ -25,17 +25,22 @@ const subjectSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    // DEPRECATED: kept for backward compatibility only. CourseSubject is the source of truth.
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
+      required: true,
+      index: true,
+    },
+    semester: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Semester',
       default: null,
       index: true,
     },
     academicSession: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession',
-      required: true,
+      default: null, // Legacy, moving to Semester-based
       index: true,
     },
     term: {
@@ -46,6 +51,16 @@ const subjectSchema = new mongoose.Schema(
       index: true,
     },
     credits: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    theoryCredits: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    practicalCredits: {
       type: Number,
       default: 0,
       min: 0,
@@ -65,6 +80,7 @@ const subjectSchema = new mongoose.Schema(
   { timestamps: true, strict: true }
 );
 
-subjectSchema.index({ program: 1, academicSession: 1, code: 1 }, { unique: true });
+// We need to relax the unique index since academicSession is now optional
+subjectSchema.index({ program: 1, code: 1, semester: 1 }, { unique: true, partialFilterExpression: { semester: { $type: "objectId" } } });
 
 module.exports = mongoose.model('Subject', subjectSchema);

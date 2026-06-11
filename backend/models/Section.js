@@ -11,13 +11,19 @@ const sectionSchema = new mongoose.Schema(
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
-      default: null,
+      required: true, // Now required in new arch
+      index: true,
+    },
+    batch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Batch',
+      default: null, // Make optional for backwards compatibility during migration
       index: true,
     },
     academicSession: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession',
-      required: true,
+      default: null, // Legacy, transitioning to Batch
       index: true,
     },
     studyYear: {
@@ -63,6 +69,7 @@ const sectionSchema = new mongoose.Schema(
   { timestamps: true, strict: true }
 );
 
-sectionSchema.index({ program: 1, course: 1, academicSession: 1, name: 1 }, { unique: true });
+// We relax the index because academicSession is now optional
+sectionSchema.index({ program: 1, course: 1, name: 1, batch: 1 }, { unique: true, partialFilterExpression: { batch: { $type: "objectId" } } });
 
 module.exports = mongoose.model('Section', sectionSchema);

@@ -657,7 +657,10 @@ export default function AssessmentMarksPage() {
                   }}
                   options={{ colleges, departments, programs, courses, sections: scopedSections }}
                   departmentCollegeMap={departmentCollegeMap}
+                  showSection={false}
                   showLevel={false}
+                  showBatch={true}
+                  showSemester={true}
                   showRoleFilter={false}
                   showTierFilter={false}
                   compact

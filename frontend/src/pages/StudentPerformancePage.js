@@ -64,6 +64,7 @@ export default function StudentPerformancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [overview, setOverview] = useState(null);
+  const [degreeProgress, setDegreeProgress] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -71,9 +72,16 @@ export default function StudentPerformancePage() {
       setLoading(true);
       setError('');
       try {
-        const res = await API.get('/academics/assessments/overview');
+        const [res, progressRes] = await Promise.all([
+          API.get('/academics/assessments/overview'),
+          API.get(`/academics/student-progress?student=${user?.id || user?._id}`).catch(() => null)
+        ]);
         if (!active) return;
         setOverview(res.data?.data || null);
+        const progressData = progressRes?.data?.data?.[0];
+        if (progressData) {
+          setDegreeProgress(progressData);
+        }
       } catch (requestError) {
         if (!active) return;
         setError(requestError.response?.data?.message || 'Unable to load your performance overview right now.');
@@ -81,11 +89,11 @@ export default function StudentPerformancePage() {
         if (active) setLoading(false);
       }
     };
-    load();
+    if (user?.id || user?._id) load();
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   const student = overview?.student || user || {};
   const attendance = overview?.attendance || {};
@@ -134,7 +142,10 @@ export default function StudentPerformancePage() {
 
       {overview ? (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {degreeProgress ? (
+              <StatCard label="Degree Progress" value={`${degreeProgress.completionPercentage || 0}%`} hint={`${degreeProgress.creditsEarned} / ${degreeProgress.totalCreditsRequired} Credits`} tone="violet" />
+            ) : null}
             <StatCard label="Attendance" value={`${attendance.attendanceRate || 0}%`} hint="Used in eligibility checks" tone={(attendance.attendanceRate || 0) >= 75 ? 'emerald' : 'amber'} />
             <StatCard label="Marks" value={`${assessments.overall?.percentage || 0}%`} hint="Overall assessment performance" tone={(assessments.overall?.percentage || 0) >= 60 ? 'emerald' : (assessments.overall?.percentage || 0) >= 45 ? 'amber' : 'red'} />
             <StatCard label="Eligibility" value={assessments.eligibility?.isEligible ? 'Eligible' : 'Review'} hint={assessments.eligibility?.isEligible ? 'You are meeting the thresholds' : 'Some criteria need attention'} tone={assessments.eligibility?.isEligible ? 'emerald' : 'amber'} />

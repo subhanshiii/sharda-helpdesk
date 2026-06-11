@@ -18,14 +18,23 @@ const { getScopeFilter } = require('../../utils/scopeGuard');
 const { syncTeachingAssignmentsForSubject, syncTeachingAssignmentsForSection } = require('../../utils/teachingAssignments');
 const { syncCourseSubjectMappings } = require('../../utils/subjectManagement');
 
+const Curriculum = require('../../models/Curriculum');
+const Semester = require('../../models/Semester');
+const Batch = require('../../models/Batch');
+const StudentProgress = require('../../models/StudentProgress');
+
 const populateMap = {
   departments: 'college',
   programs: 'department',
   courses: 'program department',
+  curriculums: 'course',
+  semesters: 'curriculum',
+  batches: 'course',
+  'student-progress': 'student batch',
   years: 'program',
   'academic-sessions': 'program',
-  sections: 'program course academicSession department advisorFaculty',
-  subjects: 'department program course academicSession',
+  sections: 'program course academicSession department advisorFaculty batch',
+  subjects: 'department program course academicSession semester',
   enrollments: [
     { path: 'student', select: 'systemId name email role department section status isActive emailVerified passwordNeedsSetup expiryDate' },
     {
@@ -35,9 +44,12 @@ const populateMap = {
         { path: 'course', select: 'name code' },
         { path: 'academicSession', select: 'label yearNumber' },
         { path: 'department', select: 'name code college' },
+        { path: 'batch', select: 'enrollmentYear' }
       ],
     },
     { path: 'academicSession', select: 'label yearNumber' },
+    { path: 'batch', select: 'enrollmentYear' },
+    { path: 'semester', select: 'semesterNumber' },
   ],
 };
 
@@ -46,6 +58,10 @@ const modelMap = {
   departments: Department,
   programs: Program,
   courses: Course,
+  curriculums: Curriculum,
+  semesters: Semester,
+  batches: Batch,
+  'student-progress': StudentProgress,
   years: AcademicSession,
   'academic-sessions': AcademicSession,
   sections: Section,
@@ -65,6 +81,10 @@ exports.list = async (req, res, next) => {
     Object.assign(query, await getScopeFilter(req.user, resource));
     if (req.query.department) query.department = req.query.department;
     if (req.query.program) query.program = req.query.program;
+    if (req.query.course) query.course = req.query.course;
+    if (req.query.curriculum) query.curriculum = req.query.curriculum;
+    if (req.query.batch) query.batch = req.query.batch;
+    if (req.query.semester) query.semester = req.query.semester;
     if (req.query.academicSession || req.query.academicYear) query.academicSession = req.query.academicSession || req.query.academicYear;
     if (req.query.section) query.section = req.query.section;
     if (req.query.student) query.student = req.query.student;

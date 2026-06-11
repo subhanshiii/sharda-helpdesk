@@ -113,6 +113,13 @@ router.use('/sections', resourceRouter(sectionController));
 router.use('/subjects', resourceRouter(subjectController));
 router.use('/enrollments', resourceRouter(enrollmentController));
 
+// New Curriculum-driven routes
+const academicCrudController = require('../controllers/academics/academicCrudController');
+router.use('/curriculums', resourceRouter(academicCrudController));
+router.use('/semesters', resourceRouter(academicCrudController));
+router.use('/batches', resourceRouter(academicCrudController));
+router.use('/student-progress', resourceRouter(academicCrudController));
+
 router.get('/timetable', getTimetable);
 router.get('/teaching-assignments', getTeachingAssignments);
 router.get('/timetable/:id', getTimetableEntry);

@@ -13,16 +13,23 @@ const enrollmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    batch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Batch',
+      default: null,
+      index: true,
+    },
     academicSession: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AcademicSession',
-      required: true,
+      default: null, // Legacy, moving to Batch-driven enrollment
       index: true,
     },
     semester: {
-      type: String,
-      default: '',
-      trim: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Semester',
+      default: null,
+      index: true,
     },
     term: {
       type: Number,

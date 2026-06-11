@@ -110,6 +110,8 @@ export default function AcademicScopeFilters({
   departmentCollegeMap,
   showSection = true,
   showLevel = true,
+  showBatch = false,
+  showSemester = false,
   showRoleFilter = false,
   showTierFilter = false,
   className = '',
@@ -202,6 +204,28 @@ export default function AcademicScopeFilters({
           ))}
         </select>
       </div>
+      ) : null}
+      {showBatch && accessProfile.showCourse ? (
+        <div className={fieldClassName}>
+          <label className={labelClassName}>Batch</label>
+          <select className={inputClassName} value={filters.batchId || ''} onChange={(event) => onChange('batchId', event.target.value)}>
+            <option value="">All Batches</option>
+            {(options.batches || []).filter(b => !filters.courseId || String(b.course) === String(filters.courseId)).map((batch) => (
+              <option key={batch._id} value={batch._id}>Batch {batch.enrollmentYear}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {showSemester && accessProfile.showCourse ? (
+        <div className={fieldClassName}>
+          <label className={labelClassName}>Semester</label>
+          <select className={inputClassName} value={filters.semesterId || ''} onChange={(event) => onChange('semesterId', event.target.value)}>
+            <option value="">All Semesters</option>
+            {(options.semesters || []).map((semester) => (
+              <option key={semester._id} value={semester._id}>Semester {semester.semesterNumber}</option>
+            ))}
+          </select>
+        </div>
       ) : null}
       {showLevel && accessProfile.showLevel ? (
         <div className={levelFieldClassName}>

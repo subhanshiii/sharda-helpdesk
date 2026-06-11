@@ -1716,7 +1716,7 @@ export default function AcademicStructurePage() {
       };
 
       await API.post('/academics/setup', payload);
-      fetchWorkspaceData();
+      loadAcademicWorkspace();
       setQuickSetupOpen(false);
       setQuickSetupForm(emptyQuickSetup);
       toast.success('Structure provisioned successfully');
@@ -1736,7 +1736,7 @@ export default function AcademicStructurePage() {
       toast.success(`Rollover complete. ${data.data.promotions.promoted} students promoted.`);
       setRolloverModalOpen(false);
       setRolloverForm({ newSessionLabel: '', newYearNumber: '' });
-      fetchWorkspaceData();
+      loadAcademicWorkspace();
     } catch (requestError) {
       setRolloverError(requestError.response?.data?.message || 'Rollover failed');
       toast.error('Rollover failed');
@@ -2364,7 +2364,12 @@ export default function AcademicStructurePage() {
               <button type="submit" disabled={inlineSaving} className="btn-primary">
                 {inlineSaving ? 'Saving...' : inlineForm.mode === 'edit' ? 'Save Changes' : 'Create Record'}
               </button>
-              <Modal open={quickSetupOpen} onClose={() => setQuickSetupOpen(false)} panelClassName="max-w-3xl">
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal open={quickSetupOpen} onClose={() => setQuickSetupOpen(false)} panelClassName="max-w-3xl">
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div>
