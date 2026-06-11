@@ -1,4 +1,5 @@
 const Permission = require('../models/Permission');
+const { invalidatePermissionCache } = require('../middleware/auth');
 const {
   ROLE_ORDER,
   PERMISSION_KEYS,
@@ -122,6 +123,9 @@ exports.updateRolePermissions = async (req, res, next) => {
       { role, permissions, resourcePermissions },
       { new: true, upsert: true, runValidators: true }
     );
+
+    // Bust the in-memory permission cache for this role
+    invalidatePermissionCache(role);
 
     res.status(200).json({
       success: true,

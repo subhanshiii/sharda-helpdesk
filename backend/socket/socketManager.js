@@ -3,6 +3,7 @@ const { loadAuthenticatedUser } = require('../middleware/auth');
 const { isPlatformAdmin } = require('../utils/permissionDefaults');
 const User = require('../models/User');
 const Group = require('../models/Group');
+const logger = require('../utils/logger');
 
 const onlineUsers = new Map();
 
@@ -40,7 +41,7 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     const user = socket.user;
     socket.allowedTicketRooms = new Set();
-    console.log(`🔌 ${user.name} (${user.role}) connected`);
+    logger.info(`Socket connected: ${user.name} (${user.role})`);
     onlineUsers.set(user._id.toString(), socket.id);
     io.emit('online_count', onlineUsers.size);
     socket.join(`user:${user._id}`);
@@ -109,7 +110,7 @@ const initSocket = (server) => {
 
         socket.join(`group:${groupId}`);
         socket.to(`group:${groupId}`).emit('group:user_online', { userId: user._id, userName: user.name, groupId });
-        console.log(`💬 ${user.name} joined group:${groupId}`);
+        logger.info(`Group joined: ${user.name} → group:${groupId}`);
       } catch (err) { socket.emit('group:error', { message: 'Failed to join group' }); }
     });
 
@@ -144,7 +145,7 @@ const initSocket = (server) => {
     });
 
     socket.on('disconnect', () => {
-      console.log(`🔌 ${user.name} disconnected`);
+      logger.info(`Socket disconnected: ${user.name}`);
       socket.allowedTicketRooms?.clear?.();
       onlineUsers.delete(user._id.toString());
       io.emit('online_count', onlineUsers.size);

@@ -12,12 +12,48 @@ import {
   FiZap,
 } from 'react-icons/fi';
 
-const SUGGESTED_QUESTIONS = [
+const HELPDESK_SUGGESTED_QUESTIONS = [
   'How do I reset my password?',
   'How do I connect to WiFi?',
   'How do I pay fees online?',
   'How do I get a bonafide certificate?',
 ];
+
+const ERP_SUGGESTED_QUESTIONS = [
+  'Show my attendance summary',
+  'Which subjects am I weak in?',
+  'Am I eligible for exams?',
+  'Show risks for this section',
+];
+
+const CHAT_MODES = {
+  helpdesk: {
+    label: 'Support Assistant',
+    badge: 'AI Assistant',
+    hero: 'Ask faster, resolve sooner',
+    description: 'Get instant answers from the FAQ knowledge base and jump into ticket creation only when you need human help.',
+    sourceLabel: 'Smart FAQ',
+    sourceHint: 'FAQ mode',
+    endpoint: '/chat',
+    prompts: HELPDESK_SUGGESTED_QUESTIONS,
+    bestFor: 'Passwords, WiFi, fee payment steps, bonafide certificates, exam schedules, library timings, and other repeat helpdesk questions.',
+    placeholder: 'Ask anything about Sharda University support...',
+    helperText: 'Enter to send, Shift+Enter for a new line, up to 30 AI requests per hour.',
+  },
+  copilot: {
+    label: 'ERP Copilot',
+    badge: 'ERP Copilot',
+    hero: 'Insights from your ERP data',
+    description: 'Ask permission-aware questions about attendance, marks, eligibility, performance trends, and section analytics.',
+    sourceLabel: 'ERP Copilot',
+    sourceHint: 'ERP mode',
+    endpoint: '/chat/copilot',
+    prompts: ERP_SUGGESTED_QUESTIONS,
+    bestFor: 'Attendance, subject performance, eligibility, weak areas, section-level risk alerts, and natural-language ERP summaries.',
+    placeholder: 'Ask about attendance, marks, eligibility, or section insights...',
+    helperText: 'Answers stay scoped to your ERP permissions and data visibility.',
+  },
+};
 
 const TypingIndicator = memo(() => (
   <div className="flex items-end gap-3">
@@ -38,7 +74,7 @@ const TypingIndicator = memo(() => (
   </div>
 ));
 
-const MessageCard = memo(({ msg, user, onSuggestionClick }) => {
+const MessageCard = memo(({ msg, user, onSuggestionClick, sourceLabel }) => {
   const isUser = msg.role === 'user';
 
   return (
@@ -67,7 +103,7 @@ const MessageCard = memo(({ msg, user, onSuggestionClick }) => {
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                 msg.source === 'openai' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
               }`}>
-                {msg.source === 'openai' ? 'GPT assistant' : 'Smart FAQ'}
+                {msg.source === 'openai' ? 'GPT assistant' : (sourceLabel || 'Smart FAQ')}
               </span>
             </div>
           ) : null}
@@ -114,20 +150,15 @@ const MessageCard = memo(({ msg, user, onSuggestionClick }) => {
 
 export default function AIAssistant() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: `Hi ${user?.name?.split(' ')[0] || 'there'}! I can help with university FAQs like WiFi, fees, certificates, library access, hostel support, and exams. Ask a question or use one of the quick prompts below.`,
-      suggestions: SUGGESTED_QUESTIONS,
-      timestamp: new Date(),
-      source: null,
-    },
-  ]);
+  const [mode, setMode] = useState('helpdesk');
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [inputRows, setInputRows] = useState(1);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+
+  const activeMode = CHAT_MODES[mode];
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,6 +172,23 @@ export default function AIAssistant() {
     setInputRows(input.includes('\n') ? 2 : 1);
   }, [input]);
 
+  useEffect(() => {
+    setMessages([
+      {
+        role: 'assistant',
+        content: mode === 'helpdesk'
+          ? `Hi ${user?.name?.split(' ')[0] || 'there'}! I can help with university FAQs like WiFi, fees, certificates, library access, hostel support, and exams. Ask a question or use one of the quick prompts below.`
+          : `Hi ${user?.name?.split(' ')[0] || 'there'}! I can answer permission-aware questions about your attendance, marks, eligibility, section performance, and other ERP insights. Use a quick prompt or ask your own question.`,
+        suggestions: activeMode.prompts,
+        timestamp: new Date(),
+        source: null,
+      },
+    ]);
+    setInput('');
+    setLoading(false);
+    textareaRef.current?.focus();
+  }, [activeMode.prompts, mode, user?.name]);
+
   const sendMessage = useCallback(async (nextText) => {
     const messageText = (nextText ?? input).trim();
     if (!messageText || loading) return;
@@ -153,17 +201,19 @@ export default function AIAssistant() {
     setLoading(true);
 
     try {
-      const res = await API.post('/chat', {
-        message: messageText,
-        conversationHistory: history,
-      });
+      const payload = activeMode.endpoint === '/chat'
+        ? { message: messageText, conversationHistory: history }
+        : { message: messageText };
+
+      const res = await API.post(activeMode.endpoint, payload);
+      const assistantText = res.data.response || res.data.answer || 'No response received.';
 
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: res.data.response,
-        suggestions: res.data.suggestions || [],
+        content: assistantText,
+        suggestions: activeMode.endpoint === '/chat' ? (res.data.suggestions || []) : [],
         action: res.data.action || null,
-        source: res.data.source,
+        source: res.data.source || (activeMode.endpoint === '/chat' ? 'faq' : 'copilot'),
         usage: res.data.usage,
         timestamp: new Date(),
       }]);
@@ -173,31 +223,35 @@ export default function AIAssistant() {
         role: 'assistant',
         content: isRateLimited
           ? 'You have reached the AI chat limit for this hour. Raise a support ticket and the team will help directly.'
-          : 'I am having trouble responding right now. Please try again in a moment or raise a support ticket.',
-        action: { label: 'Raise a Ticket', link: '/tickets/new' },
+          : activeMode.endpoint === '/chat'
+            ? 'I am having trouble responding right now. Please try again in a moment or raise a support ticket.'
+            : 'I am having trouble reading ERP data right now. Please try again in a moment or contact your administrator.',
+        action: activeMode.endpoint === '/chat' ? { label: 'Raise a Ticket', link: '/tickets/new' } : null,
         timestamp: new Date(),
       }]);
       if (!isRateLimited) {
-        toast.error('AI Assistant is temporarily unavailable');
+        toast.error(activeMode.endpoint === '/chat' ? 'AI Assistant is temporarily unavailable' : 'ERP Copilot is temporarily unavailable');
       }
     } finally {
       setLoading(false);
       textareaRef.current?.focus();
     }
-  }, [input, loading, messages]);
+  }, [activeMode.endpoint, input, loading, messages]);
 
-  const clearChat = () => {
+  const clearChat = useCallback(() => {
     setMessages([
       {
         role: 'assistant',
-        content: 'Chat cleared. Ask a new question whenever you are ready.',
-        suggestions: SUGGESTED_QUESTIONS.slice(0, 3),
+        content: activeMode.endpoint === '/chat'
+          ? 'Chat cleared. Ask a new question whenever you are ready.'
+          : 'Copilot cleared. Ask a new ERP question whenever you are ready.',
+        suggestions: activeMode.prompts.slice(0, 3),
         timestamp: new Date(),
       },
     ]);
     setInput('');
     textareaRef.current?.focus();
-  };
+  }, [activeMode.endpoint, activeMode.prompts]);
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl flex-col gap-4">
@@ -211,30 +265,46 @@ export default function AIAssistant() {
               <p className="theme-accent-badge inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em]">
                 AI Assistant
               </p>
-              <h2 className="theme-text-strong mt-3 font-display text-2xl font-bold">Ask faster, resolve sooner</h2>
+              <h2 className="theme-text-strong mt-3 font-display text-2xl font-bold">AI Assistant and ERP Copilot</h2>
               <p className="theme-text-muted mt-1 text-sm leading-6">
-                Get instant answers from the FAQ knowledge base and jump into ticket creation only when you need human help.
+                {activeMode.description}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${mode === 'copilot' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
               <FiZap size={13} />
-              {process.env.REACT_APP_OPENAI_ENABLED === 'true' ? 'GPT enabled' : 'FAQ mode'}
+              {activeMode.sourceHint}
             </div>
+            <label className="theme-surface-soft inline-flex items-center gap-2 rounded-full border border-[color:var(--border-soft)] px-3 py-2 text-xs font-semibold theme-text-main">
+              <span className="theme-text-muted whitespace-nowrap">Mode</span>
+              <select
+                value={mode}
+                onChange={(event) => setMode(event.target.value)}
+                className="theme-surface max-w-[200px] rounded-full border border-[color:var(--border-soft)] px-3 py-1.5 text-xs font-semibold outline-none"
+                aria-label="Select assistant mode"
+              >
+                <option value="helpdesk">Support Assistant</option>
+                <option value="copilot">ERP Copilot</option>
+              </select>
+            </label>
             <button type="button" onClick={clearChat} className="btn-secondary text-xs">
               <FiRefreshCw size={13} />
               Clear
             </button>
-            <Link to="/faq" className="btn-secondary text-xs">
-              <FiZap size={13} />
-              FAQ
-            </Link>
-            <Link to="/tickets/new" className="btn-primary text-xs">
-              <FiMessageSquare size={13} />
-              Raise Ticket
-            </Link>
+            {mode === 'helpdesk' ? (
+              <Link to="/faq" className="btn-secondary text-xs">
+                <FiZap size={13} />
+                FAQ
+              </Link>
+            ) : null}
+            {mode === 'helpdesk' ? (
+              <Link to="/tickets/new" className="btn-primary text-xs">
+                <FiMessageSquare size={13} />
+                Raise Ticket
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -242,7 +312,7 @@ export default function AIAssistant() {
           <div className="flex min-h-0 flex-col">
             <div className="flex-1 space-y-4 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_42%)] px-5 py-5">
               {messages.map((msg, index) => (
-                <MessageCard key={`${msg.role}-${index}-${msg.timestamp}`} msg={msg} user={user} onSuggestionClick={sendMessage} />
+                <MessageCard key={`${msg.role}-${index}-${msg.timestamp}`} msg={msg} user={user} onSuggestionClick={sendMessage} sourceLabel={activeMode.sourceLabel} />
               ))}
               {loading ? <TypingIndicator /> : null}
               <div ref={bottomRef} />
@@ -263,7 +333,7 @@ export default function AIAssistant() {
                     }}
                     rows={inputRows}
                     disabled={loading}
-                    placeholder="Ask anything about Sharda University..."
+                    placeholder={activeMode.placeholder}
                     className="theme-input min-h-[48px] max-h-40 w-full resize-none rounded-2xl px-4 py-3 text-sm outline-none transition"
                   />
                 </div>
@@ -279,7 +349,7 @@ export default function AIAssistant() {
               </div>
 
               <p className="theme-text-muted mt-2 text-center text-xs">
-                Enter to send, Shift+Enter for a new line, up to 30 AI requests per hour.
+                {activeMode.helperText}
               </p>
             </div>
           </div>
@@ -290,11 +360,11 @@ export default function AIAssistant() {
             </p>
             <h3 className="theme-text-strong mt-3 font-display text-lg font-bold">Start with a common question</h3>
             <p className="theme-text-muted mt-1 text-sm leading-6">
-              These shortcuts reduce typing and help the assistant answer faster with better context.
+              {activeMode.bestFor}
             </p>
 
             <div className="mt-5 space-y-2.5">
-              {SUGGESTED_QUESTIONS.map((question) => (
+              {activeMode.prompts.map((question) => (
                 <button
                   key={question}
                   type="button"
@@ -310,7 +380,7 @@ export default function AIAssistant() {
             <div className="theme-surface mt-5 rounded-[24px] border border-[color:var(--border-soft)] p-4">
               <p className="theme-text-strong text-sm font-semibold">Best for</p>
               <p className="theme-text-muted mt-2 text-sm leading-6">
-                Passwords, WiFi, fee payment steps, bonafide certificates, exam schedules, library timings, and other repeat helpdesk questions.
+                {activeMode.bestFor}
               </p>
             </div>
           </aside>

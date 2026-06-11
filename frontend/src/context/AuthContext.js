@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, useMemo } from 'react';
 import API from '../utils/api';
 
 const AuthContext = createContext();
@@ -35,6 +35,7 @@ const authReducer = (state, action) => {
     case 'LOGOUT':
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('previewMode');
       return { user: null, token: null, loading: false, error: null };
 
     case 'SET_ERROR':
@@ -47,6 +48,37 @@ const authReducer = (state, action) => {
 
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
+
+  const [previewModeState, setPreviewModeState] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('previewMode')) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setPreviewMode = (mode) => {
+    if (mode) {
+      sessionStorage.setItem('previewMode', JSON.stringify(mode));
+    } else {
+      sessionStorage.removeItem('previewMode');
+    }
+    setPreviewModeState(mode);
+    window.location.href = window.location.pathname; // Hard reload to ensure clean cache
+  };
+
+  const effectiveUser = useMemo(() => {
+    if (!state.user) return null;
+    if (previewModeState && state.user.adminTier === 'super_admin') {
+      return {
+        ...state.user,
+        role: previewModeState.role,
+        adminTier: previewModeState.adminTier || null,
+        isPreviewing: true,
+      };
+    }
+    return state.user;
+  }, [state.user, previewModeState]);
 
   // Verify token on app mount
   useEffect(() => {
@@ -126,7 +158,18 @@ export const AuthProvider = ({ children }) => {
   const updateUser = (user) => dispatch({ type: 'UPDATE_USER', payload: user });
 
   return (
-    <AuthContext.Provider value={{ ...state, login, googleLogin, register, logout, updateUser }}>
+    <AuthContext.Provider value={{
+      ...state,
+      user: effectiveUser,
+      trueUser: state.user,
+      previewMode: previewModeState,
+      setPreviewMode,
+      login,
+      googleLogin,
+      register,
+      logout,
+      updateUser
+    }}>
       {children}
     </AuthContext.Provider>
   );

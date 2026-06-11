@@ -62,8 +62,17 @@ const loadAuthenticatedUser = async (token) => {
 // We support BOTH so existing clients still work during migration
 const attachAuthenticatedUser = async (req, token) => {
   const user = await loadAuthenticatedUser(token);
-  req.user = user;
-  req.isSuperAdmin = isSuperAdmin(user);
+  const actuallySuperAdmin = isSuperAdmin(user);
+
+  if (actuallySuperAdmin && req.headers['x-preview-role']) {
+    user.role = req.headers['x-preview-role'];
+    user.adminTier = req.headers['x-preview-tier'] || null;
+    req.user = user;
+    req.isSuperAdmin = false; // Subject them to normal role checks
+  } else {
+    req.user = user;
+    req.isSuperAdmin = actuallySuperAdmin;
+  }
 };
 
 const getAuthToken = (req, { allowQueryToken = false } = {}) => {
@@ -98,8 +107,45 @@ const buildUnauthorizedResponse = (res, err) => {
   return res.status(401).json({ success: false, message: 'Invalid token. Please log in again.' });
 };
 
+// ── In-memory permission cache (avoids DB upsert on every request) ──
+const permissionCache = new Map();
+const PERMISSION_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+const getCachedPermissions = (cacheKey) => {
+  const entry = permissionCache.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > PERMISSION_CACHE_TTL_MS) {
+    permissionCache.delete(cacheKey);
+    return null;
+  }
+  return entry.value;
+};
+
+const setCachedPermissions = (cacheKey, value) => {
+  permissionCache.set(cacheKey, { value, timestamp: Date.now() });
+};
+
+/** Exported so that permission updates can bust the cache. */
+const invalidatePermissionCache = (role) => {
+  if (role) {
+    permissionCache.delete(role);
+  } else {
+    permissionCache.clear();
+  }
+};
+
 const resolveRequestPermissions = async (user) => {
-  const permissionDoc = await Permission.getRolePermissions(user.role);
+  const cacheKey = normalizeRole(user.role);
+  const cached = getCachedPermissions(cacheKey);
+
+  let permissionDoc;
+  if (cached) {
+    permissionDoc = cached;
+  } else {
+    permissionDoc = await Permission.getRolePermissions(user.role);
+    if (permissionDoc) setCachedPermissions(cacheKey, permissionDoc);
+  }
+
   const permissions = buildResolvedPermissions(
     user.role,
     permissionDoc?.permissions || DEFAULT_ROLE_PERMISSIONS[user.role],
@@ -261,3 +307,4 @@ exports.checkPermission = (action, resource) => async (req, res, next) => {
 };
 
 exports.isSuperAdmin = isSuperAdmin;
+exports.invalidatePermissionCache = invalidatePermissionCache;

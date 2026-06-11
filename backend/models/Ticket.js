@@ -128,29 +128,11 @@ ticketSchema.pre('save', async function (next) {
     const year = new Date().getFullYear();
     const counterName = `ticket_${year}`;
 
-    // First, check if counter exists
-    let counter = await Counter.findOne({ name: counterName });
-
-    if (!counter) {
-      // Counter doesn't exist, find the highest existing ticket ID for this year
-      const latestTicket = await mongoose.model('Ticket')
-        .findOne({ ticketId: new RegExp(`^SU-${year}-`) })
-        .sort({ ticketId: -1 })
-        .lean();
-
-      const currentSeq = latestTicket
-        ? parseInt(latestTicket.ticketId.split('-').pop(), 10)
-        : 0;
-
-      // Create the counter with the correct initial sequence
-      counter = await Counter.create({ name: counterName, seq: currentSeq });
-    }
-
-    // Now increment the counter
-    counter = await Counter.findOneAndUpdate(
+    // Atomic increment — safe under concurrent ticket creation
+    const counter = await Counter.findOneAndUpdate(
       { name: counterName },
       { $inc: { seq: 1 } },
-      { new: true }
+      { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
     this.ticketId = `SU-${year}-${String(counter.seq).padStart(4, '0')}`;
@@ -174,5 +156,9 @@ ticketSchema.index({ assignedTo: 1, status: 1 });
 ticketSchema.index({ slaDueAt: 1, status: 1 });
 ticketSchema.index({ category: 1, priority: 1 });
 ticketSchema.index({ createdAt: -1 });
+
+// Soft-delete support — tickets are never permanently destroyed
+const softDeletePlugin = require('../utils/softDeletePlugin');
+ticketSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('Ticket', ticketSchema);

@@ -14,6 +14,7 @@ exports.getAssignments = async (req, res, next) => {
       courseId: req.query.courseId,
       studyYear: req.query.studyYear,
       sectionId: req.query.sectionId,
+      subjectId: req.query.subjectId,
     });
     res.status(200).json({ success: true, count: assignments.length, data: assignments });
   } catch (error) {

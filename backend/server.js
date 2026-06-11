@@ -64,7 +64,7 @@ app.use(cors({
   origin:         process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials:    true,
   methods:        ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','X-Correlation-ID'],
+  allowedHeaders: ['Content-Type','Authorization','X-Correlation-ID','x-preview-role','x-preview-tier'],
 }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
@@ -90,29 +90,38 @@ app.use('/avatars', express.static(path.join(__dirname, '../frontend/public/avat
 app.use(trackRequest);
 
 // ── Routes ─────────────────────────────────────────────
-app.use('/api/auth',              require('./routes/authRoutes'));
-app.use('/api/verify-email',      require('./routes/emailVerificationRoutes'));
-app.use('/api/tickets',           require('./routes/ticketRoutes'));
-app.use('/api/users',             require('./routes/userRoutes'));
-app.use('/api/admin-scope',       require('./routes/adminScopeRoutes'));
-app.use('/api/academics',         require('./routes/academicRoutes'));
-app.use('/api/stats',             require('./routes/statsRoutes'));
-app.use('/api/dashboard',         require('./routes/dashboardRoutes'));
-app.use('/api/content',           require('./routes/contentRoutes'));
-app.use('/api/assignments',       require('./routes/assignmentRoutes'));
-app.use('/api/announcements',     require('./routes/announcementRoutes'));
-app.use('/api/opportunities',     require('./routes/opportunityRoutes'));
-app.use('/api/events',            require('./routes/eventRoutes'));
-app.use('/api/chat',              require('./routes/chatRoutes'));
-app.use('/api/files',             require('./routes/fileRoutes'));
-app.use('/api/academic-calendar', require('./routes/academicCalendarRoutes'));
-app.use('/api/chat-groups',       require('./routes/groupChatRoutes'));  // ← NEW
-app.use('/api/permissions',       require('./routes/permissionRoutes'));
-app.use('/api/motivation',        require('./routes/motivationRoutes'));
-app.use('/api/resources',         require('./routes/resourceRoutes'));
+// All routes are mounted under both /api/ (legacy) and /api/v1/ (versioned).
+// When v2 is needed, add a new set of routes under /api/v2/ without breaking v1.
+const routeTable = [
+  ['auth',              require('./routes/authRoutes')],
+  ['verify-email',      require('./routes/emailVerificationRoutes')],
+  ['tickets',           require('./routes/ticketRoutes')],
+  ['users',             require('./routes/userRoutes')],
+  ['admin-scope',       require('./routes/adminScopeRoutes')],
+  ['academics',         require('./routes/academicRoutes')],
+  ['stats',             require('./routes/statsRoutes')],
+  ['dashboard',         require('./routes/dashboardRoutes')],
+  ['content',           require('./routes/contentRoutes')],
+  ['assignments',       require('./routes/assignmentRoutes')],
+  ['announcements',     require('./routes/announcementRoutes')],
+  ['opportunities',     require('./routes/opportunityRoutes')],
+  ['events',            require('./routes/eventRoutes')],
+  ['chat',              require('./routes/chatRoutes')],
+  ['files',             require('./routes/fileRoutes')],
+  ['academic-calendar', require('./routes/academicCalendarRoutes')],
+  ['chat-groups',       require('./routes/groupChatRoutes')],
+  ['permissions',       require('./routes/permissionRoutes')],
+  ['motivation',        require('./routes/motivationRoutes')],
+  ['resources',         require('./routes/resourceRoutes')],
+];
+
+routeTable.forEach(([name, router]) => {
+  app.use(`/api/${name}`,    router);  // legacy (backward-compatible)
+  app.use(`/api/v1/${name}`, router);  // versioned
+});
 
 // Queue routes (optional)
-try { app.use('/api/queue', require('./routes/queueRoutes')); } catch {}
+try { app.use('/api/queue', require('./routes/queueRoutes')); app.use('/api/v1/queue', require('./routes/queueRoutes')); } catch {}
 
 app.get('/api/health', async (req, res) => {
   const { onlineUsers } = require('./socket/socketManager');

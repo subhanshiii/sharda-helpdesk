@@ -42,6 +42,12 @@ const FEATURE_REGISTRY = [
     group: 'Academics',
   },
   {
+    key: 'canManageAssessments',
+    label: 'Assessments & Marks',
+    description: 'Manage MSE, ESE, CA, practical, and other marks workflows. Included from Section Moderator upward.',
+    group: 'Academics',
+  },
+  {
     key: 'canManageAcademics',
     label: 'Academic Structure',
     description: 'Manage departments, programs, courses, sections, and enrollments. Included from Department Admin upward.',

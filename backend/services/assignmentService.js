@@ -197,6 +197,7 @@ const listAssignments = async (user, filters = {}) => {
     courseId,
     studyYear,
     sectionId,
+    subjectId,
   } = filters;
   ensureAssignmentModuleAccess(user);
   const role = normalizeRole(user.role);
@@ -274,6 +275,7 @@ const listAssignments = async (user, filters = {}) => {
     courseId,
     studyYear,
     sectionId,
+    subjectId,
   });
   if (visibilityFilter) {
     query.$and = [...(query.$and || []), visibilityFilter];

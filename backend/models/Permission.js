@@ -50,9 +50,7 @@ permissionSchema.statics.getRolePermissions = async function (role) {
     { new: true, upsert: true }
   );
 
-  if (!doc.permissions) {
-    doc.permissions = sanitizePermissions(resolvedRole, defaults);
-  }
+  doc.permissions = sanitizePermissions(resolvedRole, doc.permissions || defaults);
 
   if (!doc.resourcePermissions || typeof doc.resourcePermissions !== 'object') {
     doc.resourcePermissions = getDefaultResourcePermissions(resolvedRole);

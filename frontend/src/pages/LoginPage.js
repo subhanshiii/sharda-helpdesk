@@ -228,7 +228,7 @@ export default function LoginPage() {
       className="sidebar-logo-image w-full h-full object-contain"
     />
   </div>
-  <p className="font-display font-bold text-gray-900">Sharda University Helpdesk</p>
+  <p className="font-display font-bold text-gray-900">SmartSharda</p>
 </div>
 
           <div className="mb-8">

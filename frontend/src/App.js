@@ -29,6 +29,8 @@ const TimetablePage        = lazy(() => import('./pages/TimetablePage'));
 const TimetableFormPage    = lazy(() => import('./pages/TimetableFormPage'));
 const TimetableSectionPage = lazy(() => import('./pages/TimetableSectionPage'));
 const AttendancePage       = lazy(() => import('./pages/AttendancePage'));
+const AssessmentMarksPage   = lazy(() => import('./pages/AssessmentMarksPage'));
+const StudentPerformancePage = lazy(() => import('./pages/StudentPerformancePage'));
 const UsersPage            = lazy(() => import('./pages/UsersPage'));
 const UserFormPage         = lazy(() => import('./pages/UserFormPage'));
 const UserImportReviewPage = lazy(() => import('./pages/UserImportReviewPage'));
@@ -107,6 +109,9 @@ function AppRoutes() {
         <Route path="/attendance"        element={<ProtectedRoute roles={['student', 'faculty', 'admin']}><Suspense fallback={<FullPageSpinner />}><AttendancePage /></Suspense></ProtectedRoute>} />
         <Route path="/attendance/new"    element={<ProtectedRoute permission="canMarkAttendance"><Suspense fallback={<FullPageSpinner />}><CreateAttendancePage /></Suspense></ProtectedRoute>} />
         <Route path="/attendance/:id/edit" element={<ProtectedRoute permission="canMarkAttendance"><Suspense fallback={<FullPageSpinner />}><CreateAttendancePage /></Suspense></ProtectedRoute>} />
+        <Route path="/assessments"       element={<ProtectedRoute access={{ action: 'view', resource: 'assessments' }}><Suspense fallback={<FullPageSpinner />}><AssessmentMarksPage /></Suspense></ProtectedRoute>} />
+        <Route path="/assessments/:id/edit" element={<ProtectedRoute access={{ action: 'view', resource: 'assessments' }}><Suspense fallback={<FullPageSpinner />}><AssessmentMarksPage /></Suspense></ProtectedRoute>} />
+        <Route path="/performance"       element={<ProtectedRoute access={{ action: 'view', resource: 'assessments' }}><Suspense fallback={<FullPageSpinner />}><StudentPerformancePage /></Suspense></ProtectedRoute>} />
         <Route path="/profile"           element={<Suspense fallback={<FullPageSpinner />}><ProfilePage /></Suspense>} />
         <Route path="/notice-board"      element={<Suspense fallback={<FullPageSpinner />}><AnnouncementsPage /></Suspense>} />
         <Route path="/notice-board/new"  element={<ProtectedRoute access={{ action: 'create', resource: 'notices' }}><Suspense fallback={<FullPageSpinner />}><CreateNoticePage /></Suspense></ProtectedRoute>} />
@@ -118,6 +123,7 @@ function AppRoutes() {
         <Route path="/events/new"        element={<ProtectedRoute access={{ action: 'create', resource: 'events' }}><Suspense fallback={<FullPageSpinner />}><CreateEventPage /></Suspense></ProtectedRoute>} />
         <Route path="/resources"         element={<ProtectedRoute access={{ action: 'view', resource: 'resources' }}><Suspense fallback={<FullPageSpinner />}><ResourcesPage /></Suspense></ProtectedRoute>} />
         <Route path="/ai-assistant"      element={<Suspense fallback={<FullPageSpinner />}><AIAssistant /></Suspense>} />
+        <Route path="/copilot"           element={<Navigate to="/ai-assistant" replace />} />
         <Route path="/faq"               element={<ProtectedRoute access={{ action: 'view', resource: 'faq' }}><Suspense fallback={<FullPageSpinner />}><FAQPage /></Suspense></ProtectedRoute>} />
         <Route path="/academic-calendar" element={<Navigate to="/notice-board" replace />} />
         <Route path="/group-chat"        element={<Suspense fallback={<FullPageSpinner />}><GroupChatPage /></Suspense>} />

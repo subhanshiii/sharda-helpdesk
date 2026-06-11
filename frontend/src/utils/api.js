@@ -16,6 +16,22 @@ API.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const previewModeStr = sessionStorage.getItem('previewMode');
+    if (previewModeStr) {
+      try {
+        const previewMode = JSON.parse(previewModeStr);
+        if (previewMode?.role) {
+          config.headers['x-preview-role'] = previewMode.role;
+        }
+        if (previewMode?.adminTier) {
+          config.headers['x-preview-tier'] = previewMode.adminTier;
+        }
+      } catch (e) {
+        // Ignored
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

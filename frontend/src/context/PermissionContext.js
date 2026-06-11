@@ -20,6 +20,7 @@ const emptyPermissions = {
   canManageSections: false,
   canSubmitAssignments: false,
   canManageAssignments: false,
+  canManageAssessments: false,
   canManageAcademics: false,
   canManageTimetable: false,
   canMarkAttendance: false,

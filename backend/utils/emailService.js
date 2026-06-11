@@ -12,7 +12,7 @@ try {
 const getEmailUser = () => String(process.env.EMAIL_USER || '').trim();
 const getEmailPass = () => String(process.env.EMAIL_PASS || '').replace(/\s+/g, '').trim();
 const getFromEmail = () => String(process.env.FROM_EMAIL || process.env.EMAIL_FROM || getEmailUser() || 'noreply@localhost').trim();
-const APP_NAME = 'Sharda University Helpdesk';
+const APP_NAME = 'SmartSharda';
 
 const getSmtpConfig = () => {
   // FIXED: allow Gmail SMTP/app-password delivery through env config.
@@ -192,7 +192,7 @@ exports.sendPasswordResetEmail = async ({ toEmail, userName, resetLink }) => {
                 <tr>
                   <td style="background:#f8faff;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
                     <p style="color:#94a3b8;font-size:12px;margin:0;">
-                      © ${new Date().getFullYear()} Sharda University Helpdesk · Greater Noida, India
+                      © ${new Date().getFullYear()} SmartSharda · Greater Noida, India
                     </p>
                   </td>
                 </tr>
@@ -220,7 +220,7 @@ exports.sendTicketCreatedEmail = async ({ toEmail, userName, ticketId, ticketTit
             <tr><td align="center">
               <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
                 <tr><td style="background:linear-gradient(135deg,#0c1654,#1e3a8a);padding:28px 40px;text-align:center;">
-                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">Sharda University Helpdesk</h1>
+                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">SmartSharda</h1>
                 </td></tr>
                 <tr><td style="padding:36px 40px;">
                   <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px;">✅ Ticket Submitted Successfully</h2>
@@ -234,7 +234,7 @@ exports.sendTicketCreatedEmail = async ({ toEmail, userName, ticketId, ticketTit
                   </div>
                 </td></tr>
                 <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>
+                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} SmartSharda</p>
                 </td></tr>
               </table>
             </td></tr>
@@ -267,7 +267,7 @@ exports.sendTicketUpdatedEmail = async ({
             <tr><td align="center">
               <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
                 <tr><td style="background:linear-gradient(135deg,#0c1654,#1e3a8a);padding:28px 40px;text-align:center;">
-                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">Sharda University Helpdesk</h1>
+                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">SmartSharda</h1>
                 </td></tr>
                 <tr><td style="padding:36px 40px;">
                   <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px;">Ticket status updated</h2>
@@ -281,7 +281,7 @@ exports.sendTicketUpdatedEmail = async ({
                   </div>
                 </td></tr>
                 <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>
+                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} SmartSharda</p>
                 </td></tr>
               </table>
             </td></tr>
@@ -317,7 +317,7 @@ exports.sendTicketAssignedEmail = async ({
             <tr><td align="center">
               <table width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(30,58,138,0.1);">
                 <tr><td style="background:linear-gradient(135deg,#0c1654,#1e3a8a);padding:28px 40px;text-align:center;">
-                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">Sharda University Helpdesk</h1>
+                  <h1 style="color:white;margin:0;font-size:20px;font-weight:800;">SmartSharda</h1>
                 </td></tr>
                 <tr><td style="padding:36px 40px;">
                   <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px;">New assignment</h2>
@@ -328,7 +328,7 @@ exports.sendTicketAssignedEmail = async ({
                   ${linkBlock}
                 </td></tr>
                 <tr><td style="background:#f8faff;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} Sharda University Helpdesk</p>
+                  <p style="color:#94a3b8;font-size:12px;margin:0;">© ${new Date().getFullYear()} SmartSharda</p>
                 </td></tr>
               </table>
             </td></tr>

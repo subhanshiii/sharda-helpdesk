@@ -12,10 +12,13 @@
  */
 
 const { listFaqsSync } = require('./faqService');
+const assessmentService = require('./assessmentService');
 const motivationQuotes = require('../data/motivationQuotes');
 
 // ── OpenAI client (lazy init) ──────────────────────────
 let openaiClient = null;
+const AI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-3.5-turbo';
+const AI_COPILOT_MODEL = process.env.OPENAI_COPILOT_MODEL || 'gpt-4o-mini';
 let todaysThoughtCache = {
   dateKey: null,
   value: null,
@@ -59,7 +62,7 @@ const buildSystemPrompt = () => {
     .map((f, i) => `Q${i + 1}: ${f.question}\nA${i + 1}: ${f.answer}`)
     .join('\n\n');
 
-  return `You are a helpful support assistant for Sharda University Helpdesk.
+  return `You are a helpful support assistant for SmartSharda.
 Your job is to answer student queries about university services.
 
 Here is the knowledge base you should use to answer questions:
@@ -95,7 +98,7 @@ const chatWithAI = async (message, conversationHistory = []) => {
     ];
 
     const response = await openai.chat.completions.create({
-      model:       'gpt-3.5-turbo', // Fast and cheap — good for FAQ bot
+      model:       AI_CHAT_MODEL, // Fast and cheap — good for FAQ bot
       messages,
       max_tokens:  200,              // Keep responses concise
       temperature: 0.3,             // Low temp = more factual, less creative
@@ -151,7 +154,7 @@ const categorizeTicket = async (title, description) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: AI_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -186,7 +189,7 @@ const predictPriority = async (title, description) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: AI_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -226,7 +229,7 @@ const summarizeTicket = async (ticket) => {
       .join('\n');
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: AI_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -296,7 +299,7 @@ const suggestPreTicketSupport = async (title, description) => {
   try {
     const faqMatches = getRelevantFaqEntries(title, description);
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: AI_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -364,7 +367,7 @@ const fallbackChat = (message) => {
   if (msg.match(/^(hi|hello|hey|hii|namaste)/)) {
     return {
       success:     true,
-      response:    'Hello! 👋 I\'m the Sharda University Helpdesk Assistant. I can help with WiFi, fees, library, hostel, and more. What do you need help with?',
+      response:    'Hello! 👋 I\'m the SmartSharda Assistant. I can help with WiFi, fees, library, hostel, and more. What do you need help with?',
       suggestions: SUGGESTIONS.slice(0, 3),
       source:      'fallback',
       needsTicket: false,
@@ -413,7 +416,21 @@ const getRelatedQuestions = (message) => {
 };
 
 const fallbackDashboardInsight = (context) => {
-  const { pendingPersonalTasks, openTickets, freshNotices, overdueAssignments, dueTodayAssignments } = context.counts;
+  const { pendingPersonalTasks, openTickets, freshNotices, overdueAssignments, dueTodayAssignments, pendingGrading, lowPerformanceAlerts } = context.counts;
+
+  if (lowPerformanceAlerts > 0) {
+    return {
+      message: `${lowPerformanceAlerts} subject${lowPerformanceAlerts > 1 ? 's need' : ' needs'} attention in assessments. Focus on the weakest one first to protect eligibility.`,
+      source: 'fallback',
+    };
+  }
+
+  if (pendingGrading > 0) {
+    return {
+      message: `You still have ${pendingGrading} assessment item${pendingGrading > 1 ? 's' : ''} waiting to be graded. Clearing them will improve student visibility fast.`,
+      source: 'fallback',
+    };
+  }
 
   if (overdueAssignments > 0) {
     return {
@@ -465,7 +482,7 @@ const generateDashboardInsight = async (context) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: AI_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -479,7 +496,10 @@ Pending personal tasks: ${context.counts.pendingPersonalTasks}
 Open tickets: ${context.counts.openTickets}
 Fresh notices: ${context.counts.freshNotices}
 Overdue assignments: ${context.counts.overdueAssignments}
-Assignments due today: ${context.counts.dueTodayAssignments}`,
+Assignments due today: ${context.counts.dueTodayAssignments}
+Pending assessment grading: ${context.counts.pendingGrading || 0}
+Low performance alerts: ${context.counts.lowPerformanceAlerts || 0}
+Assessment percentage: ${context.counts.assessmentRate || 0}`,
         },
       ],
       max_tokens: 60,
@@ -493,6 +513,150 @@ Assignments due today: ${context.counts.dueTodayAssignments}`,
   } catch {
     return fallbackDashboardInsight(context);
   }
+};
+
+const safeString = (value, fallback = 'N/A') => {
+  const text = String(value || '').trim();
+  return text || fallback;
+};
+
+// Late-binding getter to avoid circular dependency (dashboardService → aiService → dashboardService)
+let _dashboardService = null;
+const getDashboardService = () => {
+  if (!_dashboardService) _dashboardService = require('./dashboardService');
+  return _dashboardService;
+};
+
+const buildErpCopilotContext = async (user) => {
+  try {
+    const dashboardService = getDashboardService();
+    const [dashboard, assessmentSummary] = await Promise.all([
+      dashboardService.getDashboardWorkspace(user),
+      assessmentService.getAssessmentDashboardSummary(user).catch(() => ({})),
+    ]);
+
+    const topSubjects = Array.isArray(assessmentSummary?.recentAssessments) ? assessmentSummary.recentAssessments.slice(0, 5) : [];
+    const weakSubjects = Array.isArray(assessmentSummary?.weakSubjects) ? assessmentSummary.weakSubjects.slice(0, 5) : [];
+
+    return {
+      role: user.role,
+      name: user.name,
+      stats: dashboard.stats || {},
+      attendance: dashboard.attendance || {},
+      assessment: assessmentSummary || {},
+      assignments: (dashboard.assignments || []).slice(0, 5),
+      timetable: (dashboard.timetable || []).slice(0, 5),
+      notices: (dashboard.notices || []).slice(0, 3),
+      topSubjects,
+      weakSubjects,
+      visibleScope: {
+        department: safeString(user.department),
+        section: safeString(user.section),
+        year: safeString(user.year),
+      },
+    };
+  } catch (error) {
+    return {
+      role: user.role,
+      name: user.name,
+      stats: {},
+      attendance: {},
+      assessment: {},
+      assignments: [],
+      timetable: [],
+      notices: [],
+      topSubjects: [],
+      weakSubjects: [],
+      visibleScope: {
+        department: safeString(user.department),
+        section: safeString(user.section),
+        year: safeString(user.year),
+      },
+      error: error.message,
+    };
+  }
+};
+
+const answerErpCopilotQuestion = async (user, question) => {
+  const context = await buildErpCopilotContext(user);
+  const openai = getOpenAI();
+  const normalizedQuestion = String(question || '').trim();
+
+  const conciseContext = `
+User role: ${context.role}
+User name: ${context.name}
+Department: ${context.visibleScope.department}
+Section: ${context.visibleScope.section}
+Year: ${context.visibleScope.year}
+Attendance rate: ${context.attendance.attendanceRate || 0}%
+Assessment percentage: ${context.assessment.percentage || 0}%
+Eligible: ${context.assessment.eligibility?.isEligible ? 'yes' : 'no'}
+Weak subjects: ${(context.weakSubjects || []).map((item) => `${item.code}:${Math.round(item.percentage || 0)}%`).join(', ') || 'none'}
+Recent assessments: ${(context.topSubjects || []).map((item) => `${item.type || 'assessment'}:${item.subject || item.code || 'subject'}:${Math.round(item.percentage || 0)}%`).join('; ') || 'none'}
+Assignments: ${(context.assignments || []).map((item) => `${item.title || 'Assignment'}:${item.status || 'open'}`).join('; ') || 'none'}
+Timetable: ${(context.timetable || []).map((item) => `${item.dayOfWeek || 'Day'} ${item.startTime || ''}-${item.endTime || ''} ${item.subjectId?.code || item.subject || ''}`).join('; ') || 'none'}
+Notices: ${(context.notices || []).map((item) => item.title || '').join('; ') || 'none'}
+`;
+
+  if (!openai) {
+    const questionText = normalizedQuestion.toLowerCase();
+    if (questionText.includes('attendance')) {
+      return {
+        answer: `Your attendance is ${context.attendance.attendanceRate || 0}%. ${context.assessment.eligibility?.isEligible ? 'You are currently eligible.' : 'You should improve attendance to stay eligible.'}`,
+        source: 'fallback',
+        context,
+      };
+    }
+    if (questionText.includes('marks') || questionText.includes('performance') || questionText.includes('weak')) {
+      return {
+        answer: `Your overall assessment performance is ${context.assessment.percentage || 0}%. Weak subjects: ${(context.weakSubjects || []).map((item) => item.code).join(', ') || 'none'}.`,
+        source: 'fallback',
+        context,
+      };
+    }
+    if (questionText.includes('timetable')) {
+      return {
+        answer: `Your current timetable has ${(context.timetable || []).length} visible slots in the workspace.`,
+        source: 'fallback',
+        context,
+      };
+    }
+    return {
+      answer: `I can see ${context.attendance.attendanceRate || 0}% attendance, ${context.assessment.percentage || 0}% performance, and ${context.assessment.eligibility?.isEligible ? 'eligibility looks good' : 'eligibility needs attention'}. Ask about a subject, section, timetable, or marks trend for more detail.`,
+      source: 'fallback',
+      context,
+    };
+  }
+
+  const response = await openai.chat.completions.create({
+    model: AI_COPILOT_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: `You are SmartSharda ERP Copilot. Answer only using the ERP context below and the user's permissions. If the user asks for data outside their visible scope, politely refuse. Be concise, specific, and helpful. Return plain text only.`,
+      },
+      {
+        role: 'user',
+        content: `Question: ${normalizedQuestion}
+
+ERP Context:${conciseContext}`,
+      },
+    ],
+    temperature: 0.2,
+    max_tokens: 260,
+  });
+
+  const answer = response.choices[0]?.message?.content?.trim();
+  return {
+    answer: answer || 'I could not generate a response from ERP data.',
+    source: 'openai',
+    context,
+    usage: response.usage ? {
+      promptTokens: response.usage.prompt_tokens,
+      completionTokens: response.usage.completion_tokens,
+      totalTokens: response.usage.total_tokens,
+    } : null,
+  };
 };
 
 const generateTodaysThought = async () => {
@@ -513,4 +677,5 @@ module.exports = {
   suggestPreTicketSupport,
   generateDashboardInsight,
   generateTodaysThought,
+  answerErpCopilotQuestion,
 };

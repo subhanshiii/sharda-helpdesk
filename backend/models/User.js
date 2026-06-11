@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, 'Please provide a password'],
-      minlength: [6, 'Password must be at least 6 characters'],
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false,
     },
     role: {
@@ -158,5 +158,9 @@ userSchema.methods.getSignedJwtToken = function () {
     expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
+
+// Soft-delete support — user records are preserved for audit compliance
+const softDeletePlugin = require('../utils/softDeletePlugin');
+userSchema.plugin(softDeletePlugin);
 
 module.exports = mongoose.model('User', userSchema);

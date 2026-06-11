@@ -6254,3 +6254,2213 @@ Error: Route.post() requires a callback function but got a [object Undefined]
   "version": "4.0.0",
   "environment": "development"
 }
+[11:27:05] [31merror[39m: uncaughtException: Cannot find module '../controllers/assessmentController'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../controllers/assessmentController'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:6:30)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../controllers/assessmentController'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:6:30)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Thu Jun 11 2026 11:27:05 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 44265,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119963648,
+      "heapTotal": 69894144,
+      "heapUsed": 39063136,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.58447265625,
+      2.80322265625,
+      2.85986328125
+    ],
+    "uptime": 497999
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 30,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 6,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[02:58:49] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 02:58:49 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 70651,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119734272,
+      "heapTotal": 69369856,
+      "heapUsed": 39269112,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.49755859375,
+      2.98388671875,
+      3.572265625
+    ],
+    "uptime": 553903
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[02:59:10] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 02:59:10 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 70661,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119554048,
+      "heapTotal": 69894144,
+      "heapUsed": 39144928,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.8037109375,
+      3.02978515625,
+      3.5751953125
+    ],
+    "uptime": 553924
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[02:59:17] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 02:59:17 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 70662,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119701504,
+      "heapTotal": 69632000,
+      "heapUsed": 39082944,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.7392578125,
+      3.01220703125,
+      3.56591796875
+    ],
+    "uptime": 553931
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[02:59:24] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 02:59:24 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 70667,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 109428736,
+      "heapTotal": 65175552,
+      "heapUsed": 40364136,
+      "external": 20595706,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.3974609375,
+      2.92919921875,
+      3.52978515625
+    ],
+    "uptime": 553938
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:05:03] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:05:03 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 70839,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119750656,
+      "heapTotal": 69632000,
+      "heapUsed": 39239824,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.62255859375,
+      2.64794921875,
+      3.185546875
+    ],
+    "uptime": 554277
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:05:46] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:05:46 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71341,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 108871680,
+      "heapTotal": 64897024,
+      "heapUsed": 39972480,
+      "external": 20595706,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.62646484375,
+      2.912109375,
+      3.25390625
+    ],
+    "uptime": 554320
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:07:00] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:07:00 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71379,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 120537088,
+      "heapTotal": 70418432,
+      "heapUsed": 39011736,
+      "external": 20571118,
+      "arrayBuffers": 18295315
+    }
+  },
+  "os": {
+    "loadavg": [
+      4.4892578125,
+      3.39990234375,
+      3.41259765625
+    ],
+    "uptime": 554394
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[03:07:27] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:07:27 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71397,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 120340480,
+      "heapTotal": 72237056,
+      "heapUsed": 29046096,
+      "external": 20571659,
+      "arrayBuffers": 18295315
+    }
+  },
+  "os": {
+    "loadavg": [
+      9.62548828125,
+      4.68603515625,
+      3.875
+    ],
+    "uptime": 554421
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[03:07:52] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:07:52 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71407,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 120586240,
+      "heapTotal": 70418432,
+      "heapUsed": 38976448,
+      "external": 20571118,
+      "arrayBuffers": 18295315
+    }
+  },
+  "os": {
+    "loadavg": [
+      7.31982421875,
+      4.53466796875,
+      3.84228515625
+    ],
+    "uptime": 554446
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[03:09:11] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:09:11 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71431,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 119619584,
+      "heapTotal": 69632000,
+      "heapUsed": 39139008,
+      "external": 20595705,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      5.056640625,
+      4.509765625,
+      3.89599609375
+    ],
+    "uptime": 554525
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:09:11] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:09:11 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71430,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 109346816,
+      "heapTotal": 65175552,
+      "heapUsed": 40494416,
+      "external": 20595706,
+      "arrayBuffers": 18295491
+    }
+  },
+  "os": {
+    "loadavg": [
+      5.056640625,
+      4.509765625,
+      3.89599609375
+    ],
+    "uptime": 554525
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:09:18] [31merror[39m: uncaughtException: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+Error: Cannot find module '../middleware/academicScope'
+Require stack:
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js
+- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18)
+    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+  {
+  "error": {
+    "code": "MODULE_NOT_FOUND",
+    "requireStack": [
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ]
+  },
+  "stack": "Error: Cannot find module '../middleware/academicScope'\nRequire stack:\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js\n- /Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)\n    at Module._load (node:internal/modules/cjs/loader:1038:27)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)\n    at require (node:internal/modules/helpers:182:18)\n    at Object.<anonymous> (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js:4:32)\n    at Module._compile (node:internal/modules/cjs/loader:1521:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)\n    at Module.load (node:internal/modules/cjs/loader:1266:32)\n    at Module._load (node:internal/modules/cjs/loader:1091:12)\n    at Module.require (node:internal/modules/cjs/loader:1289:19)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:09:18 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71433,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 120520704,
+      "heapTotal": 70418432,
+      "heapUsed": 38940272,
+      "external": 20572212,
+      "arrayBuffers": 18295315
+    }
+  },
+  "os": {
+    "loadavg": [
+      4.9716796875,
+      4.5009765625,
+      3.896484375
+    ],
+    "uptime": 554532
+  },
+  "trace": [
+    {
+      "column": 15,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._resolveFilename",
+      "line": 1207,
+      "method": "_resolveFilename",
+      "native": false
+    },
+    {
+      "column": 27,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1038,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    },
+    {
+      "column": 18,
+      "file": "node:internal/modules/helpers",
+      "function": "require",
+      "line": 182,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/routes/academicRoutes.js",
+      "function": null,
+      "line": 4,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 14,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._compile",
+      "line": 1521,
+      "method": "_compile",
+      "native": false
+    },
+    {
+      "column": 10,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._extensions..js",
+      "line": 1623,
+      "method": ".js",
+      "native": false
+    },
+    {
+      "column": 32,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.load",
+      "line": 1266,
+      "method": "load",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module._load",
+      "line": 1091,
+      "method": "_load",
+      "native": false
+    },
+    {
+      "column": 19,
+      "file": "node:internal/modules/cjs/loader",
+      "function": "Module.require",
+      "line": 1289,
+      "method": "require",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[03:10:29] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1908:16)\n    at listenInCluster (node:net:1965:12)\n    at Server.listen (node:net:2067:7)\n    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:10:29 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71468,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 125009920,
+      "heapTotal": 74809344,
+      "heapUsed": 40221608,
+      "external": 20879251,
+      "arrayBuffers": 18524155
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.0185546875,
+      4.00439453125,
+      3.75390625
+    ],
+    "uptime": 554603
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1908,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1965,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2067,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 158,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 95,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:10:37] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1908:16)\n    at listenInCluster (node:net:1965:12)\n    at Server.listen (node:net:2067:7)\n    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:10:37 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71472,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 124321792,
+      "heapTotal": 72187904,
+      "heapUsed": 49656480,
+      "external": 20892366,
+      "arrayBuffers": 18558423
+    }
+  },
+  "os": {
+    "loadavg": [
+      2.701171875,
+      3.904296875,
+      3.72119140625
+    ],
+    "uptime": 554611
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1908,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1965,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2067,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 158,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 95,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}
+[03:16:50] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1908:16)\n    at listenInCluster (node:net:1965:12)\n    at Server.listen (node:net:2067:7)\n    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:16:50 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 71757,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 124928000,
+      "heapTotal": 75071488,
+      "heapUsed": 40483400,
+      "external": 20904084,
+      "arrayBuffers": 18548988
+    }
+  },
+  "os": {
+    "loadavg": [
+      3.2724609375,
+      3.81982421875,
+      3.85693359375
+    ],
+    "uptime": 554984
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1908,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1965,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2067,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 158,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 95,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "4.0.0",
+  "environment": "development"
+}
+[03:48:46] [31merror[39m: uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  {
+  "error": {
+    "code": "EADDRINUSE",
+    "errno": -48,
+    "syscall": "listen",
+    "address": "::",
+    "port": 8080
+  },
+  "stack": "Error: listen EADDRINUSE: address already in use :::8080\n    at Server.setupListenHandle [as _listen2] (node:net:1908:16)\n    at listenInCluster (node:net:1965:12)\n    at Server.listen (node:net:2067:7)\n    at startServer (/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js:158:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)",
+  "exception": true,
+  "date": "Fri Jun 12 2026 03:48:46 GMT+0530 (India Standard Time)",
+  "process": {
+    "pid": 72702,
+    "uid": 501,
+    "gid": 20,
+    "cwd": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend",
+    "execPath": "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+    "version": "v20.20.2",
+    "argv": [
+      "/Users/subhanshiagrawal/.nvm/versions/node/v20.20.2/bin/node",
+      "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js"
+    ],
+    "memoryUsage": {
+      "rss": 106020864,
+      "heapTotal": 73236480,
+      "heapUsed": 38900392,
+      "external": 20718962,
+      "arrayBuffers": 18386113
+    }
+  },
+  "os": {
+    "loadavg": [
+      18.2646484375,
+      34.150390625,
+      19.16650390625
+    ],
+    "uptime": 556900
+  },
+  "trace": [
+    {
+      "column": 16,
+      "file": "node:net",
+      "function": "Server.setupListenHandle [as _listen2]",
+      "line": 1908,
+      "method": "setupListenHandle [as _listen2]",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "node:net",
+      "function": "listenInCluster",
+      "line": 1965,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 7,
+      "file": "node:net",
+      "function": "Server.listen",
+      "line": 2067,
+      "method": "listen",
+      "native": false
+    },
+    {
+      "column": 12,
+      "file": "/Users/subhanshiagrawal/Desktop/IdeaProjects/sharda-helpdesk/backend/server.js",
+      "function": "startServer",
+      "line": 158,
+      "method": null,
+      "native": false
+    },
+    {
+      "column": 5,
+      "file": "node:internal/process/task_queues",
+      "function": "process.processTicksAndRejections",
+      "line": 95,
+      "method": "processTicksAndRejections",
+      "native": false
+    }
+  ],
+  "service": "sharda-helpdesk",
+  "version": "3.0.0",
+  "environment": "development"
+}

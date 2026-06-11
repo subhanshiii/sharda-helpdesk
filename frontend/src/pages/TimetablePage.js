@@ -12,6 +12,7 @@ import {
   filterSectionsByScope,
 } from '../utils/academicScope';
 import { isStudentUser } from '../utils/access';
+import useAcademicOptions from '../hooks/useAcademicOptions';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -119,11 +120,8 @@ export default function TimetablePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [entries, setEntries] = useState([]);
-  const [sections, setSections] = useState([]);
-  const [colleges, setColleges] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [programs, setPrograms] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const { options, departmentCollegeMap, loading: optionsLoading } = useAcademicOptions();
+  const { colleges, departments, programs, courses, sections } = options;
   const [filters, setFilters] = useState(emptyAcademicScopeFilters);
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
@@ -141,20 +139,8 @@ export default function TimetablePage() {
     setLoading(true);
     setError('');
     try {
-      const [entriesRes, collegesRes, departmentsRes, programsRes, coursesRes, sectionsRes] = await Promise.all([
-        API.get('/academics/timetable'),
-        API.get('/academics/colleges?paginate=false'),
-        API.get('/academics/departments?paginate=false'),
-        API.get('/academics/programs?paginate=false'),
-        API.get('/academics/courses?paginate=false'),
-        API.get('/academics/sections?paginate=false'),
-      ]);
+      const entriesRes = await API.get('/academics/timetable');
       setEntries(entriesRes.data?.data || []);
-      setColleges(collegesRes.data?.data || []);
-      setDepartments(departmentsRes.data?.data || []);
-      setPrograms(programsRes.data?.data || []);
-      setCourses(coursesRes.data?.data || []);
-      setSections(sectionsRes.data?.data || []);
     } catch (requestError) {
       setEntries([]);
       setError(requestError.response?.data?.message || 'Failed to load timetable.');
@@ -167,7 +153,6 @@ export default function TimetablePage() {
     loadTimetable();
   }, [loadTimetable]);
 
-  const departmentCollegeMap = useMemo(() => buildDepartmentCollegeMap(departments), [departments]);
   const scopedSections = useMemo(
     () => filterSectionsByScope(sections, filters, departmentCollegeMap),
     [sections, filters, departmentCollegeMap]
@@ -287,7 +272,7 @@ export default function TimetablePage() {
     }
   };
 
-  if (loading) return <FullPageSpinner />;
+  if (loading || optionsLoading) return <FullPageSpinner />;
 
   return (
     <div className="space-y-6">

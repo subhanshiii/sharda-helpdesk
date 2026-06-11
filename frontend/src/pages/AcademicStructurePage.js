@@ -8,6 +8,7 @@ import {
   FiChevronRight,
   FiChevronUp,
   FiEdit2,
+  FiCopy,
   FiGitBranch,
   FiLayers,
   FiPlus,
@@ -909,6 +910,10 @@ export default function AcademicStructurePage() {
   const [selectedProgramId, setSelectedProgramId] = useState('');
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [rolloverModalOpen, setRolloverModalOpen] = useState(false);
+  const [rolloverForm, setRolloverForm] = useState({ newSessionLabel: '', newYearNumber: '' });
+  const [rolloverSaving, setRolloverSaving] = useState(false);
+  const [rolloverError, setRolloverError] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [focusLevel, setFocusLevel] = useState('college');
   const [focusScopeMode, setFocusScopeMode] = useState('contextual');
@@ -1711,14 +1716,32 @@ export default function AcademicStructurePage() {
       };
 
       await API.post('/academics/setup', payload);
-      toast.success('Academic structure created');
+      fetchWorkspaceData();
       setQuickSetupOpen(false);
       setQuickSetupForm(emptyQuickSetup);
-      await loadAcademicWorkspace();
+      toast.success('Structure provisioned successfully');
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Quick setup failed');
     } finally {
       setQuickSetupSaving(false);
+    }
+  };
+
+  const handleRolloverSubmit = async (event) => {
+    event.preventDefault();
+    setRolloverSaving(true);
+    setRolloverError('');
+    try {
+      const { data } = await API.post(`/academics/academic-sessions/${selectedSessionId}/rollover`, rolloverForm);
+      toast.success(`Rollover complete. ${data.data.promotions.promoted} students promoted.`);
+      setRolloverModalOpen(false);
+      setRolloverForm({ newSessionLabel: '', newYearNumber: '' });
+      fetchWorkspaceData();
+    } catch (requestError) {
+      setRolloverError(requestError.response?.data?.message || 'Rollover failed');
+      toast.error('Rollover failed');
+    } finally {
+      setRolloverSaving(false);
     }
   };
 
@@ -2341,38 +2364,25 @@ export default function AcademicStructurePage() {
               <button type="submit" disabled={inlineSaving} className="btn-primary">
                 {inlineSaving ? 'Saving...' : inlineForm.mode === 'edit' ? 'Save Changes' : 'Create Record'}
               </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
-
-      <Modal open={quickSetupOpen} onClose={() => setQuickSetupOpen(false)} panelClassName="max-w-3xl">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-          <div className="flex items-start justify-between gap-4">
+              <Modal open={quickSetupOpen} onClose={() => setQuickSetupOpen(false)} panelClassName="max-w-3xl">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display text-2xl font-bold text-gray-900">Quick Setup</h3>
-              <p className="mt-1 text-sm text-gray-500">Create a connected university structure in one guided flow.</p>
+              <p className="mt-1 text-sm text-gray-500">Automatically generate a complete course hierarchy.</p>
             </div>
             <button type="button" onClick={() => setQuickSetupOpen(false)} className="rounded-2xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
-              <FiX size={18} />
+              <FiX size={16} />
             </button>
           </div>
 
           <form onSubmit={handleQuickSetup} className="mt-6 space-y-5">
-            <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-              {['College', 'Department', 'Program', 'Course', 'Sections', 'Subjects'].map((step, index) => (
-                <div key={step} className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-center">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Step {index + 1}</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-800">{step}</div>
-                </div>
-              ))}
-            </div>
-
             <div className="grid gap-4 md:grid-cols-2">
               <select className="input" value={quickSetupForm.collegeId} onChange={(e) => setQuickSetupForm((c) => ({ ...c, collegeId: e.target.value }))} required>
                 <option value="">Select College</option>
-                {options.colleges.map((college) => <option key={college._id} value={college._id}>{formatEntityName(college)}</option>)}
+                {options.colleges.map((college) => <option key={college._id} value={college._id}>{college.name}</option>)}
               </select>
+              <div className="hidden md:block" />
               <input className="input" placeholder="Department" value={quickSetupForm.department} onChange={(e) => setQuickSetupForm((c) => ({ ...c, department: e.target.value }))} required />
               <input className="input" placeholder="Department Code" value={quickSetupForm.departmentCode} onChange={(e) => setQuickSetupForm((c) => ({ ...c, departmentCode: e.target.value.toUpperCase() }))} />
               <input className="input" placeholder="Program" value={quickSetupForm.program} onChange={(e) => setQuickSetupForm((c) => ({ ...c, program: e.target.value }))} required />
@@ -2382,10 +2392,10 @@ export default function AcademicStructurePage() {
               <input className="input md:col-span-2" placeholder="Academic Session Label (e.g. 2026-27)" value={quickSetupForm.academicSession} onChange={(e) => setQuickSetupForm((c) => ({ ...c, academicSession: e.target.value }))} required />
             </div>
 
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+            <div className="rounded-2xl border border-gray-200 p-5">
               <p className="text-sm font-semibold text-gray-900">Study Years</p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                {[1, 2, 3, 4].map((year) => {
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[1, 2, 3, 4, 5].map((year) => {
                   const selected = quickSetupForm.years.includes(year);
                   return (
                     <button
@@ -2395,43 +2405,91 @@ export default function AcademicStructurePage() {
                         ...current,
                         years: selected ? current.years.filter((entry) => entry !== year) : [...current.years, year].sort((a, b) => a - b),
                       }))}
-                      className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${selected ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                      className={`inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium transition ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
                     >
                       Year {year}
                     </button>
                   );
                 })}
               </div>
+
+              {quickSetupForm.years.length > 0 && (
+                <div className="mt-5 space-y-3 border-t border-gray-100 pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Section names per year (comma-separated)</p>
+                  {quickSetupForm.years.map((year) => (
+                    <div key={year} className="flex items-center gap-3">
+                      <span className="w-16 text-sm font-medium text-gray-700">Year {year}</span>
+                      <input
+                        className="input"
+                        placeholder="e.g. A, B, C"
+                        value={quickSetupForm.sectionsPerYear[year] || ''}
+                        onChange={(e) => setQuickSetupForm((current) => ({
+                          ...current,
+                          sectionsPerYear: { ...current.sectionsPerYear, [year]: e.target.value },
+                        }))}
+                        required
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {quickSetupForm.years.map((year) => (
-                <div key={year}>
-                  <label className="label">{`Sections for Year ${year}`}</label>
-                  <input
-                    className="input"
-                    placeholder="A, B, C"
-                    value={quickSetupForm.sectionsPerYear[year] || ''}
-                    onChange={(e) => setQuickSetupForm((current) => ({
-                      ...current,
-                      sectionsPerYear: {
-                        ...current.sectionsPerYear,
-                        [year]: e.target.value,
-                      },
-                    }))}
-                  />
-                </div>
-              ))}
               <div>
-                <label className="label">Capacity per Section</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Capacity per Section</label>
                 <input className="input" type="number" min="1" value={quickSetupForm.capacity} onChange={(e) => setQuickSetupForm((c) => ({ ...c, capacity: Number(e.target.value) || 60 }))} />
               </div>
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
               <button type="button" onClick={() => setQuickSetupOpen(false)} className="btn-secondary">Cancel</button>
               <button type="submit" disabled={quickSetupSaving} className="btn-primary">
                 {quickSetupSaving ? 'Creating...' : 'Create Full Structure'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal open={rolloverModalOpen} onClose={() => setRolloverModalOpen(false)} panelClassName="max-w-md">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-display text-xl font-bold text-gray-900">Rollover Academic Session</h3>
+            </div>
+            <button type="button" onClick={() => setRolloverModalOpen(false)} className="rounded-xl border border-gray-200 p-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+              <FiX size={16} />
+            </button>
+          </div>
+          <form onSubmit={handleRolloverSubmit} className="mt-5 space-y-4">
+            <p className="text-sm text-gray-500">This will deep clone all subjects and sections from this session to a new session, and automatically run the student promotion algorithm.</p>
+            {rolloverError ? <Alert variant="error" title={rolloverError} /> : null}
+            <div>
+              <label className="label">New Session Label (e.g. Fall 2026)</label>
+              <input
+                className="input"
+                placeholder="Session Label"
+                value={rolloverForm.newSessionLabel}
+                onChange={(e) => setRolloverForm((c) => ({ ...c, newSessionLabel: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <label className="label">New Year Number (e.g. 2026)</label>
+              <input
+                className="input"
+                type="number"
+                placeholder="YYYY"
+                value={rolloverForm.newYearNumber}
+                onChange={(e) => setRolloverForm((c) => ({ ...c, newYearNumber: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-3">
+              <button type="button" onClick={() => setRolloverModalOpen(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={rolloverSaving} className="btn-primary">
+                {rolloverSaving ? 'Rolling over...' : 'Automate Rollover'}
               </button>
             </div>
           </form>
@@ -3042,6 +3100,18 @@ export default function AcademicStructurePage() {
 
                           {focusLevel === 'session' ? (
                             <>
+                              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div>
+                                    <h4 className="font-semibold text-blue-900">Session Rollover</h4>
+                                    <p className="mt-0.5 text-sm text-blue-700">Duplicate this session structure to a new academic year</p>
+                                  </div>
+                                  <button type="button" onClick={() => setRolloverModalOpen(true)} className="btn-primary shrink-0">
+                                    <FiCopy className="mr-2" /> Start Rollover
+                                  </button>
+                                </div>
+                              </div>
+
                               <FocusPanel eyebrow="Sections" title="Sections in this Session" description="Delivery groups active in the selected academic session." bodyClassName="max-h-64 overflow-y-auto pr-1">
                                 <div className="space-y-2">
                                   {selectedSessionSections.length ? selectedSessionSections.slice(0, 6).map((section) => (

@@ -1,6 +1,7 @@
 const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
 const Ticket = require('../models/Ticket');
+const { getAssessmentDashboardSummary } = require('./assessmentService');
 const DashboardPreference = require('../models/DashboardPreference');
 const TimetableEntry = require('../models/TimetableEntry');
 const AttendanceSession = require('../models/AttendanceSession');
@@ -164,7 +165,7 @@ const getAttendanceSummary = async (user) => {
   };
 };
 
-const buildInsightContext = ({ user, personalTasks, stats, notices, assignments }) => {
+const buildInsightContext = ({ user, personalTasks, stats, notices, assignments, assessments = {} }) => {
   const now = new Date();
   const pendingPersonalTasks = personalTasks.filter((task) => task.status !== 'done').length;
   const overdueAssignments = assignments.filter((assignment) => {
@@ -193,6 +194,9 @@ const buildInsightContext = ({ user, personalTasks, stats, notices, assignments 
       freshNotices: notices.length,
       overdueAssignments,
       dueTodayAssignments,
+      pendingGrading: assessments.pendingGrading || 0,
+      lowPerformanceAlerts: assessments.lowPerformanceAlerts || (assessments.weakSubjects || []).length || 0,
+      assessmentRate: assessments.percentage || 0,
     },
   };
 };
@@ -229,7 +233,7 @@ const serializePreferenceDoc = (preference) => ({
 const getDashboardWorkspace = async (user) => {
   const preference = await getDashboardPreferenceDoc(user.id);
 
-  const [statsResult, notices, calendar, tickets, assignments, recentSubmissions, timetable, attendance] = await Promise.all([
+  const [statsResult, notices, calendar, tickets, assignments, recentSubmissions, timetable, attendance, assessment] = await Promise.all([
     getStats(user),
     listContent({ user, view: 'feed', limit: 3 }),
     listContent({ user, view: 'calendar', limit: 4, upcomingOnly: true }),
@@ -238,6 +242,7 @@ const getDashboardWorkspace = async (user) => {
     getRecentSubmissions(user),
     getTimetableEntries(user),
     getAttendanceSummary(user),
+    getAssessmentDashboardSummary(user),
   ]);
 
   const stats = statsResult.data;
@@ -247,6 +252,7 @@ const getDashboardWorkspace = async (user) => {
     stats,
     notices,
     assignments,
+    assessments: assessment,
   });
   const insightKey = buildInsightKey(context);
 
@@ -269,6 +275,7 @@ const getDashboardWorkspace = async (user) => {
     assignments,
     timetable,
     attendance,
+    assessment,
     recentSubmissions,
     ...serializePreferenceDoc(preference),
   };

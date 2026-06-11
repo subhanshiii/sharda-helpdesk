@@ -10,6 +10,7 @@ const ADMIN_TIER_PERMISSION_RULES = {
   canMarkAttendance: 'section_moderator',
   canManageTimetable: 'section_moderator',
   canManageAssignments: 'program_coordinator',
+  canManageAssessments: 'section_moderator',
   canCreateTickets: 'department_admin',
   canManageGroups: 'department_admin',
   canManageAcademics: 'department_admin',

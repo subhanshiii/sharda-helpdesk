@@ -11,11 +11,12 @@ const {
 } = require('../controllers/ticketController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const { validate, createTicketRules, mongoIdParam } = require('../middleware/validate');
 
 router
   .route('/')
   .get(protect, getTickets)
-  .post(protect, upload.array('attachments', 5), createTicket)
+  .post(protect, upload.array('attachments', 5), validate(createTicketRules), createTicket)
   .delete(protect, bulkDeleteTickets);
 
 router

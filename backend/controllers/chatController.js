@@ -2,7 +2,7 @@
  * Chat Controller
  * Uses real AI (OpenAI) with fallback to keyword matching
  */
-const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket, suggestPreTicketSupport } = require('../services/aiService');
+const { chatWithAI, categorizeTicket, predictPriority, summarizeTicket, suggestPreTicketSupport, answerErpCopilotQuestion } = require('../services/aiService');
 const ticketService = require('../services/ticketService');
 const { withCache, TTL, KEYS } = require('../config/cache');
 const { listFaqs, createFaq, updateFaq, deleteFaq } = require('../services/faqService');
@@ -146,6 +146,29 @@ exports.deleteFAQ = async (req, res, next) => {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ success: false, message: error.message });
     }
+    next(error);
+  }
+};
+
+
+// @desc    Ask the ERP copilot a scoped question
+// @route   POST /api/chat/copilot
+// @access  Private
+exports.copilot = async (req, res, next) => {
+  try {
+    const { message } = req.body;
+    if (!message?.trim()) {
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+
+    const result = await answerErpCopilotQuestion(req.user, message.trim());
+    res.status(200).json({
+      success: true,
+      answer: result.answer,
+      source: result.source,
+      usage: result.usage || null,
+    });
+  } catch (error) {
     next(error);
   }
 };

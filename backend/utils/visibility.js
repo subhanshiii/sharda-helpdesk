@@ -134,6 +134,7 @@ const buildVisibilityFilterQuery = (params = {}) => {
   if (params.courseId && mongoose.Types.ObjectId.isValid(params.courseId)) clauses.push({ 'targetAudience.courseId': params.courseId });
   if (params.studyYear) clauses.push({ 'targetAudience.studyYear': Number(params.studyYear) });
   if (params.sectionId && mongoose.Types.ObjectId.isValid(params.sectionId)) clauses.push({ 'targetAudience.sectionId': params.sectionId });
+  if (params.subjectId && mongoose.Types.ObjectId.isValid(params.subjectId)) clauses.push({ subjectId: params.subjectId });
 
   return clauses.length ? { $and: clauses } : null;
 };

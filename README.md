@@ -1,4 +1,4 @@
-# Sharda Helpdesk / University ERP
+# SmartSharda / University ERP
 
 Full-stack university ERP for academic structure, identity & access, helpdesk operations, and student/faculty workflows.
 

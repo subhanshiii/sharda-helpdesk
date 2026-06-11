@@ -56,4 +56,8 @@ enrollmentSchema.index(
   }
 );
 
+// Soft-delete support — enrollment history is preserved for academic compliance
+const softDeletePlugin = require('../utils/softDeletePlugin');
+enrollmentSchema.plugin(softDeletePlugin);
+
 module.exports = mongoose.model('Enrollment', enrollmentSchema);

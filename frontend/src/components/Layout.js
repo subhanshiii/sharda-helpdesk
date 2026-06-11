@@ -6,12 +6,14 @@ import { usePermissions } from '../context/PermissionContext';
 import { getRoleLabel } from '../utils/helpers';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from './ui';
+import PreviewBanner from './ui/PreviewBanner';
+import ViewAsModal from './ui/ViewAsModal';
 import { hasRole, isAdminUser, isFacultyUser, isStaffUser } from '../utils/access';
 import { FiMessageCircle } from 'react-icons/fi';
 import {
   FiHome, FiList, FiUsers,
   FiLogOut, FiMenu, FiX, FiChevronRight, FiArrowLeft,
-  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers, FiUser, FiFolder,
+  FiSpeaker, FiMessageSquare, FiHelpCircle, FiShield, FiBookOpen, FiCalendar, FiUserCheck, FiLayers, FiUser, FiFolder, FiClipboard, FiTrendingUp,
 } from 'react-icons/fi';
 
 const NavItem = ({ to, icon: Icon, label, end = false, onClick }) => (
@@ -37,13 +39,14 @@ const SectionLabel = ({ label }) => (
 );
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, trueUser, logout } = useAuth();
   const { hasPermission, can, isSuperAdmin } = usePermissions();
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [viewAsModalOpen, setViewAsModalOpen] = useState(false);
   const profileMenuRef = useRef(null);
   const footerNameRef = useRef(null);
   const [footerNameStyle, setFooterNameStyle] = useState({
@@ -64,7 +67,7 @@ export default function Layout() {
   };
   const canAccessAssignments = can('view', 'assignments') || hasPermission('canSubmitAssignments');
   const canAccessTimetable = can('view', 'timetable');
-  const canAccessAttendance = hasRole(user, ['student', 'faculty', 'admin']) || hasPermission('canMarkAttendance');
+  const canAccessAttendance = can('view', 'attendance') || hasPermission('canMarkAttendance') || hasRole(user, ['student', 'faculty', 'admin']);
   const footerDisplayName = user?.name || 'Unknown user';
   const footerRoleTagStyle = user?.adminTier === 'super_admin'
     ? { backgroundColor: '#fef3c7', color: '#b45309' }
@@ -84,6 +87,8 @@ export default function Layout() {
     '/timetable':     'Timetable',
     '/timetable/new': 'Create Timetable Slot',
     '/attendance':    'Attendance',
+    '/assessments':   'Assessments & Marks',
+    '/performance':   'Student Performance',
     '/users':         'User Management',
     '/approvals':     'Identity Alerts',
     '/academics':     'Academic Planning',
@@ -95,6 +100,7 @@ export default function Layout() {
     '/notice-board':  'Notice Board',
     '/announcements': 'Notice Board',
     '/ai-assistant':  'AI Assistant',
+    '/copilot':       'AI Assistant',
     '/faq':           'FAQ',
     '/group-chat':    'Group Chat',
     '/permissions':   'Permissions',
@@ -110,6 +116,7 @@ export default function Layout() {
     if (location.pathname.startsWith('/admin/users/')) return 'User Details';
     if (location.pathname.startsWith('/users/') && !location.pathname.endsWith('/edit')) return 'User Details';
     if (location.pathname.startsWith('/users/') && location.pathname.endsWith('/edit')) return 'Edit User';
+    if (location.pathname.startsWith('/assessments/') && location.pathname.endsWith('/edit')) return 'Edit Mark Sheet';
     if (location.pathname.startsWith('/academics/sections/') && location.pathname.endsWith('/students')) return 'Enrolled Students';
     return pageTitles[location.pathname] || 'Sharda Platform';
   })();
@@ -122,7 +129,7 @@ export default function Layout() {
         { to: '/notice-board', icon: FiSpeaker, label: 'Notice Board' },
         { to: '/events', icon: FiCalendar, label: 'Events' },
         { to: '/opportunities', icon: FiLayers, label: 'Opportunities' },
-        { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: hasPermission('canViewChat') },
+        { to: '/group-chat', icon: FiMessageCircle, label: 'Group Chat', visible: can('view', 'chat') || hasPermission('canViewChat') },
       ],
     },
     {
@@ -132,22 +139,24 @@ export default function Layout() {
         { to: '/resources', icon: FiFolder, label: 'Shared Resources', visible: can('view', 'resources') },
         { to: '/timetable', icon: FiCalendar, label: 'Timetable', visible: canAccessTimetable },
         { to: '/attendance', icon: FiUserCheck, label: 'Attendance', visible: canAccessAttendance },
-        { to: '/academics', icon: FiLayers, label: 'Academic Planning', visible: hasPermission('canManageAcademics') },
+        { to: '/assessments', icon: FiClipboard, label: 'Assessments & Marks', visible: can('view', 'assessments') },
+        { to: '/performance', icon: FiTrendingUp, label: 'Student Performance', visible: can('view', 'performance') || can('view', 'assessments') },
+        { to: '/academics', icon: FiLayers, label: 'Academic Planning', visible: can('view', 'academics') || hasPermission('canManageAcademics') },
       ],
     },
     {
       label: 'Support & Services',
       items: [
-        { to: '/tickets', icon: FiList, label: hasPermission('canHandleTickets') ? 'Support Queue' : 'My Tickets', visible: hasPermission('canCreateTickets') || hasPermission('canHandleTickets') },
+        { to: '/tickets', icon: FiList, label: can('view', 'tickets') ? 'Support Tickets' : 'My Tickets', visible: can('view', 'tickets') || hasPermission('canCreateTickets') },
         { to: '/ai-assistant', icon: FiMessageSquare, label: 'AI Assistant' },
         { to: '/faq', icon: FiHelpCircle, label: 'FAQ', visible: can('view', 'faq') },
       ],
     },
     {
-      label: 'Governance',
+      label: 'Administration',
       items: [
-        { to: '/users', icon: FiUsers, label: 'Identity & Access', visible: hasPermission('canManageUsers') },
-        { to: '/approvals', icon: FiUserCheck, label: 'Identity Alerts', visible: hasPermission('canManageUsers') },
+        { to: '/users', icon: FiUsers, label: 'Identity & Access', visible: can('view', 'users') || hasPermission('canManageUsers') },
+        { to: '/approvals', icon: FiUserCheck, label: 'Identity Alerts', visible: can('view', 'approvals') || hasPermission('canManageUsers') },
         { to: '/permissions', icon: FiShield, label: 'Permissions', visible: isSuperAdmin },
       ],
     },
@@ -268,8 +277,11 @@ export default function Layout() {
   );
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden">
-      <div className="hidden md:flex flex-col w-60 flex-shrink-0 relative overflow-hidden shadow-xl">
+    <div className="flex flex-col h-screen w-full overflow-hidden">
+      <PreviewBanner />
+      <ViewAsModal isOpen={viewAsModalOpen} onClose={() => setViewAsModalOpen(false)} />
+      <div className="app-shell flex flex-1 overflow-hidden">
+        <div className="hidden md:flex flex-col w-60 flex-shrink-0 relative overflow-hidden shadow-xl">
         <SidebarContent />
       </div>
 
@@ -281,9 +293,9 @@ export default function Layout() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="relative z-40 h-16 glass border-b border-blue-100/60 flex items-center justify-between px-5 flex-shrink-0 shadow-sm">
+        <header className="relative z-40 h-16 border-b flex items-center justify-between px-5 flex-shrink-0 shadow-sm" style={{ background: 'var(--surface-card)', borderColor: 'var(--border-main)' }}>
           <div className="flex items-center gap-3">
-            <button className="md:hidden p-2 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+            <button className="md:hidden p-2 rounded-lg transition-colors" style={{ color: 'var(--text-muted)' }}
               onClick={() => setSidebarOpen(true)}>
               <FiMenu size={22} />
             </button>
@@ -291,15 +303,16 @@ export default function Layout() {
               <button
                 type="button"
                 onClick={handleBackNavigation}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition"
+                style={{ borderColor: 'var(--border-main)', background: 'var(--surface-card)', color: 'var(--text-muted)' }}
               >
                 <FiArrowLeft size={16} />
                 Back
               </button>
             ) : null}
             <div>
-              <h2 className="font-display font-bold text-gray-900 text-lg leading-none">{pageTitle}</h2>
-              <p className="text-xs text-gray-400 mt-0.5 hidden sm:block">
+              <h2 className="font-display font-bold text-lg leading-none" style={{ color: 'var(--text-main)' }}>{pageTitle}</h2>
+              <p className="text-xs mt-0.5 hidden sm:block" style={{ color: 'var(--text-muted)' }}>
                 {new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
               </p>
             </div>
@@ -315,20 +328,36 @@ export default function Layout() {
                 <Avatar user={user} size="md" className={`cursor-pointer shadow-md ${isDark ? 'ring-1 ring-slate-700/80' : 'ring-1 ring-slate-200'}`} />
               </button>
               {profileMenuOpen ? (
-                <div className={`absolute right-0 top-12 z-50 w-52 rounded-2xl border shadow-xl ${isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'}`}>
+                <div className="absolute right-0 top-12 z-50 w-52 rounded-2xl border shadow-xl" style={{ borderColor: 'var(--border-main)', background: 'var(--surface-card)' }}>
                   <button
                     type="button"
                     onClick={openProfilePage}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition ${isDark ? 'text-slate-100 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-sm transition rounded-t-2xl hover:opacity-80"
+                    style={{ color: 'var(--text-main)' }}
                   >
                     <FiUser size={15} />
                     My Profile
                   </button>
-                  <div className={isDark ? 'border-t border-slate-700' : 'border-t border-gray-100'} />
+                  <div style={{ borderTop: '1px solid var(--border-main)' }} />
+                  {trueUser?.adminTier === 'super_admin' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setProfileMenuOpen(false); setViewAsModalOpen(true); }}
+                        className="flex w-full items-center gap-3 px-4 py-3 text-sm transition hover:opacity-80"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        <FiUserCheck size={15} />
+                        View As...
+                      </button>
+                      <div style={{ borderTop: '1px solid var(--border-main)' }} />
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setProfileMenuOpen(false); handleLogout(); }}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition ${isDark ? 'text-red-300 hover:bg-slate-800' : 'text-red-600 hover:bg-red-50'}`}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-sm transition rounded-b-2xl hover:opacity-80"
+                    style={{ color: 'var(--accent-danger, #dc2626)' }}
                   >
                     <FiLogOut size={15} />
                     Logout
@@ -346,6 +375,7 @@ export default function Layout() {
           </div>
         </main>
       </div>
+    </div>
     </div>
   );
 }

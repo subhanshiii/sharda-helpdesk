@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FiCheck, FiInfo, FiRefreshCcw, FiSave, FiShield } from 'react-icons/fi';
+import { FiCheck, FiEdit2, FiInfo, FiRefreshCcw, FiSave, FiShield } from 'react-icons/fi';
 import { Alert, EmptyState, FullPageSpinner, PageHeader } from '../components/ui';
 import { usePermissions } from '../context/PermissionContext';
 
@@ -80,6 +80,21 @@ export default function PermissionsPage() {
     setRoleDraft(role, next);
   };
 
+  const allowAllEditable = (role, base) => {
+    const next = { ...getDraft(role, base) };
+    resourceDefinitions.forEach((resource) => {
+      if (!resource.actions.includes('view')) return;
+      next[resource.key] = {
+        ...(next[resource.key] || {}),
+        view: true,
+      };
+      if (resource.actions.includes('edit')) {
+        next[resource.key].edit = true;
+      }
+    });
+    setRoleDraft(role, next);
+  };
+
   const resetRole = (role) => {
     setDrafts((current) => {
       const next = { ...current };
@@ -122,6 +137,14 @@ export default function PermissionsPage() {
       <div className="grid gap-4 xl:grid-cols-4">
         {roles.map(({ role, resourcePermissions }) => {
           const summary = roleSummaries?.[role];
+          const enabledViewCount = Object.values(resourcePermissions || {}).reduce(
+            (count, resource) => count + (resource?.view ? 1 : 0),
+            0
+          );
+          const enabledEditCount = Object.values(resourcePermissions || {}).reduce(
+            (count, resource) => count + (resource?.edit ? 1 : 0),
+            0
+          );
           const enabledCount = Object.values(resourcePermissions || {}).reduce(
             (count, resource) => count + Object.values(resource || {}).filter(Boolean).length,
             0
@@ -136,6 +159,16 @@ export default function PermissionsPage() {
                 <div className="rounded-2xl bg-white/70 px-3 py-2 text-center shadow-sm">
                   <div className="text-[11px] uppercase tracking-[0.14em] opacity-70">Allowed</div>
                   <div className="font-display text-2xl font-black">{enabledCount}</div>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-2xl bg-white/70 px-3 py-2 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">View</div>
+                  <div className="mt-1 font-display text-lg font-black">{enabledViewCount}</div>
+                </div>
+                <div className="rounded-2xl bg-white/70 px-3 py-2 shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.14em] opacity-70">Edit</div>
+                  <div className="mt-1 font-display text-lg font-black">{enabledEditCount}</div>
                 </div>
               </div>
             </div>
@@ -157,7 +190,7 @@ export default function PermissionsPage() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 <div className="flex items-center gap-2 font-semibold"><FiInfo size={15} /> Bulk action</div>
-                <div className="mt-1 text-xs">Use “Allow all view” per role to quickly grant read-only access across resources.</div>
+                <div className="mt-1 text-xs">Use “Allow all view” for read-only access or “Allow view + edit” for editable resources with one click.</div>
               </div>
             </div>
           </div>
@@ -231,6 +264,14 @@ export default function PermissionsPage() {
                                   onClick={() => allowAllViews(role, resourcePermissions)}
                                 >
                                   <FiCheck size={13} /> Allow all view
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  disabled={!editable}
+                                  onClick={() => allowAllEditable(role, resourcePermissions)}
+                                >
+                                  <FiEdit2 size={13} /> Allow view + edit
                                 </button>
                                 <button
                                   type="button"
